@@ -4,13 +4,17 @@ use std::{
     process,
 };
 
-use smt_model::{Board, Component, ExportFormat, Feeder, OpenSmt, Panel};
+use smt_model::{Board, Component, ComponentUpdate, ExportFormat, Feeder, OpenSmt, Panel, Side, SmtDocument};
 
 fn workspace(name: &str) -> PathBuf {
     let directory = std::env::temp_dir().join(format!("open-smt-{}-{name}", process::id()));
     let _ = fs::remove_dir_all(&directory);
     fs::create_dir_all(&directory).expect("create test directory");
     directory
+}
+
+fn read_document(path: &Path) -> SmtDocument {
+    serde_json::from_str(&fs::read_to_string(path).expect("document text")).expect("parse document")
 }
 
 #[test]
@@ -100,4 +104,175 @@ fn save_as_retargets_the_session() {
     let summary = session.save(Some(Path::new(&target))).expect("save as");
     assert!(summary.path.ends_with("copy.osmt"));
     assert!(target.exists());
+}
+
+#[test]
+fn update_component_moves_a_component_and_keeps_untouched_fields() {
+    let directory = workspace("update-move");
+    let path = directory.join("board.osmt");
+    let mut session = OpenSmt::new();
+    session.create(&path).expect("create");
+    session
+        .add_component(Component {
+            refdes: "R1".to_string(),
+            package: "0603".to_string(),
+            side: Side::Top,
+            x: 10.0,
+            y: 10.0,
+            rotation: 90.0,
+            height: Some(1.2),
+        })
+        .expect("add R1");
+    let before = session.summary().expect("summary");
+
+    let summary = session
+        .update_component("R1", ComponentUpdate { x: Some(40.0), y: Some(30.0), ..ComponentUpdate::default() })
+        .expect("move R1");
+    assert_eq!(summary.components, 1);
+    assert_eq!(summary.revision, before.revision + 1);
+
+    let document = read_document(&path);
+    assert_eq!(document.revision, summary.revision);
+    let component = &document.components[0];
+    assert_eq!(component.refdes, "R1");
+    assert_eq!(component.x, 40.0);
+    assert_eq!(component.y, 30.0);
+    assert_eq!(component.package, "0603");
+    assert_eq!(component.side, Side::Top);
+    assert_eq!(component.rotation, 90.0);
+    assert_eq!(component.height, Some(1.2));
+}
+
+#[test]
+fn update_component_normalises_rotation_and_manages_height_and_side() {
+    let directory = workspace("update-fields");
+    let path = directory.join("board.osmt");
+    let mut session = OpenSmt::new();
+    session.create(&path).expect("create");
+    session.add_component(Component::new("R1", "0603", 10.0, 10.0)).expect("add R1");
+
+    session
+        .update_component("R1", ComponentUpdate { rotation: Some(450.0), height: Some(0.8), ..ComponentUpdate::default() })
+        .expect("rotation and height");
+    let document = read_document(&path);
+    assert_eq!(document.components[0].rotation, 90.0);
+    assert_eq!(document.components[0].height, Some(0.8));
+
+    session.update_component("R1", ComponentUpdate { clear_height: true, ..ComponentUpdate::default() }).expect("clear height");
+    let document = read_document(&path);
+    assert_eq!(document.components[0].height, None);
+    assert_eq!(document.components[0].rotation, 90.0);
+    assert_eq!(document.components[0].x, 10.0);
+
+    session.update_component("R1", ComponentUpdate { side: Some(Side::Bottom), ..ComponentUpdate::default() }).expect("side");
+    let document = read_document(&path);
+    assert_eq!(document.components[0].side, Side::Bottom);
+}
+
+#[test]
+fn update_component_package_changes_feeder_allocation() {
+    let directory = workspace("update-feeder");
+    let path = directory.join("board.osmt");
+    let mut session = OpenSmt::new();
+    session.create(&path).expect("create");
+    session.add_component(Component::new("R1", "0603", 10.0, 10.0)).expect("add R1");
+    session.add_feeder(Feeder::new("F1", "0603", 4.0, 100)).expect("F1");
+    session.add_feeder(Feeder::new("F2", "0805", 4.0, 100)).expect("F2");
+
+    let before = session.feeders().expect("allocation");
+    assert!(before.feeders.iter().find(|feeder| feeder.id == "F1").expect("F1").refdes.contains(&"R1".to_string()));
+
+    session
+        .update_component("R1", ComponentUpdate { package: Some("0805".to_string()), ..ComponentUpdate::default() })
+        .expect("package");
+    let after = session.feeders().expect("allocation");
+    assert_eq!(after.feeders.iter().find(|feeder| feeder.id == "F2").expect("F2").refdes, vec!["R1".to_string()]);
+    assert!(after.feeders.iter().find(|feeder| feeder.id == "F1").expect("F1").refdes.is_empty());
+}
+
+#[test]
+fn update_component_rejects_invalid_requests_without_writing() {
+    let directory = workspace("update-invalid");
+    let path = directory.join("board.osmt");
+    let mut session = OpenSmt::new();
+    session.create(&path).expect("create");
+    session.add_component(Component::new("R1", "0603", 10.0, 10.0)).expect("add R1");
+    let before = session.summary().expect("summary");
+
+    let error = session
+        .update_component("R9", ComponentUpdate { x: Some(20.0), ..ComponentUpdate::default() })
+        .expect_err("unknown refdes");
+    assert_eq!(error.code, "component/unknown-refdes");
+
+    let error = session.update_component("R1", ComponentUpdate::default()).expect_err("empty request");
+    assert_eq!(error.code, "component/invalid");
+
+    let error = session
+        .update_component("R1", ComponentUpdate { height: Some(1.0), clear_height: true, ..ComponentUpdate::default() })
+        .expect_err("set and clear");
+    assert_eq!(error.code, "component/invalid");
+
+    let error = session
+        .update_component("R1", ComponentUpdate { x: Some(500.0), ..ComponentUpdate::default() })
+        .expect_err("outside the board");
+    assert_eq!(error.code, "component/outside-board");
+
+    let error = session
+        .update_component("R1", ComponentUpdate { y: Some(f64::NAN), ..ComponentUpdate::default() })
+        .expect_err("non-finite");
+    assert_eq!(error.code, "component/invalid");
+
+    let error = session
+        .update_component("R1", ComponentUpdate { rotation: Some(f64::INFINITY), ..ComponentUpdate::default() })
+        .expect_err("non-finite rotation");
+    assert_eq!(error.code, "component/invalid");
+
+    let error = session
+        .update_component("R1", ComponentUpdate { package: Some("  ".to_string()), ..ComponentUpdate::default() })
+        .expect_err("empty package");
+    assert_eq!(error.code, "component/invalid");
+
+    let after = session.summary().expect("summary");
+    assert_eq!(after.revision, before.revision);
+    let document = read_document(&path);
+    assert_eq!(document.revision, before.revision);
+    assert_eq!(document.components[0], Component::new("R1", "0603", 10.0, 10.0));
+}
+
+#[test]
+fn update_component_is_deterministic_and_round_trips() {
+    let directory = workspace("update-determinism");
+    let first = directory.join("first.osmt");
+    let second = directory.join("second.osmt");
+    for path in [&first, &second] {
+        let mut session = OpenSmt::new();
+        session.create(path).expect("create");
+        session.add_component(Component::new("R1", "0603", 10.0, 10.0)).expect("add R1");
+        session
+            .update_component(
+                "R1",
+                ComponentUpdate {
+                    package: Some("0805".to_string()),
+                    side: Some(Side::Bottom),
+                    x: Some(20.0),
+                    y: Some(25.0),
+                    rotation: Some(450.0),
+                    height: Some(0.5),
+                    clear_height: false,
+                },
+            )
+            .expect("update R1");
+    }
+    assert_eq!(fs::read(&first).expect("first"), fs::read(&second).expect("second"));
+
+    let reopened = OpenSmt::new().open(&first).expect("reopen");
+    assert_eq!(reopened.revision, 2);
+    let document = read_document(&first);
+    let component = &document.components[0];
+    assert_eq!(component.package, "0805");
+    assert_eq!(component.side, Side::Bottom);
+    assert_eq!(component.x, 20.0);
+    assert_eq!(component.y, 25.0);
+    assert_eq!(component.rotation, 90.0);
+    assert_eq!(component.height, Some(0.5));
 }

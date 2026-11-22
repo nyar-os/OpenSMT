@@ -393,12 +393,34 @@ async function componentCommand(args: readonly string[]): Promise<number> {
             },
         );
     }
+    if (action === 'update') {
+        return editDocument(
+            args.slice(1),
+            'component update <file> --refdes <R1> [--package <pkg>] [--side top|bottom] [--x <x>] [--y <y>] [--rotation <deg>] [--height <h>] [--clear-height]',
+            ['--refdes', '--package', '--side', '--x', '--y', '--rotation', '--height'],
+            async (document, parsed) => {
+                const configuredSide = parsed.options.get('--side');
+                print(
+                    await document.updateComponent(required(parsed, '--refdes'), {
+                        package: parsed.options.get('--package'),
+                        side: configuredSide === undefined ? undefined : side(configuredSide),
+                        x: number(parsed, '--x'),
+                        y: number(parsed, '--y'),
+                        rotation: number(parsed, '--rotation'),
+                        height: number(parsed, '--height'),
+                        clearHeight: parsed.flags.has('--clear-height'),
+                    }),
+                );
+            },
+            ['--clear-height'],
+        );
+    }
     if (action === 'remove') {
         return editDocument(args.slice(1), 'component remove <file>', ['--refdes'], async (document, parsed) => {
             print(await document.removeComponent(required(parsed, '--refdes')));
         });
     }
-    throw failure('cli/missing-argument', 'missingArgument', { usage: 'component add|remove <file> ...' });
+    throw failure('cli/missing-argument', 'missingArgument', { usage: 'component add|update|remove <file> ...' });
 }
 
 async function feederCommand(args: readonly string[]): Promise<number> {

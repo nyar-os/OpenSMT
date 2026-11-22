@@ -392,6 +392,23 @@ export interface ComponentRequest {
     readonly height?: number;
 }
 
+/**
+ * Request of `updateComponent()`; the refdes identifies the component.
+ *
+ * Every supplied field replaces the stored value and omitted fields keep
+ * theirs. `rotation` is normalised to `[0, 360)` when supplied. `clearHeight`
+ * sets the height back to `null` and conflicts with `height`.
+ */
+export interface ComponentUpdateRequest {
+    readonly package?: string;
+    readonly side?: Side;
+    readonly x?: number;
+    readonly y?: number;
+    readonly rotation?: number;
+    readonly height?: number;
+    readonly clearHeight?: boolean;
+}
+
 /** Request of `addFeeder()`; `loaded` defaults to `capacity`. */
 export interface FeederRequest {
     readonly id: string;

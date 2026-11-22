@@ -153,3 +153,55 @@ test('schedule lanes splits the program and rejects an invalid count', { skip: s
         await fs.rm(directory, { recursive: true, force: true });
     }
 });
+
+test('component update edits a placed component in place', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-update-'));
+    const file = path.join(directory, 'panel.osmt');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 100 });
+        await document.addFeeder({ id: 'F2', package: '0805', pitch: 4, capacity: 100 });
+        const before = document.revision;
+
+        await document.updateComponent('R1', {
+            package: '0805',
+            side: 'bottom',
+            x: 20,
+            y: 30,
+            rotation: 450,
+        });
+        assert.equal(document.revision, before + 1);
+
+        const placement = await document.placement();
+        const entry = placement.entries.find((item) => item.refdes === 'R1');
+        assert.ok(entry);
+        assert.equal(entry.package, '0805');
+        assert.equal(entry.side, 'bottom');
+        assert.equal(entry.x, 20);
+        assert.equal(entry.y, 30);
+        assert.equal(entry.rotation, 90);
+        assert.equal(entry.feeder, 'F2');
+
+        await assert.rejects(document.updateComponent('R9', { x: 20 }), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'component/unknown-refdes');
+            return true;
+        });
+        await assert.rejects(document.updateComponent('R1', {}), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'component/invalid');
+            return true;
+        });
+        await assert.rejects(document.updateComponent('R1', { x: 500 }), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'component/outside-board');
+            return true;
+        });
+        assert.equal(document.revision, before + 1);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});

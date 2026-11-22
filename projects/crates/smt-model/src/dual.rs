@@ -253,7 +253,8 @@ fn check_structure(document: &SmtDocument) -> Result<(), SmtError> {
 fn check_lane_count(lane_count: usize) -> Result<(), SmtError> {
     if (MIN_LANES..=MAX_LANES).contains(&lane_count) {
         Ok(())
-    } else {
+    }
+    else {
         Err(SmtError::new(
             "schedule/invalid-lanes",
             format!("lane count {lane_count} must be between {MIN_LANES} and {MAX_LANES}"),
@@ -354,7 +355,8 @@ fn improve_swaps(tasks: &[DualLaneTask], members: &mut [Vec<usize>], seconds: &m
                 }
             }
         }
-        let Some((left_lane, right_lane, left, right, candidate_left, candidate_right)) = swap else {
+        let Some((left_lane, right_lane, left, right, candidate_left, candidate_right)) = swap
+        else {
             break;
         };
         let (before, after) = members.split_at_mut(right_lane);

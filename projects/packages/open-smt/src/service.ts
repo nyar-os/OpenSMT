@@ -11,6 +11,7 @@ import type {
     BalanceReport,
     BoardRequest,
     ComponentRequest,
+    ComponentUpdateRequest,
     DocumentSummary,
     DualLaneReport,
     DualLaneStrategy,
@@ -125,6 +126,13 @@ export function setPanel(path: string, request: PanelRequest): DocumentSummary {
 /** Adds a component and returns the updated summary. */
 export function addComponent(path: string, request: ComponentRequest): DocumentSummary {
     return decode<DocumentSummary>(() => binding('component.add').component_add(path, JSON.stringify(request)));
+}
+
+/** Applies a partial edit to a placed component and returns the updated summary. */
+export function updateComponent(path: string, refdes: string, request: ComponentUpdateRequest): DocumentSummary {
+    return decode<DocumentSummary>(() =>
+        binding('component.update').component_update(path, JSON.stringify({ refdes, ...request })),
+    );
 }
 
 /** Removes a component and returns the updated summary. */

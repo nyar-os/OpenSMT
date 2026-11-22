@@ -9,6 +9,7 @@
             "open-smt panel <file> --rows <r> --columns <c> [--gap-x <g>] [--gap-y <g>]",
             "open-smt panel fit <file> --max-width <mm> --max-depth <mm> [--gap-x <mm>] [--gap-y <mm>]",
             "open-smt component add <file> --refdes <R1> --package <pkg> --x <x> --y <y> [--side top|bottom] [--rotation <deg>] [--height <h>]",
+            "open-smt component update <file> --refdes <R1> [--package <pkg>] [--side top|bottom] [--x <x>] [--y <y>] [--rotation <deg>] [--height <h>] [--clear-height]",
             "open-smt component remove <file> --refdes <R1>",
             "open-smt feeder add <file> --id <id> --package <pkg> --pitch <mm> --capacity <n> [--loaded <n>]",
             "open-smt feeder remove <file> --id <id>",

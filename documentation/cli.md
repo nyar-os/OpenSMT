@@ -116,6 +116,26 @@ open-smt component add <file> --refdes <R1> --package <pkg> --x <x> --y <y>
 `component/duplicate-refdes`; a position outside the board reports
 `component/outside-board`.
 
+## component update
+
+```shell
+open-smt component update <file> --refdes <R1> [--package <pkg>]
+                     [--side top|bottom] [--x <x>] [--y <y>]
+                     [--rotation <deg>] [--height <h>] [--clear-height]
+```
+
+Applies a partial edit to one placed component and writes one revision. The
+reference designator identifies the component and never changes. Every supplied
+option replaces the stored value; omitted options keep theirs, so the command
+must name at least one field. `--rotation` is normalised to `[0, 360)` (for
+example `450` becomes `90`) and an omitted rotation is left unchanged.
+`--height` sets the height and `--clear-height` sets it back to `null`; naming
+both reports `component/invalid`, as does an empty edit. An unknown `--refdes`
+reports `component/unknown-refdes`. The resulting document is checked against
+the same board-bounds, finite-value, package and height rules as `component add`,
+so an outside-board position reports `component/outside-board` and nothing is
+written.
+
 ## component remove
 
 ```shell
@@ -309,6 +329,8 @@ open-smt panel panel.osmt --rows 2 --columns 2 --gap-x 5 --gap-y 5
 open-smt panel fit panel.osmt --max-width 320 --max-depth 180 --gap-x 5 --gap-y 5
 open-smt component add panel.osmt --refdes R1 --package 0603 --x 10 --y 10
 open-smt component add panel.osmt --refdes U1 --package QFN-32 --x 50 --y 40 --side bottom
+open-smt component update panel.osmt --refdes R1 --x 20 --y 15 --rotation 90
+open-smt component update panel.osmt --refdes U1 --clear-height
 open-smt feeder add panel.osmt --id F1 --package 0603 --pitch 4 --capacity 500
 open-smt feeder add panel.osmt --id F2 --package QFN-32 --pitch 12 --capacity 50
 open-smt feeder report panel.osmt

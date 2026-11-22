@@ -15,7 +15,8 @@ use std::path::Path;
 use serde::Serialize;
 use serde_json::Value;
 use smt_model::{
-    Board, Component, DualLaneStrategy, ExportFormat, Feeder, OpenSmt, Panel, ReflowProfile, Side, SmtError, Zone,
+    Board, Component, ComponentUpdate, DualLaneStrategy, ExportFormat, Feeder, OpenSmt, Panel, ReflowProfile, Side, SmtError,
+    Zone,
 };
 use wae::{CallContext, Error, JsValue, Result, function, register_module};
 
@@ -65,6 +66,23 @@ fn text_field(request: &Value, name: &str) -> Result<String> {
     match request.get(name).and_then(Value::as_str) {
         Some(value) if !value.is_empty() => Ok(value.to_string()),
         _ => Err(argument_error(&format!("`{name}` must be a non-empty string"))),
+    }
+}
+
+fn optional_text_field(request: &Value, name: &str) -> Result<Option<String>> {
+    match request.get(name) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => match value.as_str() {
+            Some(text) if !text.is_empty() => Ok(Some(text.to_string())),
+            _ => Err(argument_error(&format!("`{name}` must be a non-empty string"))),
+        },
+    }
+}
+
+fn bool_field(request: &Value, name: &str) -> Result<bool> {
+    match request.get(name) {
+        None | Some(Value::Null) => Ok(false),
+        Some(value) => value.as_bool().ok_or_else(|| argument_error(&format!("`{name}` must be a boolean"))),
     }
 }
 
@@ -204,6 +222,31 @@ fn component_add(ctx: CallContext) -> Result<JsValue> {
     let mut session = OpenSmt::new();
     session.open(Path::new(&path)).map_err(fail)?;
     let summary = session.add_component(component).map_err(fail)?;
+    respond(&ctx, &summary)
+}
+
+/// Applies a partial edit to a placed component and saves the document.
+///
+/// The request carries `refdes` plus any of `package`, `side`, `x`, `y`,
+/// `rotation`, `height` and `clearHeight`.
+#[function]
+fn component_update(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let request = object(&ctx, 1)?;
+    let refdes = text_field(&request, "refdes")?;
+    let side = optional_text_field(&request, "side")?.map(|raw| raw.parse::<Side>()).transpose().map_err(fail)?;
+    let update = ComponentUpdate {
+        package: optional_text_field(&request, "package")?,
+        side,
+        x: number_field(&request, "x")?,
+        y: number_field(&request, "y")?,
+        rotation: number_field(&request, "rotation")?,
+        height: number_field(&request, "height")?,
+        clear_height: bool_field(&request, "clearHeight")?,
+    };
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let summary = session.update_component(&refdes, update).map_err(fail)?;
     respond(&ctx, &summary)
 }
 
@@ -437,6 +480,7 @@ register_module![
     board_set,
     panel_set,
     component_add,
+    component_update,
     component_remove,
     feeder_add,
     feeder_remove,

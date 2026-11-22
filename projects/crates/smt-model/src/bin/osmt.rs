@@ -3,8 +3,8 @@
 use std::{collections::HashMap, env, path::Path, process};
 
 use smt_model::{
-    BalanceReport, Board, Component, DualLaneStrategy, ExportFormat, Feeder, OpenSmt, Panel, ReflowProfile, Side, SmtError,
-    Zone,
+    BalanceReport, Board, Component, ComponentUpdate, DualLaneStrategy, ExportFormat, Feeder, OpenSmt, Panel, ReflowProfile,
+    Side, SmtError, Zone,
 };
 
 const USAGE: &str = "\
@@ -19,6 +19,8 @@ Usage:
   osmt panel fit <file> --max-width <mm> --max-depth <mm> [--gap-x <mm>] [--gap-y <mm>]
   osmt component add <file> --refdes <R1> --package <pkg> --x <x> --y <y>
                      [--side top|bottom] [--rotation <deg>] [--height <h>]
+  osmt component update <file> --refdes <R1> [--package <pkg>] [--side top|bottom]
+                     [--x <x>] [--y <y>] [--rotation <deg>] [--height <h>] [--clear-height]
   osmt component remove <file> --refdes <R1>
   osmt feeder add <file> --id <id> --package <pkg> --pitch <mm> --capacity <n> [--loaded <n>]
   osmt feeder remove <file> --id <id>
@@ -199,12 +201,31 @@ fn component_command(args: &[String]) -> Result<i32, SmtError> {
             component.height = values.optional_number("--height")?;
             print_json(&session(file)?.add_component(component)?)
         }
+        "update" => {
+            let file = positional(args, 2, "component update <file> --refdes <R1>")?;
+            let values = Options::parse(
+                &args[3..],
+                &["--refdes", "--package", "--side", "--x", "--y", "--rotation", "--height"],
+                &["--clear-height"],
+            )?;
+            let refdes = values.require("--refdes")?.to_string();
+            let update = ComponentUpdate {
+                package: values.value("--package").map(str::to_string),
+                side: values.value("--side").map(|raw| raw.parse::<Side>()).transpose()?,
+                x: values.optional_number("--x")?,
+                y: values.optional_number("--y")?,
+                rotation: values.optional_number("--rotation")?,
+                height: values.optional_number("--height")?,
+                clear_height: values.flag("--clear-height"),
+            };
+            print_json(&session(file)?.update_component(&refdes, update)?)
+        }
         "remove" => {
             let file = positional(args, 2, "component remove <file>")?;
             let values = Options::parse(&args[3..], &["--refdes"], &[])?;
             print_json(&session(file)?.remove_component(values.require("--refdes")?)?)
         }
-        _ => Err(SmtError::new("cli/missing-argument", "usage: osmt component add|remove <file> ...")),
+        _ => Err(SmtError::new("cli/missing-argument", "usage: osmt component add|update|remove <file> ...")),
     }
 }
 

@@ -13,6 +13,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | rectangular board in millimetres | ✅ supported |
 | panel array with row/column gaps | ✅ supported |
 | component list with side, rotation and height | ✅ supported |
+| partial component update (in-place edit) | ✅ supported |
 | feeder setup with package, pitch, capacity and loaded quantity | ✅ supported |
 | deterministic placement sequence | ✅ supported |
 | optional 2-opt placement optimisation | ✅ supported |
@@ -121,6 +122,18 @@ The machine-readable version is printed by `open-smt capabilities` and by
     `wastedWidth = maxWidth − panelWidth`, `wastedDepth = maxDepth − panelDepth`
     and `utilization = panelWidth × panelDepth / (maxWidth × maxDepth)`;
     otherwise all three are zero.
+11. **Component update.** `updateComponent` (CLI
+    `component update <file> --refdes <R1> ...`) applies a partial edit to one
+    placed component and saves one revision. The reference designator identifies
+    the component and never changes. At least one of `package`, `side`, `x`, `y`,
+    `rotation`, `height` or `clearHeight` must be supplied; omitted fields keep
+    their value. A supplied `rotation` is normalised to `[0, 360)` (for example
+    `450` becomes `90`), an omitted rotation is left unchanged, and `clearHeight`
+    sets the height back to `null`. An empty request, or `height` together with
+    `clearHeight`, reports `component/invalid`; an unknown reference designator
+    reports `component/unknown-refdes`. The edited document is validated with the
+    same board-bounds, finite-value, side, rotation, package and height rules as
+    `component add`, so a failed update writes nothing and keeps the revision.
 
 ## KiCad PCB import
 
@@ -215,6 +228,7 @@ are skipped. Rows keep the order of the source.
 | `schedule/invalid-lanes` | a multi-lane schedule requested fewer than 2 or more than 16 lanes |
 | `component/invalid` | empty refdes/package, non-finite values or bad rotation |
 | `component/duplicate-refdes` | a reference designator is declared twice |
+| `component/unknown-refdes` | an update or removal names a component that does not exist |
 | `component/outside-board` | a component lies outside the board |
 | `feeder/invalid` | empty id/package, non-positive pitch/capacity, loaded > capacity |
 | `feeder/duplicate-id` | a feeder id is declared twice |
@@ -237,9 +251,9 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/validation.rs` | every code above and warning-only documents |
 | `tests/feeder.rs` | package counts, slot numbering in package order, reference designator document order, deduplicated sorted sides, empty document, determinism |
 | `tests/panel_fit.rs` | exact-fit 2 × 3 arithmetic, leftover gaps, too-small dimensions, zero waste, gap effects, utilization, stored-gap default versus override, invalid maxima and gaps, determinism, unchanged document |
-| `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as |
+| `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as; partial component update (move, rotation normalisation, side and package changes, height set and cleared, untouched fields, invalid requests, one revision, determinism, round trip) |
 | `tests/import.rs` | KiCad footprint mapping, rotation, both sides, reference sources, loss ledger, outline errors, duplicate/missing references, empty board, determinism, existing target; CSV row order, reordered/quoted/UPPERCASE columns, empty lines, side and rotation defaults, duplicate refdes, missing column, invalid number, invalid side, line numbers, negative coordinate, determinism, one revision, existing target |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane and panel-fit smokes |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit and component-update smokes |
 
 ## Limitations
 

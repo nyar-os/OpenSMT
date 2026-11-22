@@ -22,6 +22,9 @@ open-smt board <file> --width <w> --depth <d> --thickness <t>
 open-smt panel <file> --rows <r> --columns <c> [--gap-x <g>] [--gap-y <g>]
 open-smt component add <file> --refdes <R1> --package <pkg> --x <x> --y <y>
                      [--side top|bottom] [--rotation <deg>] [--height <h>]
+open-smt component update <file> --refdes <R1> [--package <pkg>]
+                     [--side top|bottom] [--x <x>] [--y <y>]
+                     [--rotation <deg>] [--height <h>] [--clear-height]
 open-smt component remove <file> --refdes <R1>
 open-smt feeder add <file> --id <id> --package <pkg> --pitch <mm> --capacity <n>
                      [--loaded <n>]
@@ -78,6 +81,8 @@ await document.setBoard({ width: 120, depth: 90, thickness: 1.6 });
 await document.setPanel({ rows: 2, columns: 2, gapX: 5, gapY: 5 });
 await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
 await document.addComponent({ refdes: 'U1', package: 'QFN-32', side: 'bottom', x: 50, y: 40 });
+await document.updateComponent('R1', { x: 20, y: 15, rotation: 450, height: 0.8 });
+await document.updateComponent('U1', { clearHeight: true });
 await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 500 });
 await document.addFeeder({ id: 'F2', package: 'QFN-32', pitch: 12, capacity: 50, loaded: 20 });
 

@@ -37,7 +37,8 @@ pub(crate) struct ImportedCsv {
 /// Parses one CSV placement file.
 pub(crate) fn parse(source: &str, default_side: Side) -> Result<ImportedCsv, SmtError> {
     let records = read_records(source)?;
-    let Some(header) = records.first() else {
+    let Some(header) = records.first()
+    else {
         return Err(SmtError::new("import/parse", "the CSV file is empty"));
     };
     let columns = columns(header)?;

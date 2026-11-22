@@ -132,6 +132,44 @@ pub struct Report {
     pub program_lines: usize,
 }
 
+/// Partial in-place edit of one placed component.
+///
+/// Every supplied field replaces the stored value; omitted fields keep theirs.
+/// The reference designator is never part of the request because it identifies
+/// the component. Supplying `rotation` re-normalises it to `[0, 360)`; omitting
+/// it keeps the stored value unchanged. `clear_height` sets the height back to
+/// `None` and conflicts with `height`.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ComponentUpdate {
+    /// Replacement package identifier.
+    pub package: Option<String>,
+    /// Replacement board side.
+    pub side: Option<Side>,
+    /// Replacement X coordinate.
+    pub x: Option<f64>,
+    /// Replacement Y coordinate.
+    pub y: Option<f64>,
+    /// Replacement rotation in degrees, normalised to `[0, 360)`.
+    pub rotation: Option<f64>,
+    /// Replacement component height.
+    pub height: Option<f64>,
+    /// Clears the component height.
+    pub clear_height: bool,
+}
+
+impl ComponentUpdate {
+    /// Returns whether the request names no field at all.
+    pub const fn is_empty(&self) -> bool {
+        self.package.is_none()
+            && self.side.is_none()
+            && self.x.is_none()
+            && self.y.is_none()
+            && self.rotation.is_none()
+            && self.height.is_none()
+            && !self.clear_height
+    }
+}
+
 /// One document session.
 #[derive(Debug, Default)]
 pub struct OpenSmt {
@@ -281,6 +319,49 @@ impl OpenSmt {
             ));
         }
         document.components.push(component);
+        self.persist(document)
+    }
+
+    /// Applies a partial edit to a placed component and saves the document.
+    ///
+    /// `refdes` selects the component and never changes. The request must name
+    /// at least one field and cannot set and clear the height at once; both
+    /// report `component/invalid`. An unknown reference reports
+    /// `component/unknown-refdes`. The edited document is validated with the
+    /// same rules as [`OpenSmt::add_component`] before it is written.
+    pub fn update_component(&mut self, refdes: &str, request: ComponentUpdate) -> Result<DocumentSummary, SmtError> {
+        let mut document = self.document()?.clone();
+        if request.is_empty() {
+            return Err(SmtError::new("component/invalid", "component update needs at least one field"));
+        }
+        if request.clear_height && request.height.is_some() {
+            return Err(SmtError::new("component/invalid", "component update cannot set and clear the height at once"));
+        }
+        let Some(component) = document.components.iter_mut().find(|component| component.refdes == refdes)
+        else {
+            return Err(SmtError::new("component/unknown-refdes", format!("component `{refdes}` does not exist")));
+        };
+        if let Some(package) = request.package {
+            component.package = package;
+        }
+        if let Some(side) = request.side {
+            component.side = side;
+        }
+        if let Some(x) = request.x {
+            component.x = x;
+        }
+        if let Some(y) = request.y {
+            component.y = y;
+        }
+        if let Some(rotation) = request.rotation {
+            component.rotation = rotation.rem_euclid(360.0);
+        }
+        if request.clear_height {
+            component.height = None;
+        }
+        else if let Some(height) = request.height {
+            component.height = Some(height);
+        }
         self.persist(document)
     }
 

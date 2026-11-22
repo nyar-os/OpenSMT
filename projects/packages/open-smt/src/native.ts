@@ -23,6 +23,7 @@ export interface NativeBinding {
     board_set(path: string, requestJson: string): string;
     panel_set(path: string, requestJson: string): string;
     component_add(path: string, requestJson: string): string;
+    component_update(path: string, requestJson: string): string;
     component_remove(path: string, requestJson: string): string;
     feeder_add(path: string, requestJson: string): string;
     feeder_remove(path: string, requestJson: string): string;

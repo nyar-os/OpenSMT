@@ -13,6 +13,7 @@ import type {
     Board,
     BoardRequest,
     ComponentRequest,
+    ComponentUpdateRequest,
     DocumentSummary,
     DualLaneReport,
     DualLaneStrategy,
@@ -100,6 +101,13 @@ export class SmtDocument {
     async addComponent(request: ComponentRequest): Promise<DocumentSummary> {
         this.assertOpen();
         this.state = service.addComponent(this.state.path, request);
+        return this.state;
+    }
+
+    /** Applies a partial edit to a placed component. */
+    async updateComponent(refdes: string, request: ComponentUpdateRequest): Promise<DocumentSummary> {
+        this.assertOpen();
+        this.state = service.updateComponent(this.state.path, refdes, request);
         return this.state;
     }
 
