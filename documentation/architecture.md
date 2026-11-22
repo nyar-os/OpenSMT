@@ -6,7 +6,7 @@ boundaries a change must respect.
 ## Layers
 
 ```
-projects/crates/smt-model      document model, validation, allocation, sequencing, reflow, reports
+projects/crates/smt-model      document model, validation, allocation, sequencing, balancing, reflow, reports
 projects/crates/smt-napi       Node-API exports; values in, JSON strings out
 projects/packages/open-smt     TypeScript SDK (session + document) and CLI
 projects/sites/homepage        static product site (VMZ)
@@ -19,8 +19,10 @@ projects/sites/homepage        static product site (VMZ)
    writes it atomically, then returns a `DocumentSummary`.
 3. `feeders` validates and allocates every component to a lane.
 4. `placement` sequences the allocated components and returns the program.
-5. `reflow` evaluates the profile.
-6. `export` writes the program CSV, feeder CSV, JSON or Markdown through the same
+5. `balance` assigns components to 1–64 machines and reports per-machine
+   programs and feeder coverage.
+6. `reflow` evaluates the profile.
+7. `export` writes the program CSV, feeder CSV, JSON or Markdown through the same
    atomic writer.
 
 Because the `osmt` binary, the Node-API addon and the SDK all call the same
@@ -86,4 +88,5 @@ but unimplemented routes and maps to exit code `2`.
 
 `version`, `capabilities`, `create`, `open`, `save`, `board_set`, `panel_set`,
 `component_add`, `component_remove`, `feeder_add`, `feeder_remove`,
-`profile_set`, `validate`, `placement`, `feeders`, `reflow`, `export`, `report`.
+`profile_set`, `validate`, `placement`, `feeders`, `balance`, `reflow`, `export`,
+`report`.

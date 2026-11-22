@@ -25,7 +25,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | JSON / Markdown reports | ✅ supported |
 | paste aperture / stencil generation | ❌ not implemented |
 | vendor machine programs (Fuji, Yamaha, Juki, ASM) | ❌ not implemented |
-| line balancing | ❌ not implemented |
+| line balancing | ✅ supported |
 | dual-lane scheduling | ❌ not implemented |
 | KiCad / Altium / ODB import | ❌ not implemented |
 
@@ -43,10 +43,21 @@ The machine-readable version is printed by `open-smt capabilities` and by
 3. **Travel and time.** Travel is the sum of straight-line distances inside each
    side, with a fresh origin per side. Estimated placement time is
    `components × 0.6 s + travel / 200 mm·s⁻¹`.
-4. **Panel arithmetic.** `boardCount = rows × columns`,
+4. **Line balance.** `balance(machineCount)` accepts 1–64 machines and rejects
+   anything else with `balance/invalid-machines`. Components are sorted by
+   reference designator and assigned one at a time to the machine with the
+   smallest estimated completion time; a tie goes to the lowest machine index.
+   Every machine keeps a full feeder copy, starts each side at its own origin
+   and is re-sequenced with the same nearest-neighbour rule and the same
+   `0.6 s` per component plus `travel / 200 mm·s⁻¹` estimate. `imbalance` is
+   `(max − min) / max`, or zero when the slowest machine takes zero seconds.
+   Each feeder copy reports `assigned` and `loaded` and sets `ok: false` when
+   the loaded quantity does not cover the assignments; the report is still
+   produced and the top-level `ok` becomes false.
+5. **Panel arithmetic.** `boardCount = rows × columns`,
    `panelWidth = columns × width + (columns − 1) × gapX`, and
    `panelDepth = rows × depth + (rows − 1) × gapY`.
-5. **Reflow.** The board enters the first zone at 25 °C. Each zone ramps linearly
+6. **Reflow.** The board enters the first zone at 25 °C. Each zone ramps linearly
    from the previous set-point to its own set-point over
    `length / conveyor_speed × 60` seconds. Time above liquidus is integrated over
    each ramp, including partial crossings in either direction. Peak temperature
@@ -59,6 +70,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | `document/format`, `document/version`, `document/units` | not an OpenSMT millimetre document |
 | `board/invalid` | a board size is not finite and positive |
 | `panel/invalid` | zero rows/columns or a negative gap |
+| `balance/invalid-machines` | a balance requested fewer than 1 or more than 64 machines |
 | `component/invalid` | empty refdes/package, non-finite values or bad rotation |
 | `component/duplicate-refdes` | a reference designator is declared twice |
 | `component/outside-board` | a component lies outside the board |
@@ -77,10 +89,11 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | File | Asserts |
 |------|---------|
 | `tests/place.rs` | allocation order, nearest-first sequence, tie-breaks, panel size, multi-feeder split, determinism |
+| `tests/balance.rs` | single-machine parity, component conservation, side order, determinism, empty machines, invalid counts, per-machine feeder shortages |
 | `tests/reflow.rs` | default profile numbers, exact single-zone integral, below-liquidus profile, zone order |
 | `tests/validation.rs` | every code above and warning-only documents |
 | `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle and argument errors before the addon |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon and a native-gated balance smoke |
 
 ## Limitations
 
@@ -89,6 +102,9 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 - The feeder model has no lane index, tape direction or splice handling.
 - Reflow uses set-points, not measured thermocouple data, and models no
   convection or board thermal mass.
-- Only the top and bottom sides are supported; there is no dual-lane or
-  multi-machine scheduling.
+- Only the top and bottom sides are supported; there is no dual-lane
+  scheduling.
+- Line balancing distributes whole components across 1–64 machines but does not
+  emit vendor machine programs, model conveyor lanes or account for line
+  changeover time.
 - Vendor dialects and paste apertures are out of scope and reported as such.

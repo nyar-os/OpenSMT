@@ -30,6 +30,7 @@ open-smt profile set <file> --speed <mm/min> --liquidus <c>
 open-smt validate <file>
 open-smt placement <file> [--out program.json]
 open-smt feeders <file> [--out setup.csv]
+open-smt balance <file> --machines <n>
 open-smt reflow <file>
 open-smt export <file> --format program|feeders|json|md --out <path>
 open-smt report <file>
@@ -49,7 +50,8 @@ open-smt export panel.osmt --format program --out program.csv
 ```
 
 `placement` prints the program and can write it as JSON; `feeders` prints the
-allocation and can write a CSV setup sheet. Exit code `0` is success, `1` is
+allocation and can write a CSV setup sheet; `balance` prints a human-readable
+multi-machine balance for 1–64 machines. Exit code `0` is success, `1` is
 invalid input, and `2` is an unimplemented capability.
 
 ## SDK
@@ -69,6 +71,9 @@ await document.addFeeder({ id: 'F2', package: 'QFN-32', pitch: 12, capacity: 50,
 
 const report = await document.report();
 console.log(report.placement.entries.length, report.reflow.timeAboveLiquidus);
+
+const balance = await document.balance(2);
+console.log(balance.maxSeconds, balance.imbalance);
 
 await document.exportDocument('md', 'report.md');
 await smt.dispose();
@@ -97,8 +102,9 @@ because a component list is normally entered before the feeder table.
 - Units are millimetres; temperatures are degrees Celsius; no conversion.
 - Placement is a deterministic nearest-neighbour sequence, not a production
   optimiser.
-- Vendor machine programs, paste apertures, line balancing and dual-lane work
-  are not implemented.
+- Line balancing assigns whole components to 1–64 machines; it does not emit
+  vendor machine programs, model dual-lane conveyors or line changeover time.
+- Vendor machine programs and paste apertures are not implemented.
 - `validate()` is the support claim for machineability.
 
 ## License

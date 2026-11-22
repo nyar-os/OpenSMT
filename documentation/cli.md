@@ -1,7 +1,8 @@
 # Command line
 
 `open-smt` is the packaged CLI. The Rust binary `osmt` accepts the same commands
-for development and prints the same JSON.
+for development. Both print the same JSON, except `balance`, which prints the
+same human-readable summary.
 
 ```text
 open-smt <command> [options]
@@ -110,6 +111,20 @@ open-smt feeders <file> [--out setup.csv]
 
 Prints the feeder allocation and optionally writes a CSV setup sheet with id,
 package, loaded, capacity, assigned, remaining and assigned refdes.
+
+## balance
+
+```shell
+open-smt balance <file> --machines <n>
+```
+
+Prints a human-readable line balance: the machine count, total, maximum and
+minimum seconds, the imbalance, and for each machine its components in
+execution order, travel, estimated seconds and feeder copies as
+`id assigned/loaded ok|short`. `n` must be an integer from 1 to 64; any other
+value reports `balance/invalid-machines` and exits with code `1`. A feeder copy
+that cannot cover its assignments is printed as `short` and sets the overall
+`ok` to false instead of failing the command.
 
 ## reflow
 
