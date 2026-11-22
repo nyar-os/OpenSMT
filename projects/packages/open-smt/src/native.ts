@@ -18,6 +18,7 @@ export interface NativeBinding {
     create(path: string): string;
     open(path: string): string;
     import(source: string, target: string): string;
+    import_csv(source: string, target: string, side?: string): string;
     save(path: string, target?: string): string;
     board_set(path: string, requestJson: string): string;
     panel_set(path: string, requestJson: string): string;

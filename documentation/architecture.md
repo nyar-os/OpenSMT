@@ -15,6 +15,8 @@ projects/sites/homepage        static product site (VMZ)
 ## Data flow
 
 1. `OpenSmt.create` writes a fresh `.osmt` document; `OpenSmt.open` parses one.
+   `OpenSmt.import` and `OpenSmt.importCsv` write a new document from a KiCad
+   PCB or a CSV placement table.
 2. An edit mutates a candidate document in memory, validates it structurally,
    writes it atomically, then returns a `DocumentSummary`.
 3. `feeders` validates and allocates every component to a lane.
@@ -87,7 +89,7 @@ but unimplemented routes and maps to exit code `2`.
 
 ## Node-API surface
 
-`version`, `capabilities`, `create`, `open`, `import`, `save`, `board_set`, `panel_set`,
+`version`, `capabilities`, `create`, `open`, `import`, `import_csv`, `save`, `board_set`, `panel_set`,
 `component_add`, `component_remove`, `feeder_add`, `feeder_remove`,
 `profile_set`, `validate`, `placement`, `feeders`, `balance`, `dual_lane`,
 `reflow`, `export`, `report`.

@@ -13,6 +13,7 @@ osmt - OpenSMT placement, feeder and reflow planner (millimetres, degrees Celsiu
 Usage:
   osmt create <file.osmt>
   osmt import <file.kicad_pcb> --out <file.osmt>
+  osmt import csv <file.csv> --out <file.osmt> [--side top|bottom]
   osmt board <file> --width <w> --depth <d> --thickness <t>
   osmt panel <file> --rows <r> --columns <c> [--gap-x <g>] [--gap-y <g>]
   osmt component add <file> --refdes <R1> --package <pkg> --x <x> --y <y>
@@ -70,12 +71,7 @@ fn run(args: &[String]) -> Result<i32, SmtError> {
             let file = positional(args, 1, "create <file>")?;
             print_json(&OpenSmt::new().create(Path::new(file))?)
         }
-        "import" => {
-            let file = positional(args, 1, "import <file.kicad_pcb> --out <file.osmt>")?;
-            let values = Options::parse(&args[2..], &["--out"], &[])?;
-            let target = values.require("--out")?;
-            print_json(&OpenSmt::new().import(Path::new(file), Path::new(target))?)
-        }
+        "import" => import_command(args),
         "board" => {
             let file = positional(args, 1, "board <file>")?;
             let values = Options::parse(&args[2..], &["--width", "--depth", "--thickness"], &[])?;
@@ -149,6 +145,23 @@ fn run(args: &[String]) -> Result<i32, SmtError> {
         }
         other => Err(SmtError::new("cli/unknown-command", format!("unknown command `{other}`"))),
     }
+}
+
+fn import_command(args: &[String]) -> Result<i32, SmtError> {
+    if args.get(1).map(String::as_str) == Some("csv") {
+        let source = positional(args, 2, "import csv <file.csv> --out <file.osmt> [--side top|bottom]")?;
+        let values = Options::parse(&args[3..], &["--out", "--side"], &[])?;
+        let target = values.require("--out")?;
+        let default_side = match values.value("--side") {
+            Some(raw) => raw.parse::<Side>()?,
+            None => Side::Top,
+        };
+        return print_json(&OpenSmt::new().import_csv(Path::new(source), Path::new(target), default_side)?);
+    }
+    let file = positional(args, 1, "import <file.kicad_pcb> --out <file.osmt>")?;
+    let values = Options::parse(&args[2..], &["--out"], &[])?;
+    let target = values.require("--out")?;
+    print_json(&OpenSmt::new().import(Path::new(file), Path::new(target))?)
 }
 
 fn component_command(args: &[String]) -> Result<i32, SmtError> {

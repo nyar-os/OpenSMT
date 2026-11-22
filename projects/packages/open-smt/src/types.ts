@@ -276,9 +276,9 @@ export interface ImportLoss {
     readonly count: number;
 }
 
-/** Result of `import()`. */
+/** Result of `import()` or `importCsv()`. */
 export interface ImportReport {
-    /** Source format identifier; `kicad_pcb`. */
+    /** Source format identifier: `kicad_pcb` or `csv`. */
     readonly format: string;
     /** Aggregated losses in code order. */
     readonly losses: readonly ImportLoss[];

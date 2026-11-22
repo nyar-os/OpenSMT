@@ -29,6 +29,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | line balancing | ✅ supported |
 | multi-lane scheduling (2–16 lanes, including the dual-lane report) | ✅ supported (greedy or LPT, optional swaps; not optimal) |
 | KiCad PCB (`.kicad_pcb`) import | ✅ supported |
+| CSV placement (`.csv`) import | ✅ supported |
 | Altium / ODB import | ❌ not implemented |
 
 ## Algorithms
@@ -139,13 +140,47 @@ rules as hand-entered components; the imported document may still report
 `feeder/missing` and `feeder/capacity` until a feeder setup exists. An existing
 target file is never overwritten (`file/exists`).
 
+## CSV placement import
+
+`open-smt import csv <file.csv> --out <file.osmt> [--side top|bottom]` reads a
+generic placement table into a new document. The first non-empty line is the
+header and must declare `refdes`, `package`, `x` and `y`; `rotation` and `side`
+are optional. Names are case-insensitive, columns may appear in any order, a
+double-quoted field may contain commas or a doubled `""` quote, and empty lines
+are skipped. Rows keep the order of the source.
+
+- **Rows.** One component per row. `x` and `y` are millimetres and are neither
+  converted nor translated. `rotation` defaults to `0` and is normalised to
+  `[0, 360)`; `side` defaults to the command's `--side` (or `top`) and accepts
+  `top`/`bottom` in any case. `height` stays `null`.
+- **Board.** The source carries no outline, so the board is sized to the largest
+  coordinate and is never smaller than the default 100 × 80 mm; thickness is the
+  1.6 mm default. Negative coordinates are refused because the board origin is a
+  corner.
+- **Revision.** The import is one edit: the new document is written atomically
+  with revision 1. An existing target is never overwritten (`file/exists`).
+- **Checks.** Unknown or duplicate columns and rows whose field count differs
+  from the header are refused. A missing column, a non-numeric coordinate, an
+  unknown side, an empty `refdes`/`package` or a repeated reference designator
+  reports an `import/...` code that names the physical line.
+
 ## Validation
 
 | Code | Meaning |
 |------|---------|
 | `document/format`, `document/version`, `document/units` | not an OpenSMT millimetre document |
-| `import/parse` | the file is not a KiCad PCB S-expression |
+| `import/parse` | the file is not a KiCad PCB S-expression, or the CSV cannot be tokenised |
 | `import/outline-unsupported` | `Edge.Cuts` is missing or is not one axis-aligned rectangle |
+| `import/missing-column` | the CSV header lacks `refdes`, `package`, `x` or `y` |
+| `import/unknown-column` | the CSV header declares a column other than the six known names |
+| `import/duplicate-column` | the CSV header declares the same column twice |
+| `import/invalid-header` | a CSV header column has an empty name |
+| `import/invalid-row` | a CSV row has a different field count than the header |
+| `import/invalid-value` | a CSV row has an empty `refdes` or `package` |
+| `import/invalid-number` | a CSV coordinate or rotation is not a finite number |
+| `import/invalid-side` | a CSV row states a side other than top or bottom |
+| `import/duplicate-refdes` | a CSV row repeats a reference designator |
+| `import/outside-board` | a CSV row has a negative coordinate |
 | `board/invalid` | a board size is not finite and positive |
 | `panel/invalid` | zero rows/columns or a negative gap |
 | `balance/invalid-machines` | a balance requested fewer than 1 or more than 64 machines |
@@ -174,7 +209,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/reflow.rs` | default profile numbers, exact single-zone integral, below-liquidus profile, zone order |
 | `tests/validation.rs` | every code above and warning-only documents |
 | `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as |
-| `tests/import.rs` | KiCad footprint mapping, rotation, both sides, reference sources, loss ledger, outline errors, duplicate/missing references, empty board, determinism, existing target |
+| `tests/import.rs` | KiCad footprint mapping, rotation, both sides, reference sources, loss ledger, outline errors, duplicate/missing references, empty board, determinism, existing target; CSV row order, reordered/quoted/UPPERCASE columns, empty lines, side and rotation defaults, duplicate refdes, missing column, invalid number, invalid side, line numbers, negative coordinate, determinism, one revision, existing target |
 | `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon and a native-gated balance smoke |
 
 ## Limitations
@@ -200,3 +235,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   tracks, vias, pads, zones, graphics and 3D models are counted in the loss
   ledger and are not part of the document. Altium and ODB import remain
   unimplemented.
+- CSV import covers the placement table only. The board has no outline and is
+  sized to the coordinates, components carry no height, and unknown columns are
+  refused instead of ignored. Nets, feeders, panel arrays and reflow profiles
+  are not read from CSV.

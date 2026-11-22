@@ -8,7 +8,7 @@
 import { SmtDocument } from './document.js';
 import { OpenSMTError } from './errors.js';
 import * as service from './service.js';
-import type { ImportReport, OpenSMTCapabilities, OpenSMTOptions } from './types.js';
+import type { ImportReport, OpenSMTCapabilities, OpenSMTOptions, Side } from './types.js';
 
 /** Assembly session. One instance owns the documents it opens. */
 export class OpenSMT {
@@ -56,6 +56,14 @@ export class OpenSMT {
         assertPath(source);
         assertPath(target);
         return service.importKicad(source, target);
+    }
+
+    /** Imports a CSV placement file into a new document at `target` and returns the report. */
+    async importCsv(source: string, target: string, defaultSide: Side = 'top'): Promise<ImportReport> {
+        this.assertActive();
+        assertPath(source);
+        assertPath(target);
+        return service.importCsv(source, target, defaultSide);
     }
 
     /** Closes every document the session still owns. Idempotent. */

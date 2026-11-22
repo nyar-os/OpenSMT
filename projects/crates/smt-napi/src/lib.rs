@@ -126,6 +126,21 @@ fn import(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Imports a generic CSV placement file into a new document and returns the
+/// import report. An optional third argument is the default side (`top`).
+#[function]
+fn import_csv(ctx: CallContext) -> Result<JsValue> {
+    let source = text(&ctx, 0)?;
+    let target = text(&ctx, 1)?;
+    let default_side = match optional_text(&ctx, 2)? {
+        Some(raw) => raw.parse::<Side>().map_err(fail)?,
+        None => Side::Top,
+    };
+    let mut session = OpenSmt::new();
+    let report = session.import_csv(Path::new(&source), Path::new(&target), default_side).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Writes the open document to `target`, or in place, and returns its summary.
 #[function]
 fn save(ctx: CallContext) -> Result<JsValue> {
@@ -389,6 +404,7 @@ register_module![
     create,
     open,
     import,
+    import_csv,
     save,
     board_set,
     panel_set,

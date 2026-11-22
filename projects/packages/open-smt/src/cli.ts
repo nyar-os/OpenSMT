@@ -243,12 +243,7 @@ async function dispatch(args: readonly string[]): Promise<number> {
                 return 0;
             });
         case 'import':
-            return withSession(async (session) => {
-                const parsed = parse(args.slice(1), ['--out'], []);
-                const source = positional(parsed, 0, 'import <file.kicad_pcb> --out <file.osmt>');
-                print(await session.import(source, required(parsed, '--out')));
-                return 0;
-            });
+            return importCommand(args.slice(1));
         case 'board':
             return editDocument(args.slice(1), 'board <file>', ['--width', '--depth', '--thickness'], async (document, parsed) => {
                 print(
@@ -338,6 +333,24 @@ async function dispatch(args: readonly string[]): Promise<number> {
         default:
             throw new OpenSMTError('cli/unknown-command', `unknown command \`${command}\``);
     }
+}
+
+async function importCommand(args: readonly string[]): Promise<number> {
+    if (args[0] === 'csv') {
+        return withSession(async (session) => {
+            const parsed = parse(args.slice(1), ['--out', '--side'], []);
+            const source = positional(parsed, 0, 'import csv <file.csv> --out <file.osmt> [--side top|bottom]');
+            const target = required(parsed, '--out');
+            print(await session.importCsv(source, target, side(parsed.options.get('--side') ?? 'top')));
+            return 0;
+        });
+    }
+    return withSession(async (session) => {
+        const parsed = parse(args, ['--out'], []);
+        const source = positional(parsed, 0, 'import <file.kicad_pcb> --out <file.osmt>');
+        print(await session.import(source, required(parsed, '--out')));
+        return 0;
+    });
 }
 
 async function componentCommand(args: readonly string[]): Promise<number> {

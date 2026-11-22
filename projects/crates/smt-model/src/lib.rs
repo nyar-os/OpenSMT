@@ -23,6 +23,7 @@
 #![deny(missing_docs)]
 
 mod balance;
+mod csv_import;
 mod dual;
 mod error;
 mod export;
@@ -79,10 +80,12 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "odb": "unsupported"
   },
   "imports": {
-    "kicad_pcb": "supported"
+    "kicad_pcb": "supported",
+    "csv": "supported"
   },
   "limitations": {
     "dualLane": "greedy or LPT heuristic with an optional single-swap pass, not an optimal schedule",
-    "multiLane": "greedy or LPT heuristic on 2 to 16 lanes with an optional pairwise-swap pass, not an optimal schedule"
+    "multiLane": "greedy or LPT heuristic on 2 to 16 lanes with an optional pairwise-swap pass, not an optimal schedule",
+    "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }
 }"#;

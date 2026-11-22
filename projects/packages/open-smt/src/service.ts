@@ -25,6 +25,7 @@ import type {
     ReflowProfileRequest,
     ReflowReport,
     Report,
+    Side,
     ValidationReport,
 } from './types.js';
 
@@ -94,6 +95,11 @@ export function open(path: string): DocumentSummary {
 /** Imports a KiCad PCB into a new document at `target`. */
 export function importKicad(source: string, target: string): ImportReport {
     return decode<ImportReport>(() => binding('import').import(source, target));
+}
+
+/** Imports a generic CSV placement file into a new document at `target`. */
+export function importCsv(source: string, target: string, defaultSide: Side = 'top'): ImportReport {
+    return decode<ImportReport>(() => binding('import-csv').import_csv(source, target, defaultSide));
 }
 
 /** Writes a document to `target`, or in place when `target` is undefined. */

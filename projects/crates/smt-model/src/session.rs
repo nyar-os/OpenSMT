@@ -18,7 +18,7 @@ use crate::{
     dual::{self, DualLaneReport, DualLaneStrategy, LanesReport},
     export::{feeder_csv, markdown, program_csv, write_atomic},
     import::ImportReport,
-    model::{Board, Component, Feeder, Panel, ReflowProfile, SmtDocument, UNITS},
+    model::{Board, Component, Feeder, Panel, ReflowProfile, Side, SmtDocument, UNITS},
     place::{self, FeederReport, PlacementReport},
     reflow::{self, ReflowReport},
     validate::{self, ValidationReport},
@@ -207,6 +207,41 @@ impl OpenSmt {
         self.path = Some(target.to_path_buf());
         self.document = Some(document);
         Ok(ImportReport { format: crate::import::FORMAT.to_string(), losses, component_count, board })
+    }
+
+    /// Imports a generic CSV placement file into a new document at `target`.
+    ///
+    /// The header must declare `refdes`, `package`, `x` and `y`; `rotation` and
+    /// `side` are optional. Rows keep their source order, empty lines are
+    /// skipped and `default_side` applies when a row states no side. Coordinates
+    /// are millimetres and are neither converted nor translated; the board is
+    /// sized to the component extents. The import is one edit, so the written
+    /// document starts at revision 1.
+    pub fn import_csv(&mut self, source: &Path, target: &Path, default_side: Side) -> Result<ImportReport, SmtError> {
+        if target.exists() {
+            return Err(SmtError::new("file/exists", format!("`{}` already exists", target.display())));
+        }
+        let source_text = fs::read_to_string(source)
+            .map_err(|error| SmtError::new("io/read", format!("cannot read `{}`: {error}", source.display())))?;
+        let crate::csv_import::ImportedCsv { board, components } = crate::csv_import::parse(&source_text, default_side)?;
+
+        let mut document = SmtDocument::new(board);
+        document.components = components;
+        document.revision = document.revision.saturating_add(1);
+        let report = validate::validate(&document);
+        if let Some(issue) = report.issues.iter().find(|issue| {
+            issue.severity == crate::Severity::Error && issue.code != "feeder/missing" && issue.code != "feeder/capacity"
+        }) {
+            return Err(SmtError::new(issue.code.clone(), issue.message.clone()));
+        }
+
+        let text =
+            serde_json::to_string_pretty(&document).map_err(|error| SmtError::new("document/serialize", error.to_string()))?;
+        write_atomic(target, &text)?;
+        let component_count = document.components.len();
+        self.path = Some(target.to_path_buf());
+        self.document = Some(document);
+        Ok(ImportReport { format: crate::csv_import::FORMAT.to_string(), losses: Vec::new(), component_count, board })
     }
 
     /// Writes the open document in place, or to `target` when supplied.

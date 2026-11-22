@@ -43,6 +43,32 @@ outline reports `import/outline-unsupported`, and a file that is not a
 `kicad_pcb` S-expression reports `import/parse`. The loss codes are listed in
 [capabilities.md](capabilities.md).
 
+### import csv
+
+```shell
+open-smt import csv <file.csv> --out <file.osmt> [--side top|bottom]
+```
+
+Reads a generic placement table into a new millimetre document. The first
+non-empty line is the header and must declare `refdes`, `package`, `x` and `y`;
+`rotation` and `side` are optional. Column names are case-insensitive and may
+appear in any order, fields may be double-quoted (including commas and `""`),
+and empty lines are skipped. Rows become components in source order.
+
+`x` and `y` are millimetres and are not converted or translated.
+`--side` (default `top`) applies to rows without a `side` value; a row's own
+`side` wins and accepts `top`/`bottom` in any case. Rotation defaults to `0` and
+is normalised to `[0, 360)`. The board is sized to the largest coordinate, never
+smaller than the default 100 × 80 mm, with 1.6 mm thickness. The import is one
+edit, so the document is written with revision 1. An existing `--out` file
+reports `file/exists`.
+
+A missing or unknown column, a row with the wrong field count, a non-numeric
+coordinate, an unknown side, an empty `refdes`/`package`, a repeated reference
+designator or a negative coordinate reports an `import/...` code that names the
+physical line. The JSON import report contains `format` (`csv`),
+`componentCount`, `board` and an empty `losses` list.
+
 ## board
 
 ```shell
@@ -243,6 +269,7 @@ Prints the machine-readable capability matrix.
 ```shell
 open-smt create panel.osmt
 open-smt import board.kicad_pcb --out imported.osmt
+open-smt import csv placements.csv --out placements.osmt --side top
 open-smt board panel.osmt --width 120 --depth 90 --thickness 1.6
 open-smt panel panel.osmt --rows 2 --columns 2 --gap-x 5 --gap-y 5
 open-smt component add panel.osmt --refdes R1 --package 0603 --x 10 --y 10
