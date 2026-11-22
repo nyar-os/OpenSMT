@@ -1,0 +1,16 @@
+{
+    "name": "@wae/open-smt-linux-x64",
+    "version": "0.0.1",
+    "description": "Linux x64 native addon for @wae/open-smt",
+    "license": "MPL-2.0",
+    "os": ["linux"],
+    "cpu": ["x64"],
+    "main": "open-smt.linux-x64.node",
+    "files": ["open-smt.linux-x64.node", "README.md", "License.md"],
+    "engines": { "node": ">=18" },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/nyar-os/OpenSMT.git",
+        "directory": "projects/packages/open-smt-linux-x64"
+    }
+}

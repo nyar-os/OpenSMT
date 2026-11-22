@@ -1,0 +1,33 @@
+{
+    "cli": {
+        "intro": "open-smt - OpenSMT placement, feeder and reflow planner (millimetres, degrees Celsius)",
+        "usage": [
+            "open-smt create <file.osmt>",
+            "open-smt board <file> --width <w> --depth <d> --thickness <t>",
+            "open-smt panel <file> --rows <r> --columns <c> [--gap-x <g>] [--gap-y <g>]",
+            "open-smt component add <file> --refdes <R1> --package <pkg> --x <x> --y <y> [--side top|bottom] [--rotation <deg>] [--height <h>]",
+            "open-smt component remove <file> --refdes <R1>",
+            "open-smt feeder add <file> --id <id> --package <pkg> --pitch <mm> --capacity <n> [--loaded <n>]",
+            "open-smt feeder remove <file> --id <id>",
+            "open-smt profile set <file> --speed <mm/min> --liquidus <c> --zones \"name:length:temp;...\"",
+            "open-smt validate <file>",
+            "open-smt placement <file> [--out program.json]",
+            "open-smt feeders <file> [--out setup.csv]",
+            "open-smt reflow <file>",
+            "open-smt export <file> --format program|feeders|json|md --out <path>",
+            "open-smt report <file>",
+            "open-smt capabilities",
+            "open-smt version"
+        ],
+        "exit": "Exit codes: 0 success, 1 input/validation error, 2 capability not implemented",
+        "message": {},
+        "error": {
+            "missingArgument": "missing argument; usage: open-smt {usage}",
+            "missingOption": "option `{option}` is required",
+            "missingValue": "option `{option}` needs a value",
+            "unknownOption": "unknown option `{option}`",
+            "invalidNumber": "option `{option}` is not a number: `{value}`",
+            "unknownFormat": "unknown export format `{format}`; only program, feeders, json or md is supported"
+        }
+    }
+}

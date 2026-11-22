@@ -1,0 +1,157 @@
+/**
+ * Orthogonal native operations.
+ *
+ * One function performs one operation and returns data; argument parsing, help
+ * text and exit codes belong to `cli.ts`.
+ */
+
+import { NotImplementedError, OpenSMTError, errorCodes, type OpenSMTErrorCode } from './errors.js';
+import { nativeBinding } from './native.js';
+import type {
+    BoardRequest,
+    ComponentRequest,
+    DocumentSummary,
+    ExportFormat,
+    ExportReport,
+    FeederReport,
+    FeederRequest,
+    PanelRequest,
+    PlacementReport,
+    ReflowProfileRequest,
+    ReflowReport,
+    Report,
+    ValidationReport,
+} from './types.js';
+
+const knownCodes = new Set<string>(errorCodes);
+
+function binding(feature: string) {
+    const native = nativeBinding();
+    if (!native) {
+        throw new NotImplementedError(feature);
+    }
+    return native;
+}
+
+function decode<T>(work: () => string): T {
+    try {
+        return JSON.parse(work()) as T;
+    } catch (error) {
+        throw translate(error);
+    }
+}
+
+function translate(error: unknown): OpenSMTError {
+    if (error instanceof OpenSMTError) {
+        return error;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    const separator = message.indexOf(': ');
+    const code = separator > 0 ? message.slice(0, separator) : '';
+    if (knownCodes.has(code)) {
+        return new OpenSMTError(code as OpenSMTErrorCode, message.slice(separator + 2));
+    }
+    return new OpenSMTError('native/error', message, { cause: error });
+}
+
+/** Reads the version of the installed addon. */
+export function version(): string {
+    return decode<string>(() => binding('version').version());
+}
+
+/** Reads the capability matrix of the installed addon. */
+export function capabilities() {
+    const matrix = decode<{
+        analysis: Record<string, 'supported' | 'unsupported'>;
+        io: Record<string, 'supported' | 'unsupported'>;
+    }>(() => binding('capabilities').capabilities());
+    return {
+        engine: { package: 'open-smt-napi', version: version() },
+        analysis: matrix.analysis,
+        io: matrix.io,
+    };
+}
+
+/** Creates an empty document and returns its summary. */
+export function create(path: string): DocumentSummary {
+    return decode<DocumentSummary>(() => binding('create').create(path));
+}
+
+/** Opens a document and returns its summary. */
+export function open(path: string): DocumentSummary {
+    return decode<DocumentSummary>(() => binding('open').open(path));
+}
+
+/** Writes a document to `target`, or in place when `target` is undefined. */
+export function save(path: string, target?: string): DocumentSummary {
+    return decode<DocumentSummary>(() =>
+        target === undefined ? binding('save').save(path) : binding('save').save(path, target),
+    );
+}
+
+/** Replaces the board and returns the updated summary. */
+export function setBoard(path: string, request: BoardRequest): DocumentSummary {
+    return decode<DocumentSummary>(() => binding('board.set').board_set(path, JSON.stringify(request)));
+}
+
+/** Replaces the panel array and returns the updated summary. */
+export function setPanel(path: string, request: PanelRequest): DocumentSummary {
+    return decode<DocumentSummary>(() => binding('panel.set').panel_set(path, JSON.stringify(request)));
+}
+
+/** Adds a component and returns the updated summary. */
+export function addComponent(path: string, request: ComponentRequest): DocumentSummary {
+    return decode<DocumentSummary>(() => binding('component.add').component_add(path, JSON.stringify(request)));
+}
+
+/** Removes a component and returns the updated summary. */
+export function removeComponent(path: string, refdes: string): DocumentSummary {
+    return decode<DocumentSummary>(() =>
+        binding('component.remove').component_remove(path, JSON.stringify({ refdes })),
+    );
+}
+
+/** Adds a feeder and returns the updated summary. */
+export function addFeeder(path: string, request: FeederRequest): DocumentSummary {
+    return decode<DocumentSummary>(() => binding('feeder.add').feeder_add(path, JSON.stringify(request)));
+}
+
+/** Removes a feeder and returns the updated summary. */
+export function removeFeeder(path: string, id: string): DocumentSummary {
+    return decode<DocumentSummary>(() => binding('feeder.remove').feeder_remove(path, JSON.stringify({ id })));
+}
+
+/** Replaces the reflow profile and returns the updated summary. */
+export function setProfile(path: string, request: ReflowProfileRequest): DocumentSummary {
+    return decode<DocumentSummary>(() => binding('profile.set').profile_set(path, JSON.stringify(request)));
+}
+
+/** Validates a document. */
+export function validate(path: string): ValidationReport {
+    return decode<ValidationReport>(() => binding('validate').validate(path));
+}
+
+/** Returns the placement program. */
+export function placement(path: string): PlacementReport {
+    return decode<PlacementReport>(() => binding('placement').placement(path));
+}
+
+/** Returns the feeder setup. */
+export function feeders(path: string): FeederReport {
+    return decode<FeederReport>(() => binding('feeders').feeders(path));
+}
+
+/** Returns the reflow evaluation. */
+export function reflow(path: string): ReflowReport {
+    return decode<ReflowReport>(() => binding('reflow').reflow(path));
+}
+
+/** Exports a document as `program`, `feeders`, `json` or `md`. */
+export function exportDocument(path: string, format: ExportFormat, target: string): ExportReport {
+    return decode<ExportReport>(() => binding('export').export(path, format, target));
+}
+
+/** Returns the full report. */
+export function report(path: string): Report {
+    return decode<Report>(() => binding('report').report(path));
+}

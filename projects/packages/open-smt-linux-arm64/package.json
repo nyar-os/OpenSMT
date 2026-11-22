@@ -1,0 +1,16 @@
+{
+    "name": "@wae/open-smt-linux-arm64",
+    "version": "0.0.1",
+    "description": "Linux arm64 native addon for @wae/open-smt",
+    "license": "MPL-2.0",
+    "os": ["linux"],
+    "cpu": ["arm64"],
+    "main": "open-smt.linux-arm64.node",
+    "files": ["open-smt.linux-arm64.node", "README.md", "License.md"],
+    "engines": { "node": ">=18" },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/nyar-os/OpenSMT.git",
+        "directory": "projects/packages/open-smt-linux-arm64"
+    }
+}

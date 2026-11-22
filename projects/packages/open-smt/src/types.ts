@@ -1,0 +1,252 @@
+/**
+ * Declared types of `@wae/open-smt`.
+ *
+ * The shapes describe the real job: a board, an optional panel array, a
+ * component list, a feeder setup and a reflow profile. Every editing call
+ * returns the summary written to disk.
+ */
+
+/** The only unit system this build accepts: millimetres (temperatures are °C). */
+export type Units = 'mm';
+
+/** Board side a component is placed on. */
+export type Side = 'top' | 'bottom';
+
+/** Export formats `exportDocument()` can write. */
+export type ExportFormat = 'program' | 'feeders' | 'json' | 'md';
+
+/** Severity of a validation finding. */
+export type Severity = 'error' | 'warning' | 'notice';
+
+/** One rectangular board. */
+export interface Board {
+    readonly width: number;
+    readonly depth: number;
+    readonly thickness: number;
+}
+
+/** A panel array of boards. */
+export interface Panel {
+    readonly rows: number;
+    readonly columns: number;
+    readonly gapX: number;
+    readonly gapY: number;
+}
+
+/** One placed component. */
+export interface Component {
+    readonly refdes: string;
+    readonly package: string;
+    readonly side: Side;
+    readonly x: number;
+    readonly y: number;
+    /** Rotation in degrees, `0 … 360`. */
+    readonly rotation: number;
+    readonly height: number | null;
+}
+
+/** One feeder lane. */
+export interface Feeder {
+    readonly id: string;
+    readonly package: string;
+    readonly pitch: number;
+    readonly capacity: number;
+    readonly loaded: number;
+}
+
+/** One reflow zone. */
+export interface Zone {
+    readonly name: string;
+    readonly length: number;
+    readonly temperature: number;
+}
+
+/** Reflow profile. */
+export interface ReflowProfile {
+    /** Conveyor speed in millimetres per minute. */
+    readonly conveyorSpeed: number;
+    /** Alloy liquidus in degrees Celsius. */
+    readonly liquidus: number;
+    readonly zones: readonly Zone[];
+}
+
+/** Summary of one document as written to disk. */
+export interface DocumentSummary {
+    readonly id: string;
+    readonly path: string;
+    readonly units: string;
+    readonly revision: number;
+    readonly board: Board;
+    readonly panel: Panel;
+    readonly components: number;
+    readonly feeders: number;
+}
+
+/** One validation finding with a stable code. */
+export interface Issue {
+    readonly code: string;
+    readonly severity: Severity;
+    readonly message: string;
+}
+
+/** Result of `validate()`. */
+export interface ValidationReport {
+    readonly ok: boolean;
+    readonly issues: readonly Issue[];
+}
+
+/** One step of the placement program. */
+export interface PlacementEntry {
+    readonly index: number;
+    readonly refdes: string;
+    readonly package: string;
+    readonly side: Side;
+    readonly x: number;
+    readonly y: number;
+    readonly rotation: number;
+    readonly feeder: string | null;
+}
+
+/** Usage of one package. */
+export interface PackageUsage {
+    readonly package: string;
+    readonly components: number;
+    readonly feeders: number;
+}
+
+/** Allocation of one feeder. */
+export interface FeederUsage {
+    readonly id: string;
+    readonly package: string;
+    readonly loaded: number;
+    readonly capacity: number;
+    readonly assigned: number;
+    readonly remaining: number;
+    readonly refdes: readonly string[];
+}
+
+/** Feeder setup report. */
+export interface FeederReport {
+    readonly format: string;
+    readonly version: number;
+    readonly units: string;
+    readonly packages: readonly PackageUsage[];
+    readonly feeders: readonly FeederUsage[];
+    readonly unassigned: readonly string[];
+}
+
+/** Placement program report. */
+export interface PlacementReport {
+    readonly format: string;
+    readonly version: number;
+    readonly units: string;
+    readonly boardCount: number;
+    readonly panelWidth: number;
+    readonly panelDepth: number;
+    readonly travelLength: number;
+    readonly placementSeconds: number;
+    readonly entries: readonly PlacementEntry[];
+}
+
+/** One evaluated reflow zone. */
+export interface ZoneReport {
+    readonly name: string;
+    readonly length: number;
+    readonly entryTemperature: number;
+    readonly exitTemperature: number;
+    readonly seconds: number;
+    readonly secondsAboveLiquidus: number;
+}
+
+/** Evaluated reflow profile. */
+export interface ReflowReport {
+    readonly format: string;
+    readonly version: number;
+    readonly units: string;
+    readonly temperatureUnit: string;
+    readonly conveyorSpeed: number;
+    readonly liquidus: number;
+    readonly peakTemperature: number;
+    readonly timeAboveLiquidus: number;
+    readonly totalSeconds: number;
+    readonly zones: readonly ZoneReport[];
+}
+
+/** Full report returned by `report()`. */
+export interface Report {
+    readonly format: string;
+    readonly version: number;
+    readonly units: string;
+    readonly document: DocumentSummary;
+    readonly validation: ValidationReport;
+    readonly placement: PlacementReport;
+    readonly feeders: FeederReport;
+    readonly reflow: ReflowReport;
+    readonly programLines: number;
+}
+
+/** Result of `exportDocument()`. */
+export interface ExportReport {
+    readonly format: ExportFormat;
+    readonly path: string;
+    readonly files: readonly string[];
+    readonly bytes: number;
+}
+
+/** Session options. Constructing a session opens no file. */
+export interface OpenSMTOptions {
+    /** BCP-47 tag used to pick the CLI locale. Defaults to `en-US`. */
+    readonly locale?: string;
+}
+
+/** Request of `setBoard()`. */
+export interface BoardRequest {
+    readonly width: number;
+    readonly depth: number;
+    readonly thickness: number;
+}
+
+/** Request of `setPanel()`; both gaps default to zero. */
+export interface PanelRequest {
+    readonly rows: number;
+    readonly columns: number;
+    readonly gapX?: number;
+    readonly gapY?: number;
+}
+
+/** Request of `addComponent()`; `side` defaults to top and `rotation` to zero. */
+export interface ComponentRequest {
+    readonly refdes: string;
+    readonly package: string;
+    readonly side?: Side;
+    readonly x: number;
+    readonly y: number;
+    readonly rotation?: number;
+    readonly height?: number;
+}
+
+/** Request of `addFeeder()`; `loaded` defaults to `capacity`. */
+export interface FeederRequest {
+    readonly id: string;
+    readonly package: string;
+    readonly pitch: number;
+    readonly capacity: number;
+    readonly loaded?: number;
+}
+
+/** Request of `setProfile()`. */
+export interface ReflowProfileRequest {
+    readonly conveyorSpeed: number;
+    readonly liquidus: number;
+    readonly zones: readonly Zone[];
+}
+
+/** Disclosure level of one capability entry. */
+export type SupportLevel = 'supported' | 'unsupported';
+
+/** Engine capability matrix. */
+export interface OpenSMTCapabilities {
+    readonly engine: { readonly package: string; readonly version: string };
+    readonly analysis: Readonly<Record<string, SupportLevel>>;
+    readonly io: Readonly<Record<string, SupportLevel>>;
+}
