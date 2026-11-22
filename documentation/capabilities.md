@@ -15,6 +15,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | component list with side, rotation and height | ✅ supported |
 | feeder setup with package, pitch, capacity and loaded quantity | ✅ supported |
 | deterministic placement sequence | ✅ supported |
+| optional 2-opt placement optimisation | ✅ supported |
 | feeder allocation by id and loaded quantity | ✅ supported |
 | multi-feeder split of one package | ✅ supported |
 | panel board count and panel dimensions | ✅ supported |
@@ -40,10 +41,20 @@ The machine-readable version is printed by `open-smt capabilities` and by
    Each side starts at the machine origin `(0, 0)`. At every step the head visits
    the nearest remaining component; ties are broken by reference designator. The
    nearest-neighbour search is exact but not a production optimiser.
-3. **Travel and time.** Travel is the sum of straight-line distances inside each
+3. **Optional 2-opt.** With `optimize` enabled, every side's nearest-neighbour
+   route is improved by 2-opt: the segment whose reversal saves the most
+   Euclidean distance is reversed, repeating until no reversal improves by more
+   than `1e-9` mm or 64 reversals have been applied. Ties keep the earliest
+   segment, so the result is deterministic. 2-opt is a local search; it does not
+   guarantee the shortest possible route. The route is per side and the origin
+   remains first. `travelLength`, `placementSeconds` and the report's
+   `travelSaved` (nearest neighbour minus 2-opt, zero when nothing improves)
+   describe the optimized order. `optimized` appears only when the pass was
+   requested.
+4. **Travel and time.** Travel is the sum of straight-line distances inside each
    side, with a fresh origin per side. Estimated placement time is
    `components × 0.6 s + travel / 200 mm·s⁻¹`.
-4. **Line balance.** `balance(machineCount)` accepts 1–64 machines and rejects
+5. **Line balance.** `balance(machineCount)` accepts 1–64 machines and rejects
    anything else with `balance/invalid-machines`. Components are sorted by
    reference designator and assigned one at a time to the machine with the
    smallest estimated completion time; a tie goes to the lowest machine index.
@@ -53,11 +64,13 @@ The machine-readable version is printed by `open-smt capabilities` and by
    `(max − min) / max`, or zero when the slowest machine takes zero seconds.
    Each feeder copy reports `assigned` and `loaded` and sets `ok: false` when
    the loaded quantity does not cover the assignments; the report is still
-   produced and the top-level `ok` becomes false.
-5. **Panel arithmetic.** `boardCount = rows × columns`,
+   produced and the top-level `ok` becomes false. With `optimize` enabled, each
+   machine's own program is 2-opt improved independently; assignments, component
+   counts, `totalSeconds` conservation and the `imbalance` formula are unchanged.
+6. **Panel arithmetic.** `boardCount = rows × columns`,
    `panelWidth = columns × width + (columns − 1) × gapX`, and
    `panelDepth = rows × depth + (rows − 1) × gapY`.
-6. **Reflow.** The board enters the first zone at 25 °C. Each zone ramps linearly
+7. **Reflow.** The board enters the first zone at 25 °C. Each zone ramps linearly
    from the previous set-point to its own set-point over
    `length / conveyor_speed × 60` seconds. Time above liquidus is integrated over
    each ramp, including partial crossings in either direction. Peak temperature
@@ -88,8 +101,8 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 
 | File | Asserts |
 |------|---------|
-| `tests/place.rs` | allocation order, nearest-first sequence, tie-breaks, panel size, multi-feeder split, determinism |
-| `tests/balance.rs` | single-machine parity, component conservation, side order, determinism, empty machines, invalid counts, per-machine feeder shortages |
+| `tests/place.rs` | allocation order, nearest-first sequence, tie-breaks, panel size, multi-feeder split, determinism, 2-opt never longer than nearest neighbour, an improving crossing route, unchanged single/empty documents, additive report fields, byte-identical default output |
+| `tests/balance.rs` | single-machine parity, component conservation, side order, determinism, empty machines, invalid counts, per-machine feeder shortages, independent per-machine 2-opt, imbalance identity |
 | `tests/reflow.rs` | default profile numbers, exact single-zone integral, below-liquidus profile, zone order |
 | `tests/validation.rs` | every code above and warning-only documents |
 | `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as |
@@ -97,8 +110,10 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 
 ## Limitations
 
-- Placement is a deterministic nearest-neighbour heuristic, not an optimiser; it
-  does not model nozzles, head count, feeder positions or vision time.
+- Placement defaults to a deterministic nearest-neighbour heuristic. The
+  optional 2-opt pass is a bounded local search over each side's route; it
+  improves travel but does not guarantee an optimal tour. Neither mode models
+  nozzles, head count, feeder positions or vision time.
 - The feeder model has no lane index, tape direction or splice handling.
 - Reflow uses set-points, not measured thermocouple data, and models no
   convection or board thermal mass.

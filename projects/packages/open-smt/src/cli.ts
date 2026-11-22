@@ -47,6 +47,7 @@ function printUsage(): void {
 interface Parsed {
     readonly positionals: readonly string[];
     readonly options: ReadonlyMap<string, string>;
+    readonly flags: ReadonlySet<string>;
 }
 
 function parse(args: readonly string[], valueOptions: readonly string[], flagOptions: readonly string[]): Parsed {
@@ -75,7 +76,7 @@ function parse(args: readonly string[], valueOptions: readonly string[], flagOpt
             index += 1;
         }
     }
-    return { positionals, options };
+    return { positionals, options, flags };
 }
 
 function positional(parsed: Parsed, index: number, usage: string): string {
@@ -266,14 +267,20 @@ async function dispatch(args: readonly string[]): Promise<number> {
                 print(await document.validate());
             });
         case 'placement':
-            return readDocument(args.slice(1), 'placement <file>', ['--out'], async (document, parsed) => {
-                const report = await document.placement();
-                const target = parsed.options.get('--out');
-                if (target !== undefined) {
-                    fs.writeFileSync(target, JSON.stringify(report, null, 2));
-                }
-                print(report);
-            });
+            return readDocument(
+                args.slice(1),
+                'placement <file>',
+                ['--out'],
+                async (document, parsed) => {
+                    const report = await document.placement(parsed.flags.has('--optimize'));
+                    const target = parsed.options.get('--out');
+                    if (target !== undefined) {
+                        fs.writeFileSync(target, JSON.stringify(report, null, 2));
+                    }
+                    print(report);
+                },
+                ['--optimize'],
+            );
         case 'feeders':
             return readDocument(args.slice(1), 'feeders <file>', ['--out'], async (document, parsed) => {
                 const report = await document.feederSetup();
@@ -290,9 +297,15 @@ async function dispatch(args: readonly string[]): Promise<number> {
                 print(report);
             });
         case 'balance':
-            return readDocument(args.slice(1), 'balance <file>', ['--machines'], async (document, parsed) => {
-                printBalance(await document.balance(integer(parsed, '--machines')));
-            });
+            return readDocument(
+                args.slice(1),
+                'balance <file>',
+                ['--machines'],
+                async (document, parsed) => {
+                    printBalance(await document.balance(integer(parsed, '--machines'), parsed.flags.has('--optimize')));
+                },
+                ['--optimize'],
+            );
         case 'reflow':
             return readDocument(args.slice(1), 'reflow <file>', [], async (document) => {
                 print(await document.reflow());
@@ -390,8 +403,9 @@ async function editDocument(
     usage: string,
     valueOptions: readonly string[],
     work: (document: SmtDocument, parsed: Parsed) => Promise<void>,
+    flagOptions: readonly string[] = [],
 ): Promise<number> {
-    const parsed = parse(args, valueOptions, []);
+    const parsed = parse(args, valueOptions, flagOptions);
     const file = positional(parsed, 0, usage);
     return withSession(async (session) => {
         const document = await session.open(file);
@@ -405,8 +419,9 @@ async function readDocument(
     usage: string,
     valueOptions: readonly string[],
     work: (document: SmtDocument, parsed: Parsed) => Promise<void>,
+    flagOptions: readonly string[] = [],
 ): Promise<number> {
-    return editDocument(args, usage, valueOptions, work);
+    return editDocument(args, usage, valueOptions, work, flagOptions);
 }
 
 const args = process.argv.slice(2);

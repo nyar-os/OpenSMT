@@ -1,4 +1,6 @@
-use smt_model::{Board, Component, Feeder, Panel, Side, SmtDocument, allocate_feeders, sequence_placement};
+use smt_model::{
+    Board, Component, Feeder, Panel, Side, SmtDocument, allocate_feeders, sequence_placement, sequence_placement_with,
+};
 
 fn document() -> SmtDocument {
     let mut document = SmtDocument::new(Board::new(100.0, 80.0, 1.6));
@@ -54,6 +56,108 @@ fn panel_dimensions_include_gaps() {
     assert_eq!(placement.board_count, 6);
     assert!((placement.panel_width - 310.0).abs() < 1e-9);
     assert!((placement.panel_depth - 164.0).abs() < 1e-9);
+}
+
+fn crossing_document() -> SmtDocument {
+    let mut document = SmtDocument::new(Board::new(100.0, 80.0, 1.6));
+    document.components.push(Component::new("A1", "0603", 10.0, 10.0));
+    document.components.push(Component::new("A2", "0603", 20.0, 10.0));
+    document.components.push(Component::new("B1", "0603", 10.0, 20.0));
+    document.components.push(Component::new("D1", "0603", 30.0, 20.0));
+    document.feeders.push(Feeder::new("F1", "0603", 4.0, 100));
+    document
+}
+
+fn order(report: &smt_model::PlacementReport) -> Vec<&str> {
+    report.entries.iter().map(|entry| entry.refdes.as_str()).collect()
+}
+
+#[test]
+fn two_opt_never_lengthens_the_sequence() {
+    let document = crossing_document();
+    let feeders = allocate_feeders(&document).expect("valid");
+    let plain = sequence_placement(&document, &feeders).expect("sequence");
+    let optimized = sequence_placement_with(&document, &feeders, true).expect("sequence");
+    assert!(optimized.travel_length <= plain.travel_length + 1e-9);
+}
+
+#[test]
+fn two_opt_improves_a_crossing_nearest_neighbor_route() {
+    let document = crossing_document();
+    let feeders = allocate_feeders(&document).expect("valid");
+    let plain = sequence_placement(&document, &feeders).expect("sequence");
+    let optimized = sequence_placement_with(&document, &feeders, true).expect("sequence");
+
+    assert_eq!(order(&plain), vec!["A1", "A2", "B1", "D1"]);
+    assert_eq!(order(&optimized), vec!["A1", "B1", "A2", "D1"]);
+    assert!((plain.travel_length - 58.2843).abs() < 1e-3);
+    assert!((optimized.travel_length - 52.4264).abs() < 1e-3);
+    assert!(optimized.optimized);
+    let saved = optimized.travel_saved.expect("travelSaved");
+    assert!((saved - (plain.travel_length - optimized.travel_length)).abs() < 1e-9);
+}
+
+#[test]
+fn a_default_sequence_has_no_optimization_fields() {
+    let document = crossing_document();
+    let feeders = allocate_feeders(&document).expect("valid");
+    let plain = sequence_placement(&document, &feeders).expect("sequence");
+    let explicit = sequence_placement_with(&document, &feeders, false).expect("sequence");
+    let plain_json = serde_json::to_string(&plain).expect("json");
+    assert_eq!(plain_json, serde_json::to_string(&explicit).expect("json"));
+    assert!(!plain_json.contains("optimized"));
+    assert!(!plain_json.contains("travelSaved"));
+}
+
+#[test]
+fn an_optimized_report_carries_the_additive_fields() {
+    let document = crossing_document();
+    let feeders = allocate_feeders(&document).expect("valid");
+    let optimized = sequence_placement_with(&document, &feeders, true).expect("sequence");
+    let value = serde_json::to_value(&optimized).expect("json");
+    assert_eq!(value["optimized"], true);
+    assert!(value["travelSaved"].as_f64().expect("travelSaved") > 0.0);
+
+    let plain = serde_json::to_value(sequence_placement_with(&document, &feeders, false).expect("sequence")).expect("json");
+    assert!(plain.get("optimized").is_none());
+    assert!(plain.get("travelSaved").is_none());
+}
+
+#[test]
+fn optimized_placement_is_deterministic() {
+    let document = crossing_document();
+    let feeders = allocate_feeders(&document).expect("valid");
+    let first = sequence_placement_with(&document, &feeders, true).expect("sequence");
+    let second = sequence_placement_with(&document, &feeders, true).expect("sequence");
+    assert_eq!(serde_json::to_string(&first).expect("json"), serde_json::to_string(&second).expect("json"));
+}
+
+#[test]
+fn a_single_component_is_unchanged_by_optimization() {
+    let mut document = SmtDocument::new(Board::new(100.0, 80.0, 1.6));
+    document.components.push(Component::new("R1", "0603", 10.0, 10.0));
+    document.feeders.push(Feeder::new("F1", "0603", 4.0, 10));
+    let feeders = allocate_feeders(&document).expect("valid");
+    let plain = sequence_placement(&document, &feeders).expect("sequence");
+    let optimized = sequence_placement_with(&document, &feeders, true).expect("sequence");
+
+    assert_eq!(optimized.entries, plain.entries);
+    assert_eq!(optimized.travel_length, plain.travel_length);
+    assert_eq!(optimized.placement_seconds, plain.placement_seconds);
+    assert!(optimized.optimized);
+    assert_eq!(optimized.travel_saved, Some(0.0));
+}
+
+#[test]
+fn an_empty_document_stays_empty_when_optimized() {
+    let document = SmtDocument::new(Board::new(100.0, 80.0, 1.6));
+    let feeders = allocate_feeders(&document).expect("valid");
+    let optimized = sequence_placement_with(&document, &feeders, true).expect("sequence");
+
+    assert!(optimized.entries.is_empty());
+    assert_eq!(optimized.travel_length, 0.0);
+    assert_eq!(optimized.placement_seconds, 0.0);
+    assert_eq!(optimized.travel_saved, Some(0.0));
 }
 
 #[test]

@@ -131,10 +131,10 @@ export class SmtDocument {
         return service.validate(this.state.path);
     }
 
-    /** Returns the placement program. */
-    async placement(): Promise<PlacementReport> {
+    /** Returns the placement program, optionally improved with 2-opt. */
+    async placement(optimize = false): Promise<PlacementReport> {
         this.assertOpen();
-        return service.placement(this.state.path);
+        return service.placement(this.state.path, optimize);
     }
 
     /** Returns the feeder setup. */
@@ -143,10 +143,10 @@ export class SmtDocument {
         return service.feeders(this.state.path);
     }
 
-    /** Returns the multi-machine line balance. */
-    async balance(machines: number): Promise<BalanceReport> {
+    /** Returns the multi-machine line balance, optionally improved per machine. */
+    async balance(machines: number, optimize = false): Promise<BalanceReport> {
         this.assertOpen();
-        return service.balance(this.state.path, machines);
+        return service.balance(this.state.path, machines, optimize);
     }
 
     /** Returns the reflow evaluation. */

@@ -63,6 +63,7 @@ pnpm exec open-smt feeder add panel.osmt --id F1 --package 0603 --pitch 4 --capa
 pnpm exec open-smt feeder add panel.osmt --id F2 --package QFN-32 --pitch 12 --capacity 50
 pnpm exec open-smt validate panel.osmt
 pnpm exec open-smt placement panel.osmt
+pnpm exec open-smt placement panel.osmt --optimize
 pnpm exec open-smt reflow panel.osmt
 pnpm exec open-smt export panel.osmt --format program --out program.csv
 ```
@@ -93,6 +94,9 @@ implemented.
 
 - **Deterministic placement** — top side first, nearest remaining component,
   ties broken by reference designator.
+- **Optional 2-opt** — `--optimize` shortens each side's route beyond nearest
+  neighbour with a bounded, deterministic local search; `travelSaved` reports
+  the gain.
 - **Feeder allocation by id** — every component gets a lane; multiple lanes of
   one package split the load in id order.
 - **Panel arithmetic** — board count, panel width and depth including gaps.

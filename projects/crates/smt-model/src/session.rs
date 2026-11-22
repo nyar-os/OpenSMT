@@ -266,14 +266,25 @@ impl OpenSmt {
 
     /// Returns the placement program of the open document.
     pub fn placement(&self) -> Result<PlacementReport, SmtError> {
+        self.placement_with(false)
+    }
+
+    /// Returns the placement program, optionally improved with 2-opt.
+    pub fn placement_with(&self, optimize: bool) -> Result<PlacementReport, SmtError> {
         let document = self.document()?;
         let feeders = place::allocate(document)?;
-        place::sequence(document, &feeders)
+        place::sequence_with(document, &feeders, optimize)
     }
 
     /// Returns the multi-machine line balance of the open document.
     pub fn balance(&self, machine_count: u32) -> Result<BalanceReport, SmtError> {
-        balance::balance(self.document()?, machine_count)
+        self.balance_with(machine_count, false)
+    }
+
+    /// Returns the multi-machine line balance, optionally improved with 2-opt
+    /// per machine.
+    pub fn balance_with(&self, machine_count: u32, optimize: bool) -> Result<BalanceReport, SmtError> {
+        balance::balance_with(self.document()?, machine_count, optimize)
     }
 
     /// Returns the reflow evaluation of the open document.

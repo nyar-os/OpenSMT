@@ -5,6 +5,9 @@
 //! nearest remaining component, breaking ties by reference designator. The top
 //! side is processed before the bottom side, and each side starts at the machine
 //! origin.
+//!
+//! An optional 2-opt pass improves each side's nearest-neighbour route until no
+//! improving reversal remains or the fixed pass limit is reached.
 
 use std::collections::BTreeMap;
 
@@ -21,6 +24,12 @@ pub const PLACE_SECONDS: f64 = 0.6;
 
 /// Travelling head speed used for the cycle-time estimate, in millimetres per second.
 pub const HEAD_SPEED: f64 = 200.0;
+
+/// Maximum number of improving reversals a 2-opt run applies per side.
+const MAX_OPTIMIZATION_PASSES: usize = 64;
+
+/// Distance differences at or below this value count as ties.
+const OPTIMIZATION_EPSILON: f64 = 1e-9;
 
 /// One step of the placement program.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -114,8 +123,19 @@ pub struct PlacementReport {
     pub travel_length: f64,
     /// Estimated placement time in seconds.
     pub placement_seconds: f64,
+    /// Whether the sequence was produced with the 2-opt pass.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub optimized: bool,
+    /// Millimetres saved by 2-opt relative to nearest neighbour; present only
+    /// when `optimize` was requested.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub travel_saved: Option<f64>,
     /// Program steps in execution order.
     pub entries: Vec<PlacementEntry>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Allocates every component to a feeder lane.
@@ -217,11 +237,24 @@ fn allocate_lanes_with(
 /// The top side is processed before the bottom side and every side starts at
 /// the machine origin `(0, 0)`, exactly like a single-machine program.
 pub(crate) fn order_with_travel<'a>(components: &[&'a Component]) -> (Vec<&'a Component>, f64) {
+    let (ordered, travel, _) = order_with_travel_optimized(components, false);
+    (ordered, travel)
+}
+
+/// Orders `components` for one machine and returns the sequence, the total
+/// travel and the millimetres saved by 2-opt.
+///
+/// With `optimize` false the result is the plain nearest-neighbour program and
+/// the saving is zero.
+pub(crate) fn order_with_travel_optimized<'a>(components: &[&'a Component], optimize: bool) -> (Vec<&'a Component>, f64, f64) {
     let mut ordered = Vec::with_capacity(components.len());
     let mut travel = 0.0;
+    let mut saved = 0.0;
     for side in [Side::Top, Side::Bottom] {
         let side_components: Vec<&Component> = components.iter().copied().filter(|component| component.side == side).collect();
-        let sequenced = nearest_neighbor(&side_components);
+        let nearest = nearest_neighbor(&side_components);
+        let (sequenced, side_saved) = if optimize { two_opt(nearest) } else { (nearest, 0.0) };
+        saved += side_saved;
         let mut x = 0.0;
         let mut y = 0.0;
         for component in sequenced {
@@ -231,7 +264,7 @@ pub(crate) fn order_with_travel<'a>(components: &[&'a Component]) -> (Vec<&'a Co
             ordered.push(component);
         }
     }
-    (ordered, travel)
+    (ordered, travel, saved)
 }
 
 /// Estimated placement time of `count` components with `travel` millimetres.
@@ -241,6 +274,13 @@ pub(crate) fn estimated_seconds(count: usize, travel: f64) -> f64 {
 
 /// Sequences the placement program using an existing feeder allocation.
 pub fn sequence(document: &SmtDocument, feeders: &FeederReport) -> Result<PlacementReport, SmtError> {
+    sequence_with(document, feeders, false)
+}
+
+/// Sequences the placement program, optionally improving each side with 2-opt.
+///
+/// `optimize` false reproduces [`sequence`] exactly.
+pub fn sequence_with(document: &SmtDocument, feeders: &FeederReport, optimize: bool) -> Result<PlacementReport, SmtError> {
     if !feeders.unassigned.is_empty() {
         return Err(SmtError::new("feeder/capacity", format!("{} components have no feeder lane", feeders.unassigned.len())));
     }
@@ -252,7 +292,7 @@ pub fn sequence(document: &SmtDocument, feeders: &FeederReport) -> Result<Placem
     }
 
     let components: Vec<&Component> = document.components.iter().collect();
-    let (ordered, travel_length) = order_with_travel(&components);
+    let (ordered, travel_length, travel_saved) = order_with_travel_optimized(&components, optimize);
     let mut entries = Vec::with_capacity(ordered.len());
     for component in ordered {
         entries.push(PlacementEntry {
@@ -283,6 +323,8 @@ pub fn sequence(document: &SmtDocument, feeders: &FeederReport) -> Result<Placem
         panel_depth,
         travel_length,
         placement_seconds,
+        optimized: optimize,
+        travel_saved: optimize.then_some(travel_saved),
         entries,
     })
 }
@@ -310,6 +352,66 @@ fn nearest_neighbor<'a>(components: &[&'a Component]) -> Vec<&'a Component> {
         ordered.push(chosen);
     }
     ordered
+}
+
+/// Improves one side's route with 2-opt and returns it with the saved distance.
+///
+/// The origin stays first and the end is free. Each pass reverses the segment
+/// that gives the largest strict improvement; ties keep the earliest segment, so
+/// the result is deterministic. The run stops when no reversal improves by more
+/// than [`OPTIMIZATION_EPSILON`] or after [`MAX_OPTIMIZATION_PASSES`] reversals.
+fn two_opt(mut route: Vec<&Component>) -> (Vec<&Component>, f64) {
+    let count = route.len();
+    if count < 3 {
+        return (route, 0.0);
+    }
+    let initial = route_travel(&route);
+    let mut travel = initial;
+    for _ in 0..MAX_OPTIMIZATION_PASSES {
+        let mut best: Option<(usize, usize)> = None;
+        let mut best_delta = -OPTIMIZATION_EPSILON;
+        for first in 0..count - 1 {
+            let (from_x, from_y) = if first == 0 { (0.0, 0.0) } else { (route[first - 1].x, route[first - 1].y) };
+            for last in first + 1..count {
+                let before_next = if last + 1 < count {
+                    distance(route[last].x, route[last].y, route[last + 1].x, route[last + 1].y)
+                } else {
+                    0.0
+                };
+                let after_next = if last + 1 < count {
+                    distance(route[first].x, route[first].y, route[last + 1].x, route[last + 1].y)
+                } else {
+                    0.0
+                };
+                let before = distance(from_x, from_y, route[first].x, route[first].y) + before_next;
+                let after = distance(from_x, from_y, route[last].x, route[last].y) + after_next;
+                let delta = after - before;
+                if delta < best_delta {
+                    best = Some((first, last));
+                    best_delta = delta;
+                }
+            }
+        }
+        let Some((first, last)) = best else {
+            break;
+        };
+        route[first..=last].reverse();
+        travel += best_delta;
+    }
+    (route, (initial - travel).max(0.0))
+}
+
+/// Travel of `route` from the machine origin, in millimetres.
+fn route_travel(route: &[&Component]) -> f64 {
+    let mut x = 0.0;
+    let mut y = 0.0;
+    let mut travel = 0.0;
+    for component in route {
+        travel += distance(x, y, component.x, component.y);
+        x = component.x;
+        y = component.y;
+    }
+    travel
 }
 
 fn distance(from_x: f64, from_y: f64, to_x: f64, to_y: f64) -> f64 {

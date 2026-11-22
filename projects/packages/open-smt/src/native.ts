@@ -26,9 +26,9 @@ export interface NativeBinding {
     feeder_remove(path: string, requestJson: string): string;
     profile_set(path: string, requestJson: string): string;
     validate(path: string): string;
-    placement(path: string): string;
+    placement(path: string, optimize?: boolean): string;
     feeders(path: string): string;
-    balance(path: string, machines: number): string;
+    balance(path: string, machines: number, optimize?: boolean): string;
     reflow(path: string): string;
     export(path: string, format: string, target: string): string;
     report(path: string): string;

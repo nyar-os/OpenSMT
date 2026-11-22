@@ -18,9 +18,9 @@ Usage:
   osmt feeder remove <file> --id <id>
   osmt profile set <file> --speed <mm/min> --liquidus <c> --zones \"name:length:temp;...\"
   osmt validate <file>
-  osmt placement <file> [--out program.csv]
+  osmt placement <file> [--out program.csv] [--optimize]
   osmt feeders <file> [--out setup.csv]
-  osmt balance <file> --machines <n>
+  osmt balance <file> --machines <n> [--optimize]
   osmt reflow <file>
   osmt export <file> --format program|feeders|json|md --out <path>
   osmt report <file>
@@ -89,9 +89,9 @@ fn run(args: &[String]) -> Result<i32, SmtError> {
         }
         "placement" => {
             let file = positional(args, 1, "placement <file>")?;
-            let values = Options::parse(&args[2..], &["--out"], &[])?;
+            let values = Options::parse(&args[2..], &["--out"], &["--optimize"])?;
             let session = session(file)?;
-            let report = session.placement()?;
+            let report = session.placement_with(values.flag("--optimize"))?;
             if let Some(target) = values.value("--out") {
                 smt_model::write_atomic(
                     Path::new(target),
@@ -113,8 +113,8 @@ fn run(args: &[String]) -> Result<i32, SmtError> {
         }
         "balance" => {
             let file = positional(args, 1, "balance <file> --machines <n>")?;
-            let values = Options::parse(&args[2..], &["--machines"], &[])?;
-            let report = session(file)?.balance(values.integer("--machines")?)?;
+            let values = Options::parse(&args[2..], &["--machines"], &["--optimize"])?;
+            let report = session(file)?.balance_with(values.integer("--machines")?, values.flag("--optimize"))?;
             print_balance(&report);
             Ok(0)
         }
@@ -303,6 +303,10 @@ impl Options {
 
     fn value(&self, name: &str) -> Option<&str> {
         self.map.get(name).map(String::as_str)
+    }
+
+    fn flag(&self, name: &str) -> bool {
+        self.map.contains_key(name)
     }
 
     fn require(&self, name: &str) -> Result<&str, SmtError> {

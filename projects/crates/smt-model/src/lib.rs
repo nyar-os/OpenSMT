@@ -5,7 +5,8 @@
 //! * one rectangular board, an optional panel array and a component list;
 //! * a feeder setup with package, pitch, capacity and loaded quantity;
 //! * a deterministic placement program: feeders are allocated in id order and
-//!   the head visits the nearest remaining component, top side first;
+//!   the head visits the nearest remaining component, top side first; an
+//!   optional 2-opt pass improves each side's route;
 //! * a multi-machine line balance that assigns components in reference
 //!   designator order to the machine with the smallest estimated completion
 //!   time;
@@ -28,13 +29,13 @@ mod session;
 pub mod validate;
 
 pub use crate::{
-    balance::{BalanceReport, MAX_MACHINES, MIN_MACHINES, MachineFeeder, MachineReport, balance},
+    balance::{BalanceReport, MAX_MACHINES, MIN_MACHINES, MachineFeeder, MachineReport, balance, balance_with},
     error::{SmtError, not_implemented},
     export::{feeder_csv, markdown, program_csv, write_atomic},
     model::{Board, Component, FORMAT, Feeder, Panel, ReflowProfile, Side, SmtDocument, UNITS, VERSION, Zone},
     place::{
         FeederReport, FeederUsage, HEAD_SPEED, PLACE_SECONDS, PackageUsage, PlacementEntry, PlacementReport,
-        allocate as allocate_feeders, sequence as sequence_placement,
+        allocate as allocate_feeders, sequence as sequence_placement, sequence_with as sequence_placement_with,
     },
     reflow::{AMBIENT, ReflowReport, ZoneReport, evaluate as evaluate_reflow},
     session::{DEFAULT_BOARD, DocumentSummary, ExportFormat, ExportReport, OpenSmt, Report},
@@ -45,6 +46,7 @@ pub use crate::{
 pub const CAPABILITIES_JSON: &str = r#"{
   "analysis": {
     "placementSequence": "supported",
+    "placementOptimization": "supported",
     "feederAllocation": "supported",
     "panelization": "supported",
     "reflowProfile": "supported",

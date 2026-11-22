@@ -132,9 +132,9 @@ export function validate(path: string): ValidationReport {
     return decode<ValidationReport>(() => binding('validate').validate(path));
 }
 
-/** Returns the placement program. */
-export function placement(path: string): PlacementReport {
-    return decode<PlacementReport>(() => binding('placement').placement(path));
+/** Returns the placement program, optionally improved with 2-opt. */
+export function placement(path: string, optimize = false): PlacementReport {
+    return decode<PlacementReport>(() => binding('placement').placement(path, optimize));
 }
 
 /** Returns the feeder setup. */
@@ -142,9 +142,9 @@ export function feeders(path: string): FeederReport {
     return decode<FeederReport>(() => binding('feeders').feeders(path));
 }
 
-/** Returns the multi-machine line balance. */
-export function balance(path: string, machines: number): BalanceReport {
-    return decode<BalanceReport>(() => binding('balance').balance(path, machines));
+/** Returns the multi-machine line balance, optionally improved per machine. */
+export function balance(path: string, machines: number, optimize = false): BalanceReport {
+    return decode<BalanceReport>(() => binding('balance').balance(path, machines, optimize));
 }
 
 /** Returns the reflow evaluation. */

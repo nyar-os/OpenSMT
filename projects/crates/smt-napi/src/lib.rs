@@ -36,6 +36,13 @@ fn optional_text(ctx: &CallContext, index: usize) -> Result<Option<String>> {
     }
 }
 
+fn optional_bool(ctx: &CallContext, index: usize) -> Result<bool> {
+    match ctx.args().get(index) {
+        Some(value) => value.as_bool(),
+        None => Ok(false),
+    }
+}
+
 fn object(ctx: &CallContext, index: usize) -> Result<Value> {
     let raw = text(ctx, index)?;
     serde_json::from_str(&raw).map_err(|error| argument_error(&format!("expected a JSON object: {error}")))
@@ -258,13 +265,14 @@ fn validate(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
-/// Returns the placement program.
+/// Returns the placement program; an optional second argument enables 2-opt.
 #[function]
 fn placement(ctx: CallContext) -> Result<JsValue> {
     let path = text(&ctx, 0)?;
+    let optimize = optional_bool(&ctx, 1)?;
     let mut session = OpenSmt::new();
     session.open(Path::new(&path)).map_err(fail)?;
-    let report = session.placement().map_err(fail)?;
+    let report = session.placement_with(optimize).map_err(fail)?;
     respond(&ctx, &report)
 }
 
@@ -278,15 +286,17 @@ fn feeders(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
-/// Returns the multi-machine line balance.
+/// Returns the multi-machine line balance; an optional third argument enables
+/// per-machine 2-opt.
 #[function]
 fn balance(ctx: CallContext) -> Result<JsValue> {
     let path = text(&ctx, 0)?;
     let machines = argument(&ctx, 1)?.as_i64()?;
     let machines = u32::try_from(machines).unwrap_or(0);
+    let optimize = optional_bool(&ctx, 2)?;
     let mut session = OpenSmt::new();
     session.open(Path::new(&path)).map_err(fail)?;
-    let report = session.balance(machines).map_err(fail)?;
+    let report = session.balance_with(machines, optimize).map_err(fail)?;
     respond(&ctx, &report)
 }
 

@@ -28,9 +28,9 @@ open-smt feeder remove <file> --id <id>
 open-smt profile set <file> --speed <mm/min> --liquidus <c>
                      --zones "name:length:temp;..."
 open-smt validate <file>
-open-smt placement <file> [--out program.json]
+open-smt placement <file> [--out program.json] [--optimize]
 open-smt feeders <file> [--out setup.csv]
-open-smt balance <file> --machines <n>
+open-smt balance <file> --machines <n> [--optimize]
 open-smt reflow <file>
 open-smt export <file> --format program|feeders|json|md --out <path>
 open-smt report <file>
@@ -51,7 +51,9 @@ open-smt export panel.osmt --format program --out program.csv
 
 `placement` prints the program and can write it as JSON; `feeders` prints the
 allocation and can write a CSV setup sheet; `balance` prints a human-readable
-multi-machine balance for 1–64 machines. Exit code `0` is success, `1` is
+multi-machine balance for 1–64 machines. `--optimize` runs a deterministic
+2-opt pass per side (placement) or per machine (balance); the placement report
+then adds `optimized` and `travelSaved`. Exit code `0` is success, `1` is
 invalid input, and `2` is an unimplemented capability.
 
 ## SDK
@@ -71,6 +73,9 @@ await document.addFeeder({ id: 'F2', package: 'QFN-32', pitch: 12, capacity: 50,
 
 const report = await document.report();
 console.log(report.placement.entries.length, report.reflow.timeAboveLiquidus);
+
+const optimized = await document.placement(true);
+console.log(optimized.travelSaved);
 
 const balance = await document.balance(2);
 console.log(balance.maxSeconds, balance.imbalance);
@@ -100,8 +105,9 @@ because a component list is normally entered before the feeder table.
 ## Constraints
 
 - Units are millimetres; temperatures are degrees Celsius; no conversion.
-- Placement is a deterministic nearest-neighbour sequence, not a production
-  optimiser.
+- Placement defaults to a deterministic nearest-neighbour sequence; `--optimize`
+  adds a bounded 2-opt local search. Neither mode is a production optimiser or
+  guarantees an optimal tour.
 - Line balancing assigns whole components to 1–64 machines; it does not emit
   vendor machine programs, model dual-lane conveyors or line changeover time.
 - Vendor machine programs and paste apertures are not implemented.

@@ -1,6 +1,9 @@
 use std::collections::BTreeSet;
 
-use smt_model::{Board, Component, Feeder, Side, SmtDocument, allocate_feeders, balance, sequence_placement};
+use smt_model::{
+    Board, Component, Feeder, Side, SmtDocument, allocate_feeders, balance, balance_with, sequence_placement,
+    sequence_placement_with,
+};
 
 fn document() -> SmtDocument {
     let mut document = SmtDocument::new(Board::new(100.0, 80.0, 1.6));
@@ -135,6 +138,59 @@ fn each_machine_flags_its_own_feeder_shortage() {
         assert_eq!(feeder.assigned, 2);
         assert!(!feeder.ok);
     }
+}
+
+#[test]
+fn optimization_conserves_components_and_the_imbalance_identity() {
+    let document = document();
+    let plain = balance(&document, 2).expect("balance");
+    let optimized = balance_with(&document, 2, true).expect("balance");
+
+    assert_eq!(optimized.machines.len(), plain.machines.len());
+    for (left, right) in plain.machines.iter().zip(&optimized.machines) {
+        assert_eq!(left.components, right.components);
+        assert!(right.travel <= left.travel + 1e-9);
+        assert!((right.seconds - (right.components.len() as f64 * 0.6 + right.travel / 200.0)).abs() < 1e-9);
+    }
+
+    let total: usize = optimized.machines.iter().map(|machine| machine.components.len()).sum();
+    assert_eq!(total, document.components.len());
+
+    let max = optimized.machines.iter().map(|machine| machine.seconds).fold(f64::MIN, f64::max);
+    let min = optimized.machines.iter().map(|machine| machine.seconds).fold(f64::MAX, f64::min);
+    assert!((optimized.max_seconds - max).abs() < 1e-12);
+    assert!((optimized.min_seconds - min).abs() < 1e-12);
+    let expected = if max == 0.0 { 0.0 } else { (max - min) / max };
+    assert!((optimized.imbalance - expected).abs() < 1e-12);
+    let sum: f64 = optimized.machines.iter().map(|machine| machine.seconds).sum();
+    assert!((optimized.total_seconds - sum).abs() < 1e-9);
+}
+
+#[test]
+fn each_machine_is_optimized_independently() {
+    let document = document();
+    let optimized = balance_with(&document, 2, true).expect("balance");
+
+    for machine in &optimized.machines {
+        if machine.components.is_empty() {
+            continue;
+        }
+        let mut single = document.clone();
+        single.components.retain(|component| machine.components.contains(&component.refdes));
+        let feeders = allocate_feeders(&single).expect("valid");
+        let placement = sequence_placement_with(&single, &feeders, true).expect("sequence");
+        let expected: Vec<String> = placement.entries.iter().map(|entry| entry.refdes.clone()).collect();
+        assert_eq!(machine.components, expected);
+        assert!((machine.travel - placement.travel_length).abs() < 1e-9);
+    }
+}
+
+#[test]
+fn optimized_balancing_is_deterministic() {
+    let document = document();
+    let first = balance_with(&document, 3, true).expect("balance");
+    let second = balance_with(&document, 3, true).expect("balance");
+    assert_eq!(serde_json::to_string(&first).expect("json"), serde_json::to_string(&second).expect("json"));
 }
 
 #[test]

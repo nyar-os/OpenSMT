@@ -145,6 +145,10 @@ export interface PlacementReport {
     readonly panelDepth: number;
     readonly travelLength: number;
     readonly placementSeconds: number;
+    /** Present and true when the program was produced with the 2-opt pass. */
+    readonly optimized?: boolean;
+    /** Millimetres saved by 2-opt; present when optimization was requested. */
+    readonly travelSaved?: number;
     readonly entries: readonly PlacementEntry[];
 }
 

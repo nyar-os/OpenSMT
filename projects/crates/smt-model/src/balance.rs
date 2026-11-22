@@ -4,14 +4,15 @@
 //! the machine with the smallest estimated completion time; ties go to the
 //! lowest machine index. Every machine owns a full feeder copy and its own
 //! origin, so its program is exactly the single-machine program over the
-//! components it received.
+//! components it received. Optional per-machine 2-opt only resequences a
+//! machine's own program; assignments and component counts do not change.
 
 use serde::Serialize;
 
 use crate::{
     SmtError,
     model::{Component, SmtDocument},
-    place::{allocate_lanes_by_capacity, estimated_seconds, order_with_travel},
+    place::{allocate_lanes_by_capacity, estimated_seconds, order_with_travel, order_with_travel_optimized},
     validate::{Severity, validate},
 };
 
@@ -80,6 +81,15 @@ pub struct BalanceReport {
 /// Feeder coverage is reported, not enforced: an incomplete feeder setup still
 /// produces a report whose [`BalanceReport::ok`] is `false`.
 pub fn balance(document: &SmtDocument, machine_count: u32) -> Result<BalanceReport, SmtError> {
+    balance_with(document, machine_count, false)
+}
+
+/// Balances the document, optionally improving every machine's program with
+/// 2-opt.
+///
+/// Assignments stay those of [`balance`], so component counts and the total are
+/// conserved; only each machine's own travel is improved.
+pub fn balance_with(document: &SmtDocument, machine_count: u32, optimize: bool) -> Result<BalanceReport, SmtError> {
     if !(MIN_MACHINES..=MAX_MACHINES).contains(&machine_count) {
         return Err(SmtError::new(
             "balance/invalid-machines",
@@ -118,7 +128,7 @@ pub fn balance(document: &SmtDocument, machine_count: u32) -> Result<BalanceRepo
     let mut machines = Vec::with_capacity(assignments.len());
     let mut coverage_ok = true;
     for (index, assigned) in assignments.iter().enumerate() {
-        let (ordered, travel) = order_with_travel(assigned);
+        let (ordered, travel, _) = order_with_travel_optimized(assigned, optimize);
         let (lanes, unassigned) = allocate_lanes_by_capacity(&document.feeders, assigned);
         let feeders: Vec<MachineFeeder> = lanes
             .into_iter()
