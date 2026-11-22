@@ -148,6 +148,38 @@ export interface PlacementReport {
     readonly entries: readonly PlacementEntry[];
 }
 
+/** One feeder copy on a balanced machine. */
+export interface MachineFeeder {
+    readonly id: string;
+    readonly package: string;
+    readonly assigned: number;
+    readonly loaded: number;
+    readonly ok: boolean;
+}
+
+/** One machine of a line balance. */
+export interface MachineReport {
+    readonly index: number;
+    /** Reference designators in this machine's execution order. */
+    readonly components: readonly string[];
+    readonly travel: number;
+    readonly seconds: number;
+    readonly feeders: readonly MachineFeeder[];
+}
+
+/** Line balance report. */
+export interface BalanceReport {
+    readonly format: string;
+    readonly version: number;
+    readonly machines: readonly MachineReport[];
+    readonly totalSeconds: number;
+    readonly maxSeconds: number;
+    readonly minSeconds: number;
+    /** `(max − min) / max`, or zero when every machine takes zero seconds. */
+    readonly imbalance: number;
+    readonly ok: boolean;
+}
+
 /** One evaluated reflow zone. */
 export interface ZoneReport {
     readonly name: string;

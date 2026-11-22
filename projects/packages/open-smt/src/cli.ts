@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import type { SmtDocument } from './document.js';
 import { NotImplementedError, OpenSMTError, type OpenSMTErrorCode } from './errors.js';
 import { OpenSMT } from './open-smt.js';
-import type { ExportFormat, Side, Zone } from './types.js';
+import type { BalanceReport, ExportFormat, Side, Zone } from './types.js';
 
 interface CliLocale {
     readonly cli: {
@@ -170,6 +170,34 @@ function print(value: unknown): void {
     console.log(JSON.stringify(value, null, 2));
 }
 
+function round(value: number): string {
+    return String(Number(value.toFixed(3)));
+}
+
+function printBalance(report: BalanceReport): void {
+    const components = report.machines.reduce((sum, machine) => sum + machine.components.length, 0);
+    const lines = [
+        `Line balance: ${report.machines.length} machines, ${components} components`,
+        `total ${round(report.totalSeconds)} s, max ${round(report.maxSeconds)} s, min ${round(report.minSeconds)} s, imbalance ${(report.imbalance * 100).toFixed(1)}%`,
+    ];
+    for (const machine of report.machines) {
+        lines.push(
+            `machine ${machine.index}: ${machine.components.length} components, ${round(machine.travel)} mm, ${round(machine.seconds)} s`,
+        );
+        if (machine.components.length > 0) {
+            lines.push(`  ${machine.components.join(', ')}`);
+        }
+        if (machine.feeders.length > 0) {
+            const feeders = machine.feeders
+                .map((feeder) => `${feeder.id} ${feeder.assigned}/${feeder.loaded} ${feeder.ok ? 'ok' : 'short'}`)
+                .join(', ');
+            lines.push(`  feeders: ${feeders}`);
+        }
+    }
+    lines.push(`coverage: ${report.ok ? 'ok' : 'short'}`);
+    process.stdout.write(`${lines.join('\n')}\n`);
+}
+
 async function withSession<T>(work: (session: OpenSMT) => Promise<T>): Promise<T> {
     const session = new OpenSMT();
     try {
@@ -260,6 +288,10 @@ async function dispatch(args: readonly string[]): Promise<number> {
                     fs.writeFileSync(target, `${rows.join('\n')}\n`);
                 }
                 print(report);
+            });
+        case 'balance':
+            return readDocument(args.slice(1), 'balance <file>', ['--machines'], async (document, parsed) => {
+                printBalance(await document.balance(integer(parsed, '--machines')));
             });
         case 'reflow':
             return readDocument(args.slice(1), 'reflow <file>', [], async (document) => {

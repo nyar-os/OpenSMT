@@ -6,15 +6,19 @@
 //! * a feeder setup with package, pitch, capacity and loaded quantity;
 //! * a deterministic placement program: feeders are allocated in id order and
 //!   the head visits the nearest remaining component, top side first;
+//! * a multi-machine line balance that assigns components in reference
+//!   designator order to the machine with the smallest estimated completion
+//!   time;
 //! * a reflow profile evaluator that integrates time above liquidus over linear
 //!   zone ramps;
 //! * CSV program and feeder sheets, plus JSON and Markdown reports.
 //!
-//! Paste-aperture generation, vendor machine programs, line balancing and
-//! dual-lane scheduling are **not** implemented. See [`CAPABILITIES_JSON`].
+//! Paste-aperture generation, vendor machine programs and dual-lane scheduling
+//! are **not** implemented. See [`CAPABILITIES_JSON`].
 
 #![deny(missing_docs)]
 
+mod balance;
 mod error;
 mod export;
 mod model;
@@ -24,6 +28,7 @@ mod session;
 pub mod validate;
 
 pub use crate::{
+    balance::{BalanceReport, MAX_MACHINES, MIN_MACHINES, MachineFeeder, MachineReport, balance},
     error::{SmtError, not_implemented},
     export::{feeder_csv, markdown, program_csv, write_atomic},
     model::{Board, Component, FORMAT, Feeder, Panel, ReflowProfile, Side, SmtDocument, UNITS, VERSION, Zone},
@@ -46,7 +51,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "placementProgram": "supported",
     "pasteAperture": "unsupported",
     "machineProgram": "unsupported",
-    "lineBalance": "unsupported",
+    "lineBalance": "supported",
     "dualLane": "unsupported"
   },
   "io": {

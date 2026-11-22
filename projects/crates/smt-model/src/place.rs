@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use crate::{
     SmtError,
-    model::{Component, Side, SmtDocument},
+    model::{Component, Feeder, Side, SmtDocument},
     validate::{package_counts, validate},
 };
 
@@ -128,11 +128,54 @@ pub fn allocate(document: &SmtDocument) -> Result<FeederReport, SmtError> {
         return Err(error);
     }
 
-    let mut order: Vec<&Component> = document.components.iter().collect();
-    order.sort_by(|left, right| left.refdes.cmp(&right.refdes));
+    let components: Vec<&Component> = document.components.iter().collect();
+    let (feeders, unassigned) = allocate_lanes(&document.feeders, &components);
 
+    let counts = package_counts(document);
+    let packages = counts
+        .into_iter()
+        .map(|(package, components)| PackageUsage {
+            feeders: document.feeders.iter().filter(|feeder| feeder.package == package).count() as u32,
+            package,
+            components,
+        })
+        .collect();
+
+    Ok(FeederReport {
+        format: "open-smt-feeders".to_string(),
+        version: 1,
+        units: document.units.clone(),
+        packages,
+        feeders,
+        unassigned,
+    })
+}
+
+/// Allocates `components` to `feeders` and returns the lane usage in id order
+/// together with the reference designators that had no remaining lane.
+///
+/// Components are visited in reference designator order and each one takes the
+/// lane of the same package with the smallest id that still has capacity.
+pub(crate) fn allocate_lanes(feeders: &[Feeder], components: &[&Component]) -> (Vec<FeederUsage>, Vec<String>) {
+    allocate_lanes_with(feeders, components, |feeder| feeder.loaded)
+}
+
+/// Allocates `components` to `feeders` using lane capacity instead of the
+/// loaded quantity as the limit.
+///
+/// The balance report compares the resulting `assigned` demand with `loaded`,
+/// so a lane must be able to take components that are not loaded yet.
+pub(crate) fn allocate_lanes_by_capacity(feeders: &[Feeder], components: &[&Component]) -> (Vec<FeederUsage>, Vec<String>) {
+    allocate_lanes_with(feeders, components, |feeder| feeder.capacity)
+}
+
+fn allocate_lanes_with(
+    feeders: &[Feeder],
+    components: &[&Component],
+    limit: impl Fn(&Feeder) -> u32,
+) -> (Vec<FeederUsage>, Vec<String>) {
     let mut lanes: BTreeMap<String, FeederUsage> = BTreeMap::new();
-    for feeder in &document.feeders {
+    for feeder in feeders {
         lanes.insert(
             feeder.id.clone(),
             FeederUsage {
@@ -141,11 +184,14 @@ pub fn allocate(document: &SmtDocument) -> Result<FeederReport, SmtError> {
                 loaded: feeder.loaded,
                 capacity: feeder.capacity,
                 assigned: 0,
-                remaining: feeder.loaded,
+                remaining: limit(feeder),
                 refdes: Vec::new(),
             },
         );
     }
+
+    let mut order = components.to_vec();
+    order.sort_by(|left, right| left.refdes.cmp(&right.refdes));
 
     let mut unassigned = Vec::new();
     for component in order {
@@ -163,24 +209,34 @@ pub fn allocate(document: &SmtDocument) -> Result<FeederReport, SmtError> {
         }
     }
 
-    let counts = package_counts(document);
-    let packages = counts
-        .into_iter()
-        .map(|(package, components)| PackageUsage {
-            feeders: document.feeders.iter().filter(|feeder| feeder.package == package).count() as u32,
-            package,
-            components,
-        })
-        .collect();
+    (lanes.into_values().collect(), unassigned)
+}
 
-    Ok(FeederReport {
-        format: "open-smt-feeders".to_string(),
-        version: 1,
-        units: document.units.clone(),
-        packages,
-        feeders: lanes.into_values().collect(),
-        unassigned,
-    })
+/// Orders `components` for one machine and returns them with the total travel.
+///
+/// The top side is processed before the bottom side and every side starts at
+/// the machine origin `(0, 0)`, exactly like a single-machine program.
+pub(crate) fn order_with_travel<'a>(components: &[&'a Component]) -> (Vec<&'a Component>, f64) {
+    let mut ordered = Vec::with_capacity(components.len());
+    let mut travel = 0.0;
+    for side in [Side::Top, Side::Bottom] {
+        let side_components: Vec<&Component> = components.iter().copied().filter(|component| component.side == side).collect();
+        let sequenced = nearest_neighbor(&side_components);
+        let mut x = 0.0;
+        let mut y = 0.0;
+        for component in sequenced {
+            travel += distance(x, y, component.x, component.y);
+            x = component.x;
+            y = component.y;
+            ordered.push(component);
+        }
+    }
+    (ordered, travel)
+}
+
+/// Estimated placement time of `count` components with `travel` millimetres.
+pub(crate) fn estimated_seconds(count: usize, travel: f64) -> f64 {
+    count as f64 * PLACE_SECONDS + travel / HEAD_SPEED
 }
 
 /// Sequences the placement program using an existing feeder allocation.
@@ -195,28 +251,20 @@ pub fn sequence(document: &SmtDocument, feeders: &FeederReport) -> Result<Placem
         }
     }
 
-    let mut entries = Vec::with_capacity(document.components.len());
-    let mut travel_length = 0.0;
-    for side in [Side::Top, Side::Bottom] {
-        let components: Vec<&Component> = document.components.iter().filter(|component| component.side == side).collect();
-        let ordered = nearest_neighbor(&components);
-        let mut x = 0.0;
-        let mut y = 0.0;
-        for component in ordered {
-            travel_length += distance(x, y, component.x, component.y);
-            x = component.x;
-            y = component.y;
-            entries.push(PlacementEntry {
-                index: entries.len() as u32,
-                refdes: component.refdes.clone(),
-                package: component.package.clone(),
-                side: component.side,
-                x: component.x,
-                y: component.y,
-                rotation: component.rotation,
-                feeder: lane_of.get(&component.refdes).cloned(),
-            });
-        }
+    let components: Vec<&Component> = document.components.iter().collect();
+    let (ordered, travel_length) = order_with_travel(&components);
+    let mut entries = Vec::with_capacity(ordered.len());
+    for component in ordered {
+        entries.push(PlacementEntry {
+            index: entries.len() as u32,
+            refdes: component.refdes.clone(),
+            package: component.package.clone(),
+            side: component.side,
+            x: component.x,
+            y: component.y,
+            rotation: component.rotation,
+            feeder: lane_of.get(&component.refdes).cloned(),
+        });
     }
 
     let board_count = document.panel.board_count();
@@ -224,7 +272,7 @@ pub fn sequence(document: &SmtDocument, feeders: &FeederReport) -> Result<Placem
     let rows = f64::from(document.panel.rows);
     let panel_width = columns * document.board.width + (columns - 1.0) * document.panel.gap_x;
     let panel_depth = rows * document.board.depth + (rows - 1.0) * document.panel.gap_y;
-    let placement_seconds = entries.len() as f64 * PLACE_SECONDS + travel_length / HEAD_SPEED;
+    let placement_seconds = estimated_seconds(entries.len(), travel_length);
 
     Ok(PlacementReport {
         format: "open-smt-placement".to_string(),

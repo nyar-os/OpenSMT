@@ -28,6 +28,7 @@ export interface NativeBinding {
     validate(path: string): string;
     placement(path: string): string;
     feeders(path: string): string;
+    balance(path: string, machines: number): string;
     reflow(path: string): string;
     export(path: string, format: string, target: string): string;
     report(path: string): string;

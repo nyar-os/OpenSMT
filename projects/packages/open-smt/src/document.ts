@@ -9,6 +9,7 @@
 import { OpenSMTError } from './errors.js';
 import * as service from './service.js';
 import type {
+    BalanceReport,
     Board,
     BoardRequest,
     ComponentRequest,
@@ -140,6 +141,12 @@ export class SmtDocument {
     async feederSetup(): Promise<FeederReport> {
         this.assertOpen();
         return service.feeders(this.state.path);
+    }
+
+    /** Returns the multi-machine line balance. */
+    async balance(machines: number): Promise<BalanceReport> {
+        this.assertOpen();
+        return service.balance(this.state.path, machines);
     }
 
     /** Returns the reflow evaluation. */

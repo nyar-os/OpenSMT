@@ -13,6 +13,7 @@
             "open-smt validate <file>",
             "open-smt placement <file> [--out program.json]",
             "open-smt feeders <file> [--out setup.csv]",
+            "open-smt balance <file> --machines <n>",
             "open-smt reflow <file>",
             "open-smt export <file> --format program|feeders|json|md --out <path>",
             "open-smt report <file>",

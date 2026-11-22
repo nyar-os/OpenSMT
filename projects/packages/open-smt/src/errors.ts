@@ -22,6 +22,7 @@ export const errorCodes = [
     'document/units',
     'board/invalid',
     'panel/invalid',
+    'balance/invalid-machines',
     'component/invalid',
     'component/duplicate-refdes',
     'component/unknown-refdes',

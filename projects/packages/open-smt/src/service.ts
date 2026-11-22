@@ -8,6 +8,7 @@
 import { NotImplementedError, OpenSMTError, errorCodes, type OpenSMTErrorCode } from './errors.js';
 import { nativeBinding } from './native.js';
 import type {
+    BalanceReport,
     BoardRequest,
     ComponentRequest,
     DocumentSummary,
@@ -139,6 +140,11 @@ export function placement(path: string): PlacementReport {
 /** Returns the feeder setup. */
 export function feeders(path: string): FeederReport {
     return decode<FeederReport>(() => binding('feeders').feeders(path));
+}
+
+/** Returns the multi-machine line balance. */
+export function balance(path: string, machines: number): BalanceReport {
+    return decode<BalanceReport>(() => binding('balance').balance(path, machines));
 }
 
 /** Returns the reflow evaluation. */

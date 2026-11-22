@@ -278,6 +278,18 @@ fn feeders(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the multi-machine line balance.
+#[function]
+fn balance(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let machines = argument(&ctx, 1)?.as_i64()?;
+    let machines = u32::try_from(machines).unwrap_or(0);
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.balance(machines).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Returns the reflow evaluation.
 #[function]
 fn reflow(ctx: CallContext) -> Result<JsValue> {
@@ -326,6 +338,7 @@ register_module![
     validate,
     placement,
     feeders,
+    balance,
     reflow,
     export,
     report

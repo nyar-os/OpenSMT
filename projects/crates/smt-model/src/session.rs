@@ -14,6 +14,7 @@ use serde::Serialize;
 
 use crate::{
     CAPABILITIES_JSON, SmtError,
+    balance::{self, BalanceReport},
     export::{feeder_csv, markdown, program_csv, write_atomic},
     model::{Board, Component, Feeder, Panel, ReflowProfile, SmtDocument, UNITS},
     place::{self, FeederReport, PlacementReport},
@@ -268,6 +269,11 @@ impl OpenSmt {
         let document = self.document()?;
         let feeders = place::allocate(document)?;
         place::sequence(document, &feeders)
+    }
+
+    /// Returns the multi-machine line balance of the open document.
+    pub fn balance(&self, machine_count: u32) -> Result<BalanceReport, SmtError> {
+        balance::balance(self.document()?, machine_count)
     }
 
     /// Returns the reflow evaluation of the open document.

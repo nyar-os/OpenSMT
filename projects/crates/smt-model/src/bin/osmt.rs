@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, env, path::Path, process};
 
-use smt_model::{Board, Component, ExportFormat, Feeder, OpenSmt, Panel, ReflowProfile, Side, SmtError, Zone};
+use smt_model::{BalanceReport, Board, Component, ExportFormat, Feeder, OpenSmt, Panel, ReflowProfile, Side, SmtError, Zone};
 
 const USAGE: &str = "\
 osmt - OpenSMT placement, feeder and reflow planner (millimetres, degrees Celsius)
@@ -20,6 +20,7 @@ Usage:
   osmt validate <file>
   osmt placement <file> [--out program.csv]
   osmt feeders <file> [--out setup.csv]
+  osmt balance <file> --machines <n>
   osmt reflow <file>
   osmt export <file> --format program|feeders|json|md --out <path>
   osmt report <file>
@@ -109,6 +110,13 @@ fn run(args: &[String]) -> Result<i32, SmtError> {
                 smt_model::write_atomic(Path::new(target), &smt_model::feeder_csv(&report))?;
             }
             print_json(&report)
+        }
+        "balance" => {
+            let file = positional(args, 1, "balance <file> --machines <n>")?;
+            let values = Options::parse(&args[2..], &["--machines"], &[])?;
+            let report = session(file)?.balance(values.integer("--machines")?)?;
+            print_balance(&report);
+            Ok(0)
         }
         "reflow" => {
             let file = positional(args, 1, "reflow <file>")?;
@@ -224,6 +232,47 @@ fn print_json<T: serde::Serialize>(value: &T) -> Result<i32, SmtError> {
     let text = serde_json::to_string_pretty(value).map_err(|error| SmtError::new("document/serialize", error.to_string()))?;
     println!("{text}");
     Ok(0)
+}
+
+fn print_balance(report: &BalanceReport) {
+    let components: usize = report.machines.iter().map(|machine| machine.components.len()).sum();
+    println!("Line balance: {} machines, {} components", report.machines.len(), components);
+    println!(
+        "total {} s, max {} s, min {} s, imbalance {:.1}%",
+        number(report.total_seconds),
+        number(report.max_seconds),
+        number(report.min_seconds),
+        report.imbalance * 100.0
+    );
+    for machine in &report.machines {
+        println!(
+            "machine {}: {} components, {} mm, {} s",
+            machine.index,
+            machine.components.len(),
+            number(machine.travel),
+            number(machine.seconds)
+        );
+        if !machine.components.is_empty() {
+            println!("  {}", machine.components.join(", "));
+        }
+        if !machine.feeders.is_empty() {
+            let feeders: Vec<String> = machine
+                .feeders
+                .iter()
+                .map(|feeder| {
+                    let state = if feeder.ok { "ok" } else { "short" };
+                    format!("{} {}/{} {state}", feeder.id, feeder.assigned, feeder.loaded)
+                })
+                .collect();
+            println!("  feeders: {}", feeders.join(", "));
+        }
+    }
+    println!("coverage: {}", if report.ok { "ok" } else { "short" });
+}
+
+fn number(value: f64) -> String {
+    let rounded = (value * 1000.0).round() / 1000.0;
+    if rounded.abs() < 1e-9 { "0".to_string() } else { format!("{rounded}") }
 }
 
 struct Options {
