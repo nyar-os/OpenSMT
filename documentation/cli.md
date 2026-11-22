@@ -156,6 +156,20 @@ that cannot cover its assignments is printed as `short` and sets the overall
 `--optimize` applies the same 2-opt pass to every machine independently.
 Assignments, component counts, total and imbalance arithmetic do not change.
 
+## schedule dual
+
+```shell
+open-smt schedule dual <file>
+```
+
+Prints the dual-lane schedule as JSON. Each placement step becomes one task with
+a fixed time of `0.6 s + travel / 200 mm·s⁻¹` from the previous step of the same
+side. Tasks are visited in program order and join the lane with the smaller
+accumulated time; a tie goes to the first lane. The report contains `lanes`
+(`index`, `tasks` in program order and `seconds`), `singleLaneSeconds`,
+`makespan` and `balanceRatio` (`makespan / singleLaneSeconds`, zero for an empty
+document). The assignment is greedy and is not an optimal partition.
+
 ## reflow
 
 ```shell
@@ -212,6 +226,7 @@ open-smt feeder add panel.osmt --id F1 --package 0603 --pitch 4 --capacity 500
 open-smt feeder add panel.osmt --id F2 --package QFN-32 --pitch 12 --capacity 50
 open-smt validate panel.osmt
 open-smt placement panel.osmt
+open-smt schedule dual panel.osmt
 open-smt reflow panel.osmt
 open-smt export panel.osmt --format program --out program.csv
 ```

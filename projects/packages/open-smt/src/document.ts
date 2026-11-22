@@ -14,6 +14,7 @@ import type {
     BoardRequest,
     ComponentRequest,
     DocumentSummary,
+    DualLaneReport,
     ExportFormat,
     ExportReport,
     FeederReport,
@@ -147,6 +148,12 @@ export class SmtDocument {
     async balance(machines: number, optimize = false): Promise<BalanceReport> {
         this.assertOpen();
         return service.balance(this.state.path, machines, optimize);
+    }
+
+    /** Returns the dual-lane schedule. */
+    async dualLane(): Promise<DualLaneReport> {
+        this.assertOpen();
+        return service.dualLane(this.state.path);
     }
 
     /** Returns the reflow evaluation. */

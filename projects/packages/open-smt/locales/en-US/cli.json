@@ -15,6 +15,7 @@
             "open-smt placement <file> [--out program.json] [--optimize]",
             "open-smt feeders <file> [--out setup.csv]",
             "open-smt balance <file> --machines <n> [--optimize]",
+            "open-smt schedule dual <file>",
             "open-smt reflow <file>",
             "open-smt export <file> --format program|feeders|json|md --out <path>",
             "open-smt report <file>",

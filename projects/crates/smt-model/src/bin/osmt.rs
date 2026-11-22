@@ -22,6 +22,7 @@ Usage:
   osmt placement <file> [--out program.csv] [--optimize]
   osmt feeders <file> [--out setup.csv]
   osmt balance <file> --machines <n> [--optimize]
+  osmt schedule dual <file>
   osmt reflow <file>
   osmt export <file> --format program|feeders|json|md --out <path>
   osmt report <file>
@@ -126,6 +127,7 @@ fn run(args: &[String]) -> Result<i32, SmtError> {
             print_balance(&report);
             Ok(0)
         }
+        "schedule" => schedule_command(args),
         "reflow" => {
             let file = positional(args, 1, "reflow <file>")?;
             print_json(&session(file)?.reflow()?)
@@ -206,6 +208,14 @@ fn profile_command(args: &[String]) -> Result<i32, SmtError> {
     let zones = parse_zones(values.require("--zones")?)?;
     let profile = ReflowProfile { conveyor_speed: values.number("--speed")?, liquidus: values.number("--liquidus")?, zones };
     print_json(&session(file)?.set_profile(profile)?)
+}
+
+fn schedule_command(args: &[String]) -> Result<i32, SmtError> {
+    if args.get(1).map(String::as_str) != Some("dual") {
+        return Err(SmtError::new("cli/missing-argument", "usage: osmt schedule dual <file>"));
+    }
+    let file = positional(args, 2, "schedule dual <file>")?;
+    print_json(&session(file)?.dual_lane()?)
 }
 
 fn parse_zones(raw: &str) -> Result<Vec<Zone>, SmtError> {

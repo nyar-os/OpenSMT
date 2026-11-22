@@ -10,16 +10,19 @@
 //! * a multi-machine line balance that assigns components in reference
 //!   designator order to the machine with the smallest estimated completion
 //!   time;
+//! * a dual-lane schedule that assigns placement tasks in program order to the
+//!   lane with the smaller accumulated time;
 //! * a reflow profile evaluator that integrates time above liquidus over linear
 //!   zone ramps;
 //! * CSV program and feeder sheets, plus JSON and Markdown reports.
 //!
-//! Paste-aperture generation, vendor machine programs and dual-lane scheduling
-//! are **not** implemented. See [`CAPABILITIES_JSON`].
+//! Paste-aperture generation and vendor machine programs are **not**
+//! implemented. See [`CAPABILITIES_JSON`].
 
 #![deny(missing_docs)]
 
 mod balance;
+mod dual;
 mod error;
 mod export;
 mod import;
@@ -31,6 +34,7 @@ pub mod validate;
 
 pub use crate::{
     balance::{BalanceReport, MAX_MACHINES, MIN_MACHINES, MachineFeeder, MachineReport, balance, balance_with},
+    dual::{DualLaneReport, DualLaneTask, LANES, LaneSchedule, plan_dual_lane, plan_dual_lane_tasks},
     error::{SmtError, not_implemented},
     export::{feeder_csv, markdown, program_csv, write_atomic},
     import::{ImportLoss, ImportReport},
@@ -56,7 +60,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "pasteAperture": "unsupported",
     "machineProgram": "unsupported",
     "lineBalance": "supported",
-    "dualLane": "unsupported"
+    "dualLane": "supported"
   },
   "io": {
     "osmt": "supported",
@@ -70,5 +74,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
   },
   "imports": {
     "kicad_pcb": "supported"
+  },
+  "limitations": {
+    "dualLane": "greedy assignment by cumulative task seconds, not an optimal schedule"
   }
 }"#;

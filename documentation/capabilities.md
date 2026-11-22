@@ -27,7 +27,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | paste aperture / stencil generation | ❌ not implemented |
 | vendor machine programs (Fuji, Yamaha, Juki, ASM) | ❌ not implemented |
 | line balancing | ✅ supported |
-| dual-lane scheduling | ❌ not implemented |
+| dual-lane scheduling | ✅ supported (greedy, not optimal) |
 | KiCad PCB (`.kicad_pcb`) import | ✅ supported |
 | Altium / ODB import | ❌ not implemented |
 
@@ -68,10 +68,19 @@ The machine-readable version is printed by `open-smt capabilities` and by
    produced and the top-level `ok` becomes false. With `optimize` enabled, each
    machine's own program is 2-opt improved independently; assignments, component
    counts, `totalSeconds` conservation and the `imbalance` formula are unchanged.
-6. **Panel arithmetic.** `boardCount = rows × columns`,
+6. **Dual-lane schedule.** `planDualLane` (CLI `schedule dual`) derives one
+   task per placement step in the same nearest-neighbour program order. A task's
+   fixed time is `0.6 s + distance from the previous step of the same side /
+   200 mm·s⁻¹`; the times therefore sum to the single-lane placement estimate.
+   Tasks are visited in program order and each joins the lane with the smaller
+   accumulated time; a tie goes to the first lane (index 0). Each lane keeps
+   its tasks in program order. `makespan` is `max` of the two lane totals and
+   `balanceRatio` is `makespan / singleLaneSeconds`, or zero for an empty
+   document. The pass is greedy and is not an optimal two-lane partition.
+7. **Panel arithmetic.** `boardCount = rows × columns`,
    `panelWidth = columns × width + (columns − 1) × gapX`, and
    `panelDepth = rows × depth + (rows − 1) × gapY`.
-7. **Reflow.** The board enters the first zone at 25 °C. Each zone ramps linearly
+8. **Reflow.** The board enters the first zone at 25 °C. Each zone ramps linearly
    from the previous set-point to its own set-point over
    `length / conveyor_speed × 60` seconds. Time above liquidus is integrated over
    each ramp, including partial crossings in either direction. Peak temperature
@@ -151,6 +160,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 |------|---------|
 | `tests/place.rs` | allocation order, nearest-first sequence, tie-breaks, panel size, multi-feeder split, determinism, 2-opt never longer than nearest neighbour, an improving crossing route, unchanged single/empty documents, additive report fields, byte-identical default output |
 | `tests/balance.rs` | single-machine parity, component conservation, side order, determinism, empty machines, invalid counts, per-machine feeder shortages, independent per-machine 2-opt, imbalance identity |
+| `tests/dual_lane.rs` | greedy lane assignment, one empty lane, empty input, work/ratio arithmetic, per-lane order preservation, placement-program parity, determinism |
 | `tests/reflow.rs` | default profile numbers, exact single-zone integral, below-liquidus profile, zone order |
 | `tests/validation.rs` | every code above and warning-only documents |
 | `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as |
@@ -166,8 +176,10 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 - The feeder model has no lane index, tape direction or splice handling.
 - Reflow uses set-points, not measured thermocouple data, and models no
   convection or board thermal mass.
-- Only the top and bottom sides are supported; there is no dual-lane
-  scheduling.
+- Only the top and bottom sides are supported.
+- Dual-lane scheduling assigns whole placement tasks to two lanes with a greedy
+  cumulative-time rule. It does not model conveyor lanes, lane transfer, nozzle
+  counts or per-lane re-sequencing, and its result is not an optimal partition.
 - Line balancing distributes whole components across 1–64 machines but does not
   emit vendor machine programs, model conveyor lanes or account for line
   changeover time.

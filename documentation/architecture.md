@@ -20,7 +20,8 @@ projects/sites/homepage        static product site (VMZ)
 3. `feeders` validates and allocates every component to a lane.
 4. `placement` sequences the allocated components and returns the program.
 5. `balance` assigns components to 1–64 machines and reports per-machine
-   programs and feeder coverage.
+   programs and feeder coverage. `schedule dual` assigns placement tasks to two
+   lanes by cumulative task time and reports per-lane sequences and makespan.
 6. `reflow` evaluates the profile.
 7. `export` writes the program CSV, feeder CSV, JSON or Markdown through the same
    atomic writer.
@@ -31,7 +32,7 @@ session, they cannot disagree about a program or an error code.
 ## Invariants
 
 1. **The Rust session is the only implementation.** No allocation, sequencing,
-   panel or reflow rule may be reimplemented in TypeScript.
+   balancing, dual-lane, panel or reflow rule may be reimplemented in TypeScript.
 2. **The Node-API layer maps values only.** Each export accepts a path or JSON
    request and returns a JSON string.
 3. **The TypeScript layer parses arguments and formats output.** It owns help
@@ -88,5 +89,5 @@ but unimplemented routes and maps to exit code `2`.
 
 `version`, `capabilities`, `create`, `open`, `import`, `save`, `board_set`, `panel_set`,
 `component_add`, `component_remove`, `feeder_add`, `feeder_remove`,
-`profile_set`, `validate`, `placement`, `feeders`, `balance`, `reflow`, `export`,
-`report`.
+`profile_set`, `validate`, `placement`, `feeders`, `balance`, `dual_lane`,
+`reflow`, `export`, `report`.

@@ -313,6 +313,8 @@ async function dispatch(args: readonly string[]): Promise<number> {
                 },
                 ['--optimize'],
             );
+        case 'schedule':
+            return scheduleCommand(args.slice(1));
         case 'reflow':
             return readDocument(args.slice(1), 'reflow <file>', [], async (document) => {
                 print(await document.reflow());
@@ -388,6 +390,15 @@ async function feederCommand(args: readonly string[]): Promise<number> {
         });
     }
     throw failure('cli/missing-argument', 'missingArgument', { usage: 'feeder add|remove <file> ...' });
+}
+
+async function scheduleCommand(args: readonly string[]): Promise<number> {
+    if (args[0] !== 'dual') {
+        throw failure('cli/missing-argument', 'missingArgument', { usage: 'schedule dual <file>' });
+    }
+    return readDocument(args.slice(1), 'schedule dual <file>', [], async (document) => {
+        print(await document.dualLane());
+    });
 }
 
 async function profileCommand(args: readonly string[]): Promise<number> {

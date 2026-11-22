@@ -15,6 +15,7 @@ use serde::Serialize;
 use crate::{
     CAPABILITIES_JSON, SmtError,
     balance::{self, BalanceReport},
+    dual::{self, DualLaneReport},
     export::{feeder_csv, markdown, program_csv, write_atomic},
     import::ImportReport,
     model::{Board, Component, Feeder, Panel, ReflowProfile, SmtDocument, UNITS},
@@ -323,6 +324,11 @@ impl OpenSmt {
     /// per machine.
     pub fn balance_with(&self, machine_count: u32, optimize: bool) -> Result<BalanceReport, SmtError> {
         balance::balance_with(self.document()?, machine_count, optimize)
+    }
+
+    /// Returns the dual-lane schedule of the open document.
+    pub fn dual_lane(&self) -> Result<DualLaneReport, SmtError> {
+        dual::plan_dual_lane(self.document()?)
     }
 
     /// Returns the reflow evaluation of the open document.

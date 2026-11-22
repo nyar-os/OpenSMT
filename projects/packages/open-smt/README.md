@@ -32,6 +32,7 @@ open-smt validate <file>
 open-smt placement <file> [--out program.json] [--optimize]
 open-smt feeders <file> [--out setup.csv]
 open-smt balance <file> --machines <n> [--optimize]
+open-smt schedule dual <file>
 open-smt reflow <file>
 open-smt export <file> --format program|feeders|json|md --out <path>
 open-smt report <file>
@@ -59,7 +60,8 @@ non-rectangular outline reports `import/outline-unsupported`.
 
 `placement` prints the program and can write it as JSON; `feeders` prints the
 allocation and can write a CSV setup sheet; `balance` prints a human-readable
-multi-machine balance for 1–64 machines. `--optimize` runs a deterministic
+multi-machine balance for 1–64 machines; `schedule dual` prints the two-lane
+task schedule. `--optimize` runs a deterministic
 2-opt pass per side (placement) or per machine (balance); the placement report
 then adds `optimized` and `travelSaved`. Exit code `0` is success, `1` is
 invalid input, and `2` is an unimplemented capability.
@@ -87,6 +89,9 @@ console.log(optimized.travelSaved);
 
 const balance = await document.balance(2);
 console.log(balance.maxSeconds, balance.imbalance);
+
+const lanes = await document.dualLane();
+console.log(lanes.makespan, lanes.balanceRatio);
 
 await document.exportDocument('md', 'report.md');
 await smt.dispose();
@@ -116,8 +121,10 @@ because a component list is normally entered before the feeder table.
 - Placement defaults to a deterministic nearest-neighbour sequence; `--optimize`
   adds a bounded 2-opt local search. Neither mode is a production optimiser or
   guarantees an optimal tour.
-- Line balancing assigns whole components to 1–64 machines; it does not emit
-  vendor machine programs, model dual-lane conveyors or line changeover time.
+- Line balancing assigns whole components to 1–64 machines and dual-lane
+  scheduling splits placement tasks over two lanes with a greedy rule. Neither
+  emits vendor machine programs, models lane hardware or accounts for line
+  changeover time.
 - Vendor machine programs and paste apertures are not implemented.
 - `validate()` is the support claim for machineability.
 

@@ -310,6 +310,16 @@ fn balance(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the dual-lane schedule.
+#[function]
+fn dual_lane(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.dual_lane().map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Returns the reflow evaluation.
 #[function]
 fn reflow(ctx: CallContext) -> Result<JsValue> {
@@ -360,6 +370,7 @@ register_module![
     placement,
     feeders,
     balance,
+    dual_lane,
     reflow,
     export,
     report

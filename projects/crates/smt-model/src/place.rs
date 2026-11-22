@@ -417,7 +417,7 @@ fn route_travel(route: &[&Component]) -> f64 {
     travel
 }
 
-fn distance(from_x: f64, from_y: f64, to_x: f64, to_y: f64) -> f64 {
+pub(crate) fn distance(from_x: f64, from_y: f64, to_x: f64, to_y: f64) -> f64 {
     let dx = to_x - from_x;
     let dy = to_y - from_y;
     (dx * dx + dy * dy).sqrt()

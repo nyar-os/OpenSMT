@@ -184,6 +184,25 @@ export interface BalanceReport {
     readonly ok: boolean;
 }
 
+/** One lane of a dual-lane schedule. */
+export interface LaneSchedule {
+    readonly index: number;
+    /** Task reference designators in execution order. */
+    readonly tasks: readonly string[];
+    readonly seconds: number;
+}
+
+/** Dual-lane schedule report. */
+export interface DualLaneReport {
+    readonly format: string;
+    readonly version: number;
+    readonly lanes: readonly LaneSchedule[];
+    readonly singleLaneSeconds: number;
+    readonly makespan: number;
+    /** `makespan / singleLaneSeconds`, or zero when every task takes zero seconds. */
+    readonly balanceRatio: number;
+}
+
 /** One evaluated reflow zone. */
 export interface ZoneReport {
     readonly name: string;
@@ -306,4 +325,6 @@ export interface OpenSMTCapabilities {
     readonly analysis: Readonly<Record<string, SupportLevel>>;
     readonly io: Readonly<Record<string, SupportLevel>>;
     readonly imports: Readonly<Record<string, SupportLevel>>;
+    /** Caveats of supported capabilities, keyed by capability. */
+    readonly limitations?: Readonly<Record<string, string>>;
 }

@@ -12,6 +12,7 @@ import type {
     BoardRequest,
     ComponentRequest,
     DocumentSummary,
+    DualLaneReport,
     ExportFormat,
     ExportReport,
     FeederReport,
@@ -67,12 +68,14 @@ export function capabilities() {
         analysis: Record<string, 'supported' | 'unsupported'>;
         io: Record<string, 'supported' | 'unsupported'>;
         imports: Record<string, 'supported' | 'unsupported'>;
+        limitations?: Record<string, string>;
     }>(() => binding('capabilities').capabilities());
     return {
         engine: { package: 'open-smt-napi', version: version() },
         analysis: matrix.analysis,
         io: matrix.io,
         imports: matrix.imports,
+        limitations: matrix.limitations ?? {},
     };
 }
 
@@ -153,6 +156,11 @@ export function feeders(path: string): FeederReport {
 /** Returns the multi-machine line balance, optionally improved per machine. */
 export function balance(path: string, machines: number, optimize = false): BalanceReport {
     return decode<BalanceReport>(() => binding('balance').balance(path, machines, optimize));
+}
+
+/** Returns the dual-lane schedule. */
+export function dualLane(path: string): DualLaneReport {
+    return decode<DualLaneReport>(() => binding('dual-lane').dual_lane(path));
 }
 
 /** Returns the reflow evaluation. */

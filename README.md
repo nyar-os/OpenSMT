@@ -31,7 +31,7 @@ Typical uses:
 
 - a paste-aperture or stencil generator;
 - a vendor machine-program translator (no Fuji, Yamaha, Juki or ASM dialect);
-- a dual-lane scheduler or line-changeover planner;
+- a conveyor-line simulator or line-changeover planner;
 - a place where an unsupported feature silently degrades — an unimplemented
   route returns `capability/not-implemented` with exit code `2`.
 

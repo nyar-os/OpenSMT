@@ -30,6 +30,7 @@ export interface NativeBinding {
     placement(path: string, optimize?: boolean): string;
     feeders(path: string): string;
     balance(path: string, machines: number, optimize?: boolean): string;
+    dual_lane(path: string): string;
     reflow(path: string): string;
     export(path: string, format: string, target: string): string;
     report(path: string): string;
