@@ -86,6 +86,25 @@ open-smt panel <file> --rows <r> --columns <c> [--gap-x <g>] [--gap-y <g>]
 `rows` and `columns` default to 1 and must be positive integers; gaps default to
 0.
 
+### panel fit
+
+```shell
+open-smt panel fit <file> --max-width <mm> --max-depth <mm> [--gap-x <mm>] [--gap-y <mm>]
+```
+
+Prints a read-only report of how many boards fit into the maximum panel size.
+The stored panel array and the document are not changed. `--max-width` and
+`--max-depth` are required and must be finite and positive. `--gap-x` and
+`--gap-y` default to the stored panel gaps and must be finite and non-negative.
+Invalid input reports `panel/invalid` and exits with code `1`.
+
+The report contains `format` (`open-smt-panel-fit`), `version`, `units`, the
+inputs `maxWidth`, `maxDepth`, `gapX`, `gapY`, the board `width` and `depth`,
+and the result `rows`, `columns`, `boardCount`, `panelWidth`, `panelDepth`,
+`fits`, `wastedWidth`, `wastedDepth` and `utilization`. Counts are
+`floor((max + gap) / (size + gap))`, floored at zero. When no board fits,
+`fits` is false and `wastedWidth`, `wastedDepth` and `utilization` are zero.
+
 ## component add
 
 ```shell
@@ -287,6 +306,7 @@ open-smt import board.kicad_pcb --out imported.osmt
 open-smt import csv placements.csv --out placements.osmt --side top
 open-smt board panel.osmt --width 120 --depth 90 --thickness 1.6
 open-smt panel panel.osmt --rows 2 --columns 2 --gap-x 5 --gap-y 5
+open-smt panel fit panel.osmt --max-width 320 --max-depth 180 --gap-x 5 --gap-y 5
 open-smt component add panel.osmt --refdes R1 --package 0603 --x 10 --y 10
 open-smt component add panel.osmt --refdes U1 --package QFN-32 --x 50 --y 40 --side bottom
 open-smt feeder add panel.osmt --id F1 --package 0603 --pitch 4 --capacity 500

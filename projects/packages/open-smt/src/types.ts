@@ -158,6 +158,43 @@ export interface FeederLoadingReport {
     readonly slots: readonly FeederSlot[];
 }
 
+/** Read-only panel fit report for a maximum panel size. */
+export interface PanelFitReport {
+    readonly format: string;
+    readonly version: number;
+    readonly units: string;
+    /** Maximum panel width tested, in millimetres. */
+    readonly maxWidth: number;
+    /** Maximum panel depth tested, in millimetres. */
+    readonly maxDepth: number;
+    /** Column gap used by the fit, in millimetres. */
+    readonly gapX: number;
+    /** Row gap used by the fit, in millimetres. */
+    readonly gapY: number;
+    /** Board width, in millimetres. */
+    readonly width: number;
+    /** Board depth, in millimetres. */
+    readonly depth: number;
+    /** Number of board rows that fit. */
+    readonly rows: number;
+    /** Number of board columns that fit. */
+    readonly columns: number;
+    /** Number of boards on the fitted panel. */
+    readonly boardCount: number;
+    /** Width of the fitted panel including column gaps. */
+    readonly panelWidth: number;
+    /** Depth of the fitted panel including row gaps. */
+    readonly panelDepth: number;
+    /** Whether at least one board fits. */
+    readonly fits: boolean;
+    /** Unused width when a board fits; zero otherwise. */
+    readonly wastedWidth: number;
+    /** Unused depth when a board fits; zero otherwise. */
+    readonly wastedDepth: number;
+    /** `panelWidth × panelDepth / (maxWidth × maxDepth)` when a board fits. */
+    readonly utilization: number;
+}
+
 /** Placement program report. */
 export interface PlacementReport {
     readonly format: string;
@@ -329,6 +366,18 @@ export interface PanelRequest {
     readonly rows: number;
     readonly columns: number;
     readonly gapX?: number;
+    readonly gapY?: number;
+}
+
+/** Request of `panelFit()`; both gaps default to the stored panel gaps. */
+export interface PanelFitRequest {
+    /** Maximum panel width in millimetres. */
+    readonly maxWidth: number;
+    /** Maximum panel depth in millimetres. */
+    readonly maxDepth: number;
+    /** Column gap override in millimetres. */
+    readonly gapX?: number;
+    /** Row gap override in millimetres. */
     readonly gapY?: number;
 }
 

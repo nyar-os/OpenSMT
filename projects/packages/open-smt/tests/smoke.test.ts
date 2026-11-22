@@ -86,6 +86,37 @@ test('balance splits components and rejects zero machines', { skip: skipWithoutN
     }
 });
 
+test('panel fit reports how many boards fit and leaves the document unchanged', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-panel-fit-'));
+    const file = path.join(directory, 'panel.osmt');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        const before = document.revision;
+
+        const report = await document.panelFit({ maxWidth: 300, maxDepth: 160 });
+        assert.equal(report.format, 'open-smt-panel-fit');
+        assert.equal(report.version, 1);
+        assert.equal(report.columns, 3);
+        assert.equal(report.rows, 2);
+        assert.equal(report.boardCount, 6);
+        assert.equal(report.fits, true);
+        assert.equal(report.wastedWidth, 0);
+        assert.equal(report.wastedDepth, 0);
+        assert.equal(report.utilization, 1);
+        assert.equal(document.revision, before);
+
+        await assert.rejects(document.panelFit({ maxWidth: 0, maxDepth: 160 }), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'panel/invalid');
+            return true;
+        });
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
 test('schedule lanes splits the program and rejects an invalid count', { skip: skipWithoutNative }, async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-lanes-'));
     const file = path.join(directory, 'panel.osmt');

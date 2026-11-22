@@ -20,6 +20,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | feeder loading report (package counts and suggested slots) | ✅ supported |
 | multi-feeder split of one package | ✅ supported |
 | panel board count and panel dimensions | ✅ supported |
+| panel fit report (boards fitting a maximum panel size) | ✅ supported |
 | reflow zone report and peak temperature | ✅ supported |
 | time above liquidus over linear ramps | ✅ supported |
 | placement program CSV | ✅ supported |
@@ -87,7 +88,8 @@ The machine-readable version is printed by `open-smt capabilities` and by
    or zero for an empty document. The report names the assignment in `strategy`
    and the lane count in `laneCount`. Both strategies and the swap pass are
    heuristics; none is an optimal multi-lane partition.
-7. **Panel arithmetic.** `boardCount = rows × columns`,
+7. **Stored panel arithmetic.** The document's panel array reports
+   `boardCount = rows × columns`,
    `panelWidth = columns × width + (columns − 1) × gapX`, and
    `panelDepth = rows × depth + (rows − 1) × gapY`.
 8. **Reflow.** The board enters the first zone at 25 °C. Each zone ramps linearly
@@ -104,6 +106,21 @@ The machine-readable version is printed by `open-smt capabilities` and by
    `uniquePackages` the number of slots. An empty document yields zero counts and
    no slots. Slot numbers are suggestions only; no physical machine slot, tape
    direction or pitch constraint is modelled.
+10. **Panel fit report.** `panelFit` (CLI `panel fit <file> --max-width <mm>
+    --max-depth <mm> [--gap-x <mm>] [--gap-y <mm>]`) reports how many boards fit
+    into a maximum panel size without changing the document or its stored panel.
+    `maxWidth` and `maxDepth` must be finite and positive. Gaps default to the
+    stored panel gaps and must be finite and non-negative when supplied;
+    invalid input reports `panel/invalid`. The counts are
+    `columns = floor((maxWidth + gapX) / (width + gapX))` and
+    `rows = floor((maxDepth + gapY) / (depth + gapY))`, each floored at zero,
+    with `boardCount = rows × columns` and
+    `panelWidth = columns × width + (columns − 1) × gapX`,
+    `panelDepth = rows × depth + (rows − 1) × gapY` (both zero when the matching
+    count is zero). `fits` is `boardCount > 0`. When a board fits,
+    `wastedWidth = maxWidth − panelWidth`, `wastedDepth = maxDepth − panelDepth`
+    and `utilization = panelWidth × panelDepth / (maxWidth × maxDepth)`;
+    otherwise all three are zero.
 
 ## KiCad PCB import
 
@@ -192,7 +209,7 @@ are skipped. Rows keep the order of the source.
 | `import/duplicate-refdes` | a CSV row repeats a reference designator |
 | `import/outside-board` | a CSV row has a negative coordinate |
 | `board/invalid` | a board size is not finite and positive |
-| `panel/invalid` | zero rows/columns or a negative gap |
+| `panel/invalid` | zero rows/columns, a negative gap, or an invalid panel-fit maximum or gap |
 | `balance/invalid-machines` | a balance requested fewer than 1 or more than 64 machines |
 | `schedule/invalid-strategy` | a schedule requested a strategy other than `greedy` or `lpt` |
 | `schedule/invalid-lanes` | a multi-lane schedule requested fewer than 2 or more than 16 lanes |
@@ -219,9 +236,10 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/reflow.rs` | default profile numbers, exact single-zone integral, below-liquidus profile, zone order |
 | `tests/validation.rs` | every code above and warning-only documents |
 | `tests/feeder.rs` | package counts, slot numbering in package order, reference designator document order, deduplicated sorted sides, empty document, determinism |
+| `tests/panel_fit.rs` | exact-fit 2 × 3 arithmetic, leftover gaps, too-small dimensions, zero waste, gap effects, utilization, stored-gap default versus override, invalid maxima and gaps, determinism, unchanged document |
 | `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as |
 | `tests/import.rs` | KiCad footprint mapping, rotation, both sides, reference sources, loss ledger, outline errors, duplicate/missing references, empty board, determinism, existing target; CSV row order, reordered/quoted/UPPERCASE columns, empty lines, side and rotation defaults, duplicate refdes, missing column, invalid number, invalid side, line numbers, negative coordinate, determinism, one revision, existing target |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon and a native-gated balance smoke |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane and panel-fit smokes |
 
 ## Limitations
 
@@ -233,6 +251,9 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   feeder loading report numbers packages from 1 in name order, but those slot
   numbers are suggestions only: they do not describe a physical machine slot or
   a tape layout, and the report never writes a feeder setup.
+- The panel fit report assumes an axis-aligned grid of whole boards. It does not
+  rotate boards, add edge rails, reserve fiducial or tooling areas, or derive a
+  panel outline, and it never changes the stored panel array.
 - Reflow uses set-points, not measured thermocouple data, and models no
   convection or board thermal mass.
 - Only the top and bottom sides are supported.

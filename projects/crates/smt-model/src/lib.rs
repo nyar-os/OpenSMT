@@ -30,6 +30,7 @@ mod export;
 mod feeder;
 mod import;
 mod model;
+mod panel_fit;
 mod place;
 mod reflow;
 mod session;
@@ -47,6 +48,7 @@ pub use crate::{
     feeder::{FeederLoadingReport, FeederSlot, report as feeder_loading_report},
     import::{ImportLoss, ImportReport},
     model::{Board, Component, FORMAT, Feeder, Panel, ReflowProfile, Side, SmtDocument, UNITS, VERSION, Zone},
+    panel_fit::{PanelFitReport, fit as panel_fit},
     place::{
         FeederReport, FeederUsage, HEAD_SPEED, PLACE_SECONDS, PackageUsage, PlacementEntry, PlacementReport,
         allocate as allocate_feeders, sequence as sequence_placement, sequence_with as sequence_placement_with,
@@ -64,6 +66,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "feederAllocation": "supported",
     "feederLoadingReport": "supported",
     "panelization": "supported",
+    "panelFit": "supported",
     "reflowProfile": "supported",
     "placementProgram": "supported",
     "pasteAperture": "unsupported",
@@ -90,6 +93,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "dualLane": "greedy or LPT heuristic with an optional single-swap pass, not an optimal schedule",
     "multiLane": "greedy or LPT heuristic on 2 to 16 lanes with an optional pairwise-swap pass, not an optimal schedule",
     "feederLoadingReport": "slot numbers are suggestions only; no machine slot, tape direction or pitch constraint is modelled",
+    "panelFit": "axis-aligned grid of whole boards only; no rotation, edge rail, fiducial or panel outline is modelled",
     "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }
 }"#;

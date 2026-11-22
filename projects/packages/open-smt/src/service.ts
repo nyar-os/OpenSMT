@@ -21,6 +21,8 @@ import type {
     FeederRequest,
     ImportReport,
     LanesReport,
+    PanelFitReport,
+    PanelFitRequest,
     PanelRequest,
     PlacementReport,
     ReflowProfileRequest,
@@ -165,6 +167,11 @@ export function feeders(path: string): FeederReport {
 /** Returns the read-only feeder loading report. */
 export function feederReport(path: string): FeederLoadingReport {
     return decode<FeederLoadingReport>(() => binding('feeder.report').feeder_report(path));
+}
+
+/** Returns the read-only panel fit report for a maximum panel size. */
+export function panelFit(path: string, request: PanelFitRequest): PanelFitReport {
+    return decode<PanelFitReport>(() => binding('panel.fit').panel_fit(path, JSON.stringify(request)));
 }
 
 /** Returns the multi-machine line balance, optionally improved per machine. */

@@ -323,6 +323,24 @@ fn feeder_report(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the read-only panel fit report for a maximum panel size.
+///
+/// The request carries `maxWidth` and `maxDepth`; `gapX` and `gapY` default to
+/// the stored panel gaps.
+#[function]
+fn panel_fit(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let request = object(&ctx, 1)?;
+    let max_width = required_number_field(&request, "maxWidth")?;
+    let max_depth = required_number_field(&request, "maxDepth")?;
+    let gap_x = number_field(&request, "gapX")?;
+    let gap_y = number_field(&request, "gapY")?;
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.panel_fit(max_width, max_depth, gap_x, gap_y).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Returns the multi-machine line balance; an optional third argument enables
 /// per-machine 2-opt.
 #[function]
@@ -427,6 +445,7 @@ register_module![
     placement,
     feeders,
     feeder_report,
+    panel_fit,
     balance,
     dual_lane,
     schedule_lanes,

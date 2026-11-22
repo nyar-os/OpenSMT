@@ -20,6 +20,7 @@ use crate::{
     feeder::{self, FeederLoadingReport},
     import::ImportReport,
     model::{Board, Component, Feeder, Panel, ReflowProfile, Side, SmtDocument, UNITS},
+    panel_fit::{self, PanelFitReport},
     place::{self, FeederReport, PlacementReport},
     reflow::{self, ReflowReport},
     validate::{self, ValidationReport},
@@ -345,6 +346,20 @@ impl OpenSmt {
     /// per package; it does not need a feeder setup and never writes.
     pub fn feeder_report(&self) -> Result<FeederLoadingReport, SmtError> {
         Ok(feeder::report(self.document()?))
+    }
+
+    /// Returns the read-only panel fit report for a maximum panel size.
+    ///
+    /// `gap_x` and `gap_y` default to the stored panel gaps. The document is
+    /// never modified.
+    pub fn panel_fit(
+        &self,
+        max_width: f64,
+        max_depth: f64,
+        gap_x: Option<f64>,
+        gap_y: Option<f64>,
+    ) -> Result<PanelFitReport, SmtError> {
+        panel_fit::fit(self.document()?, max_width, max_depth, gap_x, gap_y)
     }
 
     /// Returns the placement program of the open document.

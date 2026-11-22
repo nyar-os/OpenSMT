@@ -16,6 +16,7 @@ Usage:
   osmt import csv <file.csv> --out <file.osmt> [--side top|bottom]
   osmt board <file> --width <w> --depth <d> --thickness <t>
   osmt panel <file> --rows <r> --columns <c> [--gap-x <g>] [--gap-y <g>]
+  osmt panel fit <file> --max-width <mm> --max-depth <mm> [--gap-x <mm>] [--gap-y <mm>]
   osmt component add <file> --refdes <R1> --package <pkg> --x <x> --y <y>
                      [--side top|bottom] [--rotation <deg>] [--height <h>]
   osmt component remove <file> --refdes <R1>
@@ -79,17 +80,7 @@ fn run(args: &[String]) -> Result<i32, SmtError> {
             let board = Board::new(values.number("--width")?, values.number("--depth")?, values.number("--thickness")?);
             print_json(&session(file)?.set_board(board)?)
         }
-        "panel" => {
-            let file = positional(args, 1, "panel <file>")?;
-            let values = Options::parse(&args[2..], &["--rows", "--columns", "--gap-x", "--gap-y"], &[])?;
-            let panel = Panel::new(
-                values.integer("--rows")?,
-                values.integer("--columns")?,
-                values.number_or("--gap-x", 0.0)?,
-                values.number_or("--gap-y", 0.0)?,
-            );
-            print_json(&session(file)?.set_panel(panel)?)
-        }
+        "panel" => panel_command(args),
         "component" => component_command(args),
         "feeder" => feeder_command(args),
         "profile" => profile_command(args),
@@ -163,6 +154,29 @@ fn import_command(args: &[String]) -> Result<i32, SmtError> {
     let values = Options::parse(&args[2..], &["--out"], &[])?;
     let target = values.require("--out")?;
     print_json(&OpenSmt::new().import(Path::new(file), Path::new(target))?)
+}
+
+fn panel_command(args: &[String]) -> Result<i32, SmtError> {
+    if args.get(1).map(String::as_str) == Some("fit") {
+        let file = positional(args, 2, "panel fit <file> --max-width <mm> --max-depth <mm> [--gap-x <mm>] [--gap-y <mm>]")?;
+        let values = Options::parse(&args[3..], &["--max-width", "--max-depth", "--gap-x", "--gap-y"], &[])?;
+        let report = session(file)?.panel_fit(
+            values.number("--max-width")?,
+            values.number("--max-depth")?,
+            values.optional_number("--gap-x")?,
+            values.optional_number("--gap-y")?,
+        )?;
+        return print_json(&report);
+    }
+    let file = positional(args, 1, "panel <file>")?;
+    let values = Options::parse(&args[2..], &["--rows", "--columns", "--gap-x", "--gap-y"], &[])?;
+    let panel = Panel::new(
+        values.integer("--rows")?,
+        values.integer("--columns")?,
+        values.number_or("--gap-x", 0.0)?,
+        values.number_or("--gap-y", 0.0)?,
+    );
+    print_json(&session(file)?.set_panel(panel)?)
 }
 
 fn component_command(args: &[String]) -> Result<i32, SmtError> {

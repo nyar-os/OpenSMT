@@ -23,6 +23,8 @@ import type {
     FeederRequest,
     LanesReport,
     Panel,
+    PanelFitReport,
+    PanelFitRequest,
     PanelRequest,
     PlacementReport,
     ReflowProfileRequest,
@@ -151,6 +153,12 @@ export class SmtDocument {
     async feederReport(): Promise<FeederLoadingReport> {
         this.assertOpen();
         return service.feederReport(this.state.path);
+    }
+
+    /** Returns the read-only panel fit report for a maximum panel size. */
+    async panelFit(request: PanelFitRequest): Promise<PanelFitReport> {
+        this.assertOpen();
+        return service.panelFit(this.state.path, request);
     }
 
     /** Returns the multi-machine line balance, optionally improved per machine. */

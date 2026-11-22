@@ -255,6 +255,23 @@ async function dispatch(args: readonly string[]): Promise<number> {
                 );
             });
         case 'panel':
+            if (args[1] === 'fit') {
+                return readDocument(
+                    args.slice(2),
+                    'panel fit <file> --max-width <mm> --max-depth <mm> [--gap-x <mm>] [--gap-y <mm>]',
+                    ['--max-width', '--max-depth', '--gap-x', '--gap-y'],
+                    async (document, parsed) => {
+                        print(
+                            await document.panelFit({
+                                maxWidth: requiredNumber(parsed, '--max-width'),
+                                maxDepth: requiredNumber(parsed, '--max-depth'),
+                                gapX: number(parsed, '--gap-x'),
+                                gapY: number(parsed, '--gap-y'),
+                            }),
+                        );
+                    },
+                );
+            }
             return editDocument(args.slice(1), 'panel <file>', ['--rows', '--columns', '--gap-x', '--gap-y'], async (document, parsed) => {
                 print(
                     await document.setPanel({
