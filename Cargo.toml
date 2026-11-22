@@ -10,7 +10,7 @@ exclude = [
 ]
 
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
