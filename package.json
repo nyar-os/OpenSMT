@@ -1,0 +1,32 @@
+{
+    "name": "open-smt-workspace",
+    "private": true,
+    "type": "module",
+    "packageManager": "pnpm@10.28.0",
+    "description": "OpenSMT workspace: placement programs, feeder setup and reflow analysis on one native model",
+    "keywords": ["smt", "pcba", "placement", "feeder", "reflow", "wae"],
+    "license": "MPL-2.0",
+    "repository": "https://github.com/nyar-os/OpenSMT",
+    "scripts": {
+        "build": "wae build",
+        "build:rust": "cargo build --workspace",
+        "doc": "cargo doc --no-deps --all-features",
+        "test": "cargo test --release",
+        "test:smt": "cargo test -p smt-model --offline",
+        "fmt": "cargo fmt --all",
+        "check:rust": "cargo clippy -p smt-model -p open-smt-napi --all-targets -- -D warnings && cargo test -p smt-model --offline",
+        "build:napi": "wae native build",
+        "build:ts": "pnpm --filter @wae/open-smt run build",
+        "stage:native": "wae native stage",
+        "typecheck": "pnpm -r --filter \"./projects/packages/*\" run typecheck",
+        "p": "git push && git push --tags --prune",
+        "reset": "git reset Head~ --soft",
+        "u": "cargo upgrade --workspace"
+    },
+    "devDependencies": {
+        "@doki-land/nifty": "^0.1.15",
+        "@types/node": "^22.20.4",
+        "@wae/wae": "0.0.6",
+        "typescript": "^5.9.2"
+    }
+}

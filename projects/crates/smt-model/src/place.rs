@@ -1,0 +1,271 @@
+//! Placement sequencing and feeder allocation.
+//!
+//! Both reports are deterministic. Feeders are allocated in id order over
+//! components sorted by reference designator, and the placement head visits the
+//! nearest remaining component, breaking ties by reference designator. The top
+//! side is processed before the bottom side, and each side starts at the machine
+//! origin.
+
+use std::collections::BTreeMap;
+
+use serde::Serialize;
+
+use crate::{
+    SmtError,
+    model::{Component, Side, SmtDocument},
+    validate::{package_counts, validate},
+};
+
+/// Fixed pick-and-place overhead per component, in seconds.
+pub const PLACE_SECONDS: f64 = 0.6;
+
+/// Travelling head speed used for the cycle-time estimate, in millimetres per second.
+pub const HEAD_SPEED: f64 = 200.0;
+
+/// One step of the placement program.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlacementEntry {
+    /// Zero-based program index.
+    pub index: u32,
+    /// Reference designator.
+    pub refdes: String,
+    /// Package identifier.
+    pub package: String,
+    /// Board side.
+    pub side: Side,
+    /// Placement X coordinate.
+    pub x: f64,
+    /// Placement Y coordinate.
+    pub y: f64,
+    /// Rotation in degrees.
+    pub rotation: f64,
+    /// Feeder that supplies the component; `null` when unallocated.
+    pub feeder: Option<String>,
+}
+
+/// Usage of one package.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageUsage {
+    /// Package identifier.
+    pub package: String,
+    /// Components of this package.
+    pub components: u32,
+    /// Feeders that supply this package.
+    pub feeders: u32,
+}
+
+/// Allocation of one feeder.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeederUsage {
+    /// Feeder identifier.
+    pub id: String,
+    /// Package supplied by the feeder.
+    pub package: String,
+    /// Components loaded on the lane.
+    pub loaded: u32,
+    /// Maximum lane capacity.
+    pub capacity: u32,
+    /// Components assigned to the lane.
+    pub assigned: u32,
+    /// Components still available after allocation.
+    pub remaining: u32,
+    /// Reference designators assigned to the lane, in program order.
+    pub refdes: Vec<String>,
+}
+
+/// Feeder setup report.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeederReport {
+    /// Report format identifier.
+    pub format: String,
+    /// Report version.
+    pub version: u32,
+    /// Unit system of the document.
+    pub units: String,
+    /// One entry per used package, in package order.
+    pub packages: Vec<PackageUsage>,
+    /// One entry per feeder, in id order.
+    pub feeders: Vec<FeederUsage>,
+    /// Reference designators that could not be allocated; empty for a valid document.
+    pub unassigned: Vec<String>,
+}
+
+/// Placement program report.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlacementReport {
+    /// Report format identifier.
+    pub format: String,
+    /// Report version.
+    pub version: u32,
+    /// Unit system of the document.
+    pub units: String,
+    /// Number of boards on the panel.
+    pub board_count: u32,
+    /// Panel width including column gaps.
+    pub panel_width: f64,
+    /// Panel depth including row gaps.
+    pub panel_depth: f64,
+    /// Head travel of the program, in millimetres.
+    pub travel_length: f64,
+    /// Estimated placement time in seconds.
+    pub placement_seconds: f64,
+    /// Program steps in execution order.
+    pub entries: Vec<PlacementEntry>,
+}
+
+/// Allocates every component to a feeder lane.
+///
+/// The document is validated first, so a missing or undersized feeder is
+/// reported as an error instead of producing a partial setup.
+pub fn allocate(document: &SmtDocument) -> Result<FeederReport, SmtError> {
+    let report = validate(document);
+    if let Some(error) = crate::validate::first_error(&report) {
+        return Err(error);
+    }
+
+    let mut order: Vec<&Component> = document.components.iter().collect();
+    order.sort_by(|left, right| left.refdes.cmp(&right.refdes));
+
+    let mut lanes: BTreeMap<String, FeederUsage> = BTreeMap::new();
+    for feeder in &document.feeders {
+        lanes.insert(
+            feeder.id.clone(),
+            FeederUsage {
+                id: feeder.id.clone(),
+                package: feeder.package.clone(),
+                loaded: feeder.loaded,
+                capacity: feeder.capacity,
+                assigned: 0,
+                remaining: feeder.loaded,
+                refdes: Vec::new(),
+            },
+        );
+    }
+
+    let mut unassigned = Vec::new();
+    for component in order {
+        let lane = lanes
+            .values_mut()
+            .filter(|lane| lane.package == component.package && lane.remaining > 0)
+            .min_by(|left, right| left.id.cmp(&right.id));
+        match lane {
+            Some(lane) => {
+                lane.assigned += 1;
+                lane.remaining -= 1;
+                lane.refdes.push(component.refdes.clone());
+            }
+            None => unassigned.push(component.refdes.clone()),
+        }
+    }
+
+    let counts = package_counts(document);
+    let packages = counts
+        .into_iter()
+        .map(|(package, components)| PackageUsage {
+            feeders: document.feeders.iter().filter(|feeder| feeder.package == package).count() as u32,
+            package,
+            components,
+        })
+        .collect();
+
+    Ok(FeederReport {
+        format: "open-smt-feeders".to_string(),
+        version: 1,
+        units: document.units.clone(),
+        packages,
+        feeders: lanes.into_values().collect(),
+        unassigned,
+    })
+}
+
+/// Sequences the placement program using an existing feeder allocation.
+pub fn sequence(document: &SmtDocument, feeders: &FeederReport) -> Result<PlacementReport, SmtError> {
+    if !feeders.unassigned.is_empty() {
+        return Err(SmtError::new("feeder/capacity", format!("{} components have no feeder lane", feeders.unassigned.len())));
+    }
+    let mut lane_of = BTreeMap::new();
+    for feeder in &feeders.feeders {
+        for refdes in &feeder.refdes {
+            lane_of.insert(refdes.clone(), feeder.id.clone());
+        }
+    }
+
+    let mut entries = Vec::with_capacity(document.components.len());
+    let mut travel_length = 0.0;
+    for side in [Side::Top, Side::Bottom] {
+        let components: Vec<&Component> = document.components.iter().filter(|component| component.side == side).collect();
+        let ordered = nearest_neighbor(&components);
+        let mut x = 0.0;
+        let mut y = 0.0;
+        for component in ordered {
+            travel_length += distance(x, y, component.x, component.y);
+            x = component.x;
+            y = component.y;
+            entries.push(PlacementEntry {
+                index: entries.len() as u32,
+                refdes: component.refdes.clone(),
+                package: component.package.clone(),
+                side: component.side,
+                x: component.x,
+                y: component.y,
+                rotation: component.rotation,
+                feeder: lane_of.get(&component.refdes).cloned(),
+            });
+        }
+    }
+
+    let board_count = document.panel.board_count();
+    let columns = f64::from(document.panel.columns);
+    let rows = f64::from(document.panel.rows);
+    let panel_width = columns * document.board.width + (columns - 1.0) * document.panel.gap_x;
+    let panel_depth = rows * document.board.depth + (rows - 1.0) * document.panel.gap_y;
+    let placement_seconds = entries.len() as f64 * PLACE_SECONDS + travel_length / HEAD_SPEED;
+
+    Ok(PlacementReport {
+        format: "open-smt-placement".to_string(),
+        version: 1,
+        units: document.units.clone(),
+        board_count,
+        panel_width,
+        panel_depth,
+        travel_length,
+        placement_seconds,
+        entries,
+    })
+}
+
+fn nearest_neighbor<'a>(components: &[&'a Component]) -> Vec<&'a Component> {
+    let mut remaining: Vec<&'a Component> = components.to_vec();
+    remaining.sort_by(|left, right| left.refdes.cmp(&right.refdes));
+    let mut x = 0.0;
+    let mut y = 0.0;
+    let mut ordered = Vec::with_capacity(remaining.len());
+    while !remaining.is_empty() {
+        let mut best = 0;
+        let mut best_distance = distance(x, y, remaining[0].x, remaining[0].y);
+        for (index, component) in remaining.iter().enumerate().skip(1) {
+            let candidate = distance(x, y, component.x, component.y);
+            let tie = (candidate - best_distance).abs() <= 1e-9;
+            if candidate < best_distance - 1e-9 || (tie && component.refdes < remaining[best].refdes) {
+                best = index;
+                best_distance = candidate;
+            }
+        }
+        let chosen = remaining.remove(best);
+        x = chosen.x;
+        y = chosen.y;
+        ordered.push(chosen);
+    }
+    ordered
+}
+
+fn distance(from_x: f64, from_y: f64, to_x: f64, to_y: f64) -> f64 {
+    let dx = to_x - from_x;
+    let dy = to_y - from_y;
+    (dx * dx + dy * dy).sqrt()
+}

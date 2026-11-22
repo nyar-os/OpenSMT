@@ -1,0 +1,15 @@
+[package]
+name = "smt-model"
+version.workspace = true
+edition = "2021"
+publish = false
+description = "Deterministic SMT placement program, feeder setup and reflow analysis"
+license = "MPL-2.0"
+
+[[bin]]
+name = "osmt"
+path = "src/bin/osmt.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
