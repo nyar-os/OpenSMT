@@ -158,7 +158,8 @@ pub fn markdown(document: &SmtDocument, placement: &PlacementReport, feeders: &F
 fn escape(value: &str) -> String {
     if value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('|') {
         format!("\"{}\"", value.replace('"', "\"\""))
-    } else {
+    }
+    else {
         value.to_string()
     }
 }

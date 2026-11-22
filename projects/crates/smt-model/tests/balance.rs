@@ -75,7 +75,8 @@ fn each_machine_runs_its_top_side_before_its_bottom_side() {
             let component = document.components.iter().find(|entry| entry.refdes == *refdes).expect("known component");
             if component.side == Side::Bottom {
                 seen_bottom = true;
-            } else {
+            }
+            else {
                 assert!(!seen_bottom, "machine {} placed {refdes} after a bottom-side component", machine.index);
             }
         }

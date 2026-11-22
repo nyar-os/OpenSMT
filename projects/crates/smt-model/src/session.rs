@@ -269,7 +269,8 @@ impl OpenSmt {
     /// Removes a feeder and saves the document.
     pub fn remove_feeder(&mut self, id: &str) -> Result<DocumentSummary, SmtError> {
         let mut document = self.document()?.clone();
-        let Some(feeder) = document.feeders.iter().find(|feeder| feeder.id == id) else {
+        let Some(feeder) = document.feeders.iter().find(|feeder| feeder.id == id)
+        else {
             return Err(SmtError::new("feeder/unknown-id", format!("feeder `{id}` does not exist")));
         };
         let used = document.components.iter().any(|component| component.package == feeder.package);

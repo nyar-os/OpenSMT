@@ -43,7 +43,8 @@ fn main() {
 }
 
 fn run(args: &[String]) -> Result<i32, SmtError> {
-    let Some(command) = args.first().map(String::as_str) else {
+    let Some(command) = args.first().map(String::as_str)
+    else {
         println!("{USAGE}");
         return Ok(0);
     };
@@ -295,13 +296,15 @@ impl Options {
             if flags.contains(&argument) {
                 map.insert(argument.to_string(), String::new());
                 index += 1;
-            } else if values.contains(&argument) {
+            }
+            else if values.contains(&argument) {
                 let value = args
                     .get(index + 1)
                     .ok_or_else(|| SmtError::new("cli/missing-value", format!("option `{argument}` needs a value")))?;
                 map.insert(argument.to_string(), value.clone());
                 index += 2;
-            } else {
+            }
+            else {
                 return Err(SmtError::new("cli/unknown-option", format!("unknown option `{argument}`")));
             }
         }

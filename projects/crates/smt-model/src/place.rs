@@ -375,12 +375,14 @@ fn two_opt(mut route: Vec<&Component>) -> (Vec<&Component>, f64) {
             for last in first + 1..count {
                 let before_next = if last + 1 < count {
                     distance(route[last].x, route[last].y, route[last + 1].x, route[last + 1].y)
-                } else {
+                }
+                else {
                     0.0
                 };
                 let after_next = if last + 1 < count {
                     distance(route[first].x, route[first].y, route[last + 1].x, route[last + 1].y)
-                } else {
+                }
+                else {
                     0.0
                 };
                 let before = distance(from_x, from_y, route[first].x, route[first].y) + before_next;
@@ -392,7 +394,8 @@ fn two_opt(mut route: Vec<&Component>) -> (Vec<&Component>, f64) {
                 }
             }
         }
-        let Some((first, last)) = best else {
+        let Some((first, last)) = best
+        else {
             break;
         };
         route[first..=last].reverse();
