@@ -1,0 +1,317 @@
+<template>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+        <div class="strip">
+            <div class="strip__inner">
+                <span class="strip__item">SMT ASSEMBLY / REFLOW</span>
+                <span class="strip__item strip__item--mid">DOC OSMT-01 · REV 0 · UNRELEASED</span>
+                <span class="strip__item strip__item--end">
+                    <i class="led"></i>
+                    LOCAL BUILD 0.0.0
+                </span>
+            </div>
+        </div>
+        <div class="site-header__inner">
+            <Link to="IndexPage" class="brand">
+                <span class="brand__mark">SMT</span>
+                <span class="brand__text">
+                    <span class="brand__name">OpenSMT</span>
+                    <span class="brand__sub">place / feeder / reflow</span>
+                </span>
+            </Link>
+            <nav id="primary-nav" aria-label="Primary" class="nav" :data-open="open ? 'true' : 'false'">
+                <Link to="IndexPage" data-nav="home" :data-active="activeId === 'home' ? 'true' : 'false'">
+                    Home
+                </Link>
+                <Link to="FeaturesPage" data-nav="features" :data-active="activeId === 'features' ? 'true' : 'false'">
+                    Features
+                </Link>
+                <Link to="RoadmapPage" data-nav="roadmap" :data-active="activeId === 'roadmap' ? 'true' : 'false'">
+                    Roadmap
+                </Link>
+            </nav>
+            <div class="header-actions">
+                <a class="nav-source" href="https://github.com/nyar-os/OpenSMT" rel="noopener">
+                    SOURCE
+                </a>
+                <button
+                    type="button"
+                    class="menu-toggle"
+                    @click="toggleMenu"
+                    :aria-expanded="open ? 'true' : 'false'"
+                    aria-controls="primary-nav"
+                >
+                    {{ menuLabel() }}
+                </button>
+            </div>
+        </div>
+    </header>
+</template>
+
+<style>
+.skip-link {
+    position: absolute;
+    left: 12px;
+    top: -48px;
+    z-index: 30;
+    padding: 7px 12px;
+    border: 1px solid var(--smt-accent);
+    background: var(--smt-surface);
+    color: var(--smt-accent-ink);
+    font-family: var(--smt-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.skip-link:focus {
+    top: 10px;
+    text-decoration: none;
+}
+
+.site-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-bottom: 1px solid var(--smt-line-strong);
+    background: rgba(229, 233, 236, 0.96);
+    backdrop-filter: blur(6px);
+}
+
+.strip {
+    border-bottom: 1px solid var(--smt-line);
+    background: var(--smt-ink);
+    color: #c8d2d8;
+}
+
+.strip__inner {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    max-width: var(--smt-maxw);
+    margin: 0 auto;
+    padding: 3px 20px;
+    font-family: var(--smt-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.strip__item--mid {
+    margin-left: auto;
+    color: #93a2ab;
+}
+
+.strip__item--end {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #d6b36a;
+}
+
+.led {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    background: #d6b36a;
+    box-shadow: 0 0 5px rgba(214, 179, 106, 0.8);
+}
+
+.site-header__inner {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+    max-width: var(--smt-maxw);
+    margin: 0 auto;
+    padding: 10px 20px;
+}
+
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+    color: var(--smt-ink);
+}
+
+.brand:hover {
+    text-decoration: none;
+}
+
+.brand__mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--smt-ink);
+    background: var(--smt-ink);
+    color: var(--smt-surface);
+    font-family: var(--smt-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.brand__text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.brand__name {
+    font-family: var(--smt-mono);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.brand__sub {
+    color: var(--smt-muted);
+    font-family: var(--smt-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    border-left: 1px solid var(--smt-line);
+}
+
+.nav a {
+    padding: 4px 12px;
+    color: var(--smt-muted);
+    font-family: var(--smt-mono);
+    font-size: 11px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.nav a:hover {
+    color: var(--smt-ink);
+    text-decoration: none;
+}
+
+.nav a[data-active="true"] {
+    box-shadow: inset 0 -2px 0 var(--smt-accent);
+    color: var(--smt-ink);
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.nav-source {
+    padding: 5px 11px;
+    border: 1px solid var(--smt-line-strong);
+    background: var(--smt-surface);
+    color: var(--smt-ink);
+    font-family: var(--smt-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+}
+
+.nav-source:hover {
+    border-color: var(--smt-accent);
+    color: var(--smt-accent-ink);
+    text-decoration: none;
+}
+
+.menu-toggle {
+    display: none;
+    padding: 5px 10px;
+    border: 1px solid var(--smt-line-strong);
+    background: var(--smt-surface);
+    color: var(--smt-ink);
+    font-family: var(--smt-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.menu-toggle:hover {
+    border-color: var(--smt-accent);
+}
+
+@media (max-width: 760px) {
+    .strip__item--mid {
+        display: none;
+    }
+
+    .strip__item--end {
+        margin-left: auto;
+    }
+
+    .site-header__inner {
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        padding: 9px 16px 10px;
+    }
+
+    .nav-source {
+        display: none;
+    }
+
+    .menu-toggle {
+        display: inline-flex;
+    }
+
+    .nav {
+        order: 3;
+        width: 100%;
+        flex-direction: column;
+        gap: 0;
+        border-top: 1px solid var(--smt-line);
+        border-left: 0;
+    }
+
+    .nav[data-open="false"] {
+        display: none;
+    }
+
+    .nav a {
+        padding: 8px 2px;
+        font-size: 11px;
+    }
+
+    .brand__sub {
+        display: none;
+    }
+}
+</style>
+
+<script client>
+const NAV_BY_PATH = {
+    "/": "home",
+    "/features": "features",
+    "/roadmap": "roadmap",
+};
+
+export default class SiteHeader {
+    public activeId: string = "";
+    public open: boolean = false;
+
+    onMount() {
+        this.resolveActive();
+    }
+
+    menuLabel() {
+        return this.open ? "CLOSE" : "MENU";
+    }
+
+    toggleMenu() {
+        this.open = !this.open;
+    }
+
+    resolveActive() {
+        if (typeof window === "undefined" || !window.location) return;
+        const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
+        this.activeId = NAV_BY_PATH[path] ?? "";
+    }
+}
+</script>

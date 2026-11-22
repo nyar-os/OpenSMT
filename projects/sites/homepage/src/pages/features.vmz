@@ -1,0 +1,154 @@
+<template>
+    <SiteShell page="features">
+        <header class="page-head">
+            <span class="eyebrow">Feature index</span>
+            <h1>What OpenSMT plans</h1>
+            <p class="lead">
+                Placement, feeder allocation, panel arithmetic and reflow, all
+                backed by Rust tests in
+                <code>projects/crates/smt-model/tests/</code>.
+            </p>
+        </header>
+
+        <section class="section">
+            <div class="section-head">
+                <h2><span class="section-index">01</span>Placement</h2>
+                <p>A deterministic program, not a production optimiser.</p>
+            </div>
+            <div class="table-wrap">
+                <table class="matrix">
+                    <thead>
+                        <tr><th>Rule</th><th>Behaviour</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td class="name">side order</td><td>top side first, then bottom</td></tr>
+                        <tr><td class="name">start point</td><td>machine origin <code>(0, 0)</code>, fresh per side</td></tr>
+                        <tr><td class="name">selection</td><td>nearest remaining component by straight-line distance</td></tr>
+                        <tr><td class="name">tie-break</td><td>reference designator, lexicographic</td></tr>
+                        <tr><td class="name">time estimate</td><td><code>0.6 s × parts + travel / 200 mm·s⁻¹</code></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-head">
+                <h2><span class="section-index">02</span>Feeders</h2>
+                <p>Allocation is by id and loaded quantity.</p>
+            </div>
+            <div class="table-wrap">
+                <table class="matrix">
+                    <thead>
+                        <tr><th>Field</th><th>Meaning</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td class="name">id</td><td>lane identifier; allocation walks the smallest id first</td></tr>
+                        <tr><td class="name">package</td><td>package the lane supplies</td></tr>
+                        <tr><td class="name">pitch</td><td>tape pitch in millimetres</td></tr>
+                        <tr><td class="name">capacity</td><td>maximum lane capacity</td></tr>
+                        <tr><td class="name">loaded</td><td>parts actually loaded; allocation never exceeds it</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="table-note">
+                A used package without a feeder reports <code>feeder/missing</code>;
+                loaded parts below the component count report
+                <code>feeder/capacity</code>. Both are enforced when the program is
+                generated, so an incomplete setup can still be saved while editing.
+            </p>
+        </section>
+
+        <section class="section">
+            <div class="section-head">
+                <h2><span class="section-index">03</span>Reflow</h2>
+                <p>Set-points are integrated, not counted.</p>
+            </div>
+            <div class="grid-2">
+                <article class="card">
+                    <span class="chip chip--available">zones</span>
+                    <h3>Linear ramps</h3>
+                    <p>
+                        The board enters at 25 °C. Each zone ramps linearly from
+                        the previous set-point to its own over
+                        <code>length / speed × 60</code> seconds.
+                    </p>
+                </article>
+                <article class="card">
+                    <span class="chip chip--available">liquidus</span>
+                    <h3>Exact crossings</h3>
+                    <p>
+                        Time above liquidus is integrated over each ramp, including
+                        partial crossings in either direction, so a single zone that
+                        crosses the liquidus is measured exactly.
+                    </p>
+                </article>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-head">
+                <h2><span class="section-index">04</span>Reports</h2>
+                <p>Four deterministic outputs from the same analysis.</p>
+            </div>
+            <div class="table-wrap">
+                <table class="matrix">
+                    <thead>
+                        <tr><th>Format</th><th>Content</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td class="name">program CSV</td><td>index, refdes, package, side, x, y, rotation, feeder</td></tr>
+                        <tr><td class="name">feeder CSV</td><td>id, package, loaded, capacity, assigned, remaining, refdes</td></tr>
+                        <tr><td class="name">JSON</td><td>summary, validation, placement, feeders and reflow</td></tr>
+                        <tr><td class="name">Markdown</td><td>board, panel, feeders, reflow and the full program table</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-head">
+                <h2><span class="section-index">05</span>Errors</h2>
+                <p>Stable codes, comparable without parsing prose.</p>
+            </div>
+            <div class="table-wrap">
+                <table class="matrix">
+                    <thead>
+                        <tr><th>Code</th><th>When</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td class="name">component/outside-board</td><td>a placement lies outside the board</td></tr>
+                        <tr><td class="name">component/duplicate-refdes</td><td>a reference designator is used twice</td></tr>
+                        <tr><td class="name">feeder/missing</td><td>a used package has no feeder</td></tr>
+                        <tr><td class="name">feeder/capacity</td><td>loaded parts do not cover the component count</td></tr>
+                        <tr><td class="name">feeder/in-use</td><td>removing the only feeder of a used package</td></tr>
+                        <tr><td class="name">capability/not-implemented</td><td>a declared-but-unbuilt route, exit code 2</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <p class="cta-line">
+            <Link to="IndexPage">Back to the overview</Link>
+            ·
+            <Link to="RoadmapPage">Read the gate log</Link>
+        </p>
+    </SiteShell>
+</template>
+
+<style>
+.lead {
+    max-width: 720px;
+}
+</style>
+
+<script client>
+export default class FeaturesPage {
+    static meta() {
+        return {
+            title: "OpenSMT feature index",
+            description:
+                "Placement sequencing, feeder allocation, panel arithmetic, reflow integration and stable error codes.",
+        };
+    }
+}
+</script>

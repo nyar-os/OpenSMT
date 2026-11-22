@@ -1,0 +1,143 @@
+<template>
+    <SiteShell page="roadmap">
+        <header class="page-head">
+            <span class="eyebrow">Gate log</span>
+            <h1>What is closed, what is next</h1>
+            <p class="lead">
+                OpenSMT grows by closing verifiable slices. A row is only closed
+                when a test asserts it and the capability matrix says so.
+            </p>
+        </header>
+
+        <section class="section">
+            <div class="section-head">
+                <h2><span class="section-index">01</span>Closed</h2>
+                <p>Implemented, tested and exposed through every surface.</p>
+            </div>
+            <div class="table-wrap">
+                <table class="matrix">
+                    <thead>
+                        <tr><th>Gate</th><th>Evidence</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="row in closed" :key="row.gate">
+                            <td class="name">{{ row.gate }}</td>
+                            <td class="method">{{ row.evidence }}</td>
+                            <td><span class="chip chip--available">closed</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-head">
+                <h2><span class="section-index">02</span>Next</h2>
+                <p>Not implemented; every entry fails explicitly today.</p>
+            </div>
+            <div class="table-wrap">
+                <table class="matrix">
+                    <thead>
+                        <tr><th>Gate</th><th>Why it is not closed</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="row in next" :key="row.gate">
+                            <td class="name">{{ row.gate }}</td>
+                            <td class="method">{{ row.reason }}</td>
+                            <td><span class="chip chip--blocked">open</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="table-note">
+                Unimplemented routes return
+                <code>capability/not-implemented</code> and exit code
+                <code>2</code>; they never approximate a result.
+            </p>
+        </section>
+
+        <section class="status-band">
+            <div>
+                <span class="eyebrow">Rule of the log</span>
+                <h2>No claim without a test.</h2>
+                <p>
+                    A gate moves to closed only when the engine, the Node-API
+                    surface, the SDK, the CLI, the capability matrix and at least
+                    one test agree.
+                </p>
+            </div>
+            <Link to="FeaturesPage" class="btn btn--ghost">Read the feature index</Link>
+        </section>
+
+        <p class="cta-line">
+            <Link to="IndexPage">Back to the overview</Link>
+        </p>
+    </SiteShell>
+</template>
+
+<style>
+.lead {
+    max-width: 720px;
+}
+
+.status-band {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-top: 36px;
+    padding: 18px 20px;
+    border: 1px solid var(--smt-line-strong);
+    border-left: 4px solid var(--smt-accent);
+    background: var(--smt-surface);
+}
+
+.status-band h2 {
+    margin: 6px 0 6px;
+    font-size: 19px;
+}
+
+.status-band p {
+    max-width: 720px;
+    margin: 0;
+    color: var(--smt-muted);
+    font-size: 13.5px;
+}
+</style>
+
+<script client>
+const CLOSED = [
+    { gate: "Document model", evidence: "format/version/units validation, atomic save" },
+    { gate: "Components", evidence: "side, rotation and board-bound checks" },
+    { gate: "Panelization", evidence: "board count, width and depth with gaps" },
+    { gate: "Feeder allocation", evidence: "id order, loaded quantity, multi-lane split" },
+    { gate: "Placement program", evidence: "nearest-first, top side first, refdes tie-break" },
+    { gate: "Reflow", evidence: "linear ramps and exact liquidus crossings" },
+    { gate: "Reports", evidence: "program CSV, feeder CSV, JSON and Markdown" },
+    { gate: "Determinism", evidence: "byte-identical repeated reports" },
+    { gate: "SDK and CLI", evidence: "one session behind both surfaces" },
+];
+
+const NEXT = [
+    { gate: "Paste apertures", reason: "no stencil or aperture model" },
+    { gate: "Vendor programs", reason: "only the neutral placement CSV exists" },
+    { gate: "Line balancing", reason: "single machine, single lane" },
+    { gate: "Dual lane", reason: "no lane scheduling model" },
+    { gate: "KiCad / Altium / ODB", reason: "components must currently be declared as numbers" },
+    { gate: "Nozzle / head optimisation", reason: "the sequence ignores machine heads" },
+];
+
+export default class RoadmapPage {
+    public closed: typeof CLOSED = CLOSED;
+    public next: typeof NEXT = NEXT;
+
+    static meta() {
+        return {
+            title: "OpenSMT gate log",
+            description:
+                "Closed gates with test evidence and the explicitly unimplemented capabilities of OpenSMT.",
+        };
+    }
+}
+</script>

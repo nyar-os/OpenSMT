@@ -1,0 +1,191 @@
+<template>
+    <footer class="site-footer">
+        <div class="site-footer__inner">
+            <div class="titleblock">
+                <div class="tb tb--wide">
+                    <span class="tb__label">Project</span>
+                    <b class="tb__value">OpenSMT</b>
+                    <p class="tb__note">
+                        Deterministic placement, feeder setup and reflow
+                        analysis on one native model. Unimplemented routes fail
+                        explicitly.
+                    </p>
+                </div>
+                <div class="tb">
+                    <span class="tb__label">Document</span>
+                    <span class="tb__value">OSMT-01</span>
+                </div>
+                <div class="tb">
+                    <span class="tb__label">Rev</span>
+                    <span class="tb__value">0</span>
+                </div>
+                <div class="tb">
+                    <span class="tb__label">Units</span>
+                    <span class="tb__value">mm · °C</span>
+                </div>
+                <div class="tb">
+                    <span class="tb__label">License</span>
+                    <span class="tb__value">MPL-2.0</span>
+                </div>
+            </div>
+
+            <nav aria-label="Product" class="footer-group">
+                <b>Product</b>
+                <Link to="FeaturesPage">Features</Link>
+                <Link to="RoadmapPage">Roadmap</Link>
+                <Link to="IndexPage">Overview</Link>
+            </nav>
+
+            <nav aria-label="Developers" class="footer-group">
+                <b>Developers</b>
+                <a href="https://github.com/nyar-os/OpenSMT" rel="noopener">CLI</a>
+                <a href="https://github.com/nyar-os/OpenSMT" rel="noopener">SDK</a>
+                <a href="https://github.com/nyar-os/OpenSMT/tree/master/projects/packages/open-smt" rel="noopener">
+                    Native addon
+                </a>
+            </nav>
+
+            <nav aria-label="Project" class="footer-group">
+                <b>Project</b>
+                <a href="https://github.com/nyar-os/OpenSMT" rel="noopener">Source code</a>
+                <a href="https://github.com/nyar-os/OpenSMT/issues" rel="noopener">Issues</a>
+                <a href="https://github.com/nyar-os/OpenSMT/releases" rel="noopener">Releases</a>
+            </nav>
+
+            <div class="site-footer__bottom">
+                <span>MPL-2.0 licensed · Built with VMZ</span>
+                <span>No public release yet</span>
+            </div>
+        </div>
+    </footer>
+</template>
+
+<style>
+.site-footer {
+    border-top: 1px solid var(--smt-line-strong);
+    background: var(--smt-surface);
+    margin-top: 56px;
+}
+
+.site-footer__inner {
+    display: grid;
+    grid-template-columns: 2.2fr 1fr 1fr 1fr;
+    gap: 0 28px;
+    max-width: var(--smt-maxw);
+    margin: 0 auto;
+    padding: 0 20px 26px;
+}
+
+.titleblock {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: 2.2fr repeat(4, 1fr);
+    border-left: 1px solid var(--smt-line-strong);
+    border-top: 1px solid var(--smt-line-strong);
+    margin-bottom: 22px;
+}
+
+.tb {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 10px;
+    border-right: 1px solid var(--smt-line-strong);
+    border-bottom: 1px solid var(--smt-line-strong);
+}
+
+.tb__label {
+    color: var(--smt-muted);
+    font-family: var(--smt-mono);
+    font-size: 8px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+.tb__value {
+    font-family: var(--smt-mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.tb__note {
+    margin: 4px 0 0;
+    max-width: 300px;
+    color: var(--smt-muted);
+    font-size: 12px;
+}
+
+.footer-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.footer-group b {
+    margin-bottom: 2px;
+    color: var(--smt-muted);
+    font-family: var(--smt-mono);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.footer-group a {
+    color: var(--smt-ink);
+    font-size: 13px;
+}
+
+.footer-group a:hover {
+    color: var(--smt-accent-ink);
+}
+
+.site-footer__bottom {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 26px;
+    padding-top: 12px;
+    border-top: 1px solid var(--smt-line);
+    color: var(--smt-muted);
+    font-family: var(--smt-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+    .site-footer__inner {
+        grid-template-columns: 1fr 1fr;
+        gap: 22px 24px;
+    }
+
+    .titleblock {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 620px) {
+    .site-footer__inner {
+        grid-template-columns: 1fr;
+        padding: 0 16px 22px;
+    }
+
+    .titleblock {
+        grid-template-columns: 1fr;
+    }
+
+    .site-footer__bottom {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+    }
+}
+</style>
+
+<script client>
+export default class SiteFooter {}
+</script>
