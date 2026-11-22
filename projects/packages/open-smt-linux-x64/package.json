@@ -1,6 +1,6 @@
 {
     "name": "@wae/open-smt-linux-x64",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "description": "Linux x64 native addon for @wae/open-smt",
     "license": "MPL-2.0",
     "os": ["linux"],
