@@ -313,6 +313,16 @@ fn feeders(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the read-only feeder loading report.
+#[function]
+fn feeder_report(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.feeder_report().map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Returns the multi-machine line balance; an optional third argument enables
 /// per-machine 2-opt.
 #[function]
@@ -416,6 +426,7 @@ register_module![
     validate,
     placement,
     feeders,
+    feeder_report,
     balance,
     dual_lane,
     schedule_lanes,

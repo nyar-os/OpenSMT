@@ -409,7 +409,12 @@ async function feederCommand(args: readonly string[]): Promise<number> {
             print(await document.removeFeeder(required(parsed, '--id')));
         });
     }
-    throw failure('cli/missing-argument', 'missingArgument', { usage: 'feeder add|remove <file> ...' });
+    if (action === 'report') {
+        return readDocument(args.slice(1), 'feeder report <file>', [], async (document) => {
+            print(await document.feederReport());
+        });
+    }
+    throw failure('cli/missing-argument', 'missingArgument', { usage: 'feeder add|remove|report <file> ...' });
 }
 
 async function scheduleCommand(args: readonly string[]): Promise<number> {

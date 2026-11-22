@@ -17,6 +17,7 @@ use crate::{
     balance::{self, BalanceReport},
     dual::{self, DualLaneReport, DualLaneStrategy, LanesReport},
     export::{feeder_csv, markdown, program_csv, write_atomic},
+    feeder::{self, FeederLoadingReport},
     import::ImportReport,
     model::{Board, Component, Feeder, Panel, ReflowProfile, Side, SmtDocument, UNITS},
     place::{self, FeederReport, PlacementReport},
@@ -336,6 +337,14 @@ impl OpenSmt {
     /// Returns the feeder allocation of the open document.
     pub fn feeders(&self) -> Result<FeederReport, SmtError> {
         place::allocate(self.document()?)
+    }
+
+    /// Returns the read-only feeder loading report of the open document.
+    ///
+    /// The report aggregates placements by package and suggests one tape slot
+    /// per package; it does not need a feeder setup and never writes.
+    pub fn feeder_report(&self) -> Result<FeederLoadingReport, SmtError> {
+        Ok(feeder::report(self.document()?))
     }
 
     /// Returns the placement program of the open document.

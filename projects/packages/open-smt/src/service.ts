@@ -16,6 +16,7 @@ import type {
     DualLaneStrategy,
     ExportFormat,
     ExportReport,
+    FeederLoadingReport,
     FeederReport,
     FeederRequest,
     ImportReport,
@@ -159,6 +160,11 @@ export function placement(path: string, optimize = false): PlacementReport {
 /** Returns the feeder setup. */
 export function feeders(path: string): FeederReport {
     return decode<FeederReport>(() => binding('feeders').feeders(path));
+}
+
+/** Returns the read-only feeder loading report. */
+export function feederReport(path: string): FeederLoadingReport {
+    return decode<FeederLoadingReport>(() => binding('feeder.report').feeder_report(path));
 }
 
 /** Returns the multi-machine line balance, optionally improved per machine. */

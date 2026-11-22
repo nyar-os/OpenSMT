@@ -11,6 +11,7 @@
             "open-smt component remove <file> --refdes <R1>",
             "open-smt feeder add <file> --id <id> --package <pkg> --pitch <mm> --capacity <n> [--loaded <n>]",
             "open-smt feeder remove <file> --id <id>",
+            "open-smt feeder report <file>",
             "open-smt profile set <file> --speed <mm/min> --liquidus <c> --zones \"name:length:temp;...\"",
             "open-smt validate <file>",
             "open-smt placement <file> [--out program.json] [--optimize]",

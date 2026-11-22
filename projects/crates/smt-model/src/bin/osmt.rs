@@ -21,6 +21,7 @@ Usage:
   osmt component remove <file> --refdes <R1>
   osmt feeder add <file> --id <id> --package <pkg> --pitch <mm> --capacity <n> [--loaded <n>]
   osmt feeder remove <file> --id <id>
+  osmt feeder report <file>
   osmt profile set <file> --speed <mm/min> --liquidus <c> --zones \"name:length:temp;...\"
   osmt validate <file>
   osmt placement <file> [--out program.csv] [--optimize]
@@ -212,7 +213,11 @@ fn feeder_command(args: &[String]) -> Result<i32, SmtError> {
             let values = Options::parse(&args[3..], &["--id"], &[])?;
             print_json(&session(file)?.remove_feeder(values.require("--id")?)?)
         }
-        _ => Err(SmtError::new("cli/missing-argument", "usage: osmt feeder add|remove <file> ...")),
+        "report" => {
+            let file = positional(args, 2, "feeder report <file>")?;
+            print_json(&session(file)?.feeder_report()?)
+        }
+        _ => Err(SmtError::new("cli/missing-argument", "usage: osmt feeder add|remove|report <file> ...")),
     }
 }
 

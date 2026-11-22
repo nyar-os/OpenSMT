@@ -17,6 +17,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | deterministic placement sequence | ✅ supported |
 | optional 2-opt placement optimisation | ✅ supported |
 | feeder allocation by id and loaded quantity | ✅ supported |
+| feeder loading report (package counts and suggested slots) | ✅ supported |
 | multi-feeder split of one package | ✅ supported |
 | panel board count and panel dimensions | ✅ supported |
 | reflow zone report and peak temperature | ✅ supported |
@@ -94,6 +95,15 @@ The machine-readable version is printed by `open-smt capabilities` and by
    `length / conveyor_speed × 60` seconds. Time above liquidus is integrated over
    each ramp, including partial crossings in either direction. Peak temperature
    is the highest set-point.
+9. **Feeder loading report.** `feederReport` (CLI `feeder report <file>`)
+   aggregates the placement list by package without reading or writing the
+   feeder setup. Packages are visited in ascending name order and receive one
+   suggested slot each, numbered from 1. A slot records the package, its
+   placement count, its reference designators in document order and its distinct
+   sides in sorted order. `totalPlacements` is the number of components and
+   `uniquePackages` the number of slots. An empty document yields zero counts and
+   no slots. Slot numbers are suggestions only; no physical machine slot, tape
+   direction or pitch constraint is modelled.
 
 ## KiCad PCB import
 
@@ -208,6 +218,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/dual_lane.rs` | greedy lane assignment, LPT beating greedy, swap-pass improvement and order preservation, explicit greedy parity, one empty lane, empty input, work/ratio arithmetic, per-lane order preservation, placement-program parity, invalid strategy, determinism, three-lane LPT, task conservation, exact two-lane parity, invalid lane counts |
 | `tests/reflow.rs` | default profile numbers, exact single-zone integral, below-liquidus profile, zone order |
 | `tests/validation.rs` | every code above and warning-only documents |
+| `tests/feeder.rs` | package counts, slot numbering in package order, reference designator document order, deduplicated sorted sides, empty document, determinism |
 | `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as |
 | `tests/import.rs` | KiCad footprint mapping, rotation, both sides, reference sources, loss ledger, outline errors, duplicate/missing references, empty board, determinism, existing target; CSV row order, reordered/quoted/UPPERCASE columns, empty lines, side and rotation defaults, duplicate refdes, missing column, invalid number, invalid side, line numbers, negative coordinate, determinism, one revision, existing target |
 | `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon and a native-gated balance smoke |
@@ -218,7 +229,10 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   optional 2-opt pass is a bounded local search over each side's route; it
   improves travel but does not guarantee an optimal tour. Neither mode models
   nozzles, head count, feeder positions or vision time.
-- The feeder model has no lane index, tape direction or splice handling.
+- The feeder model has no lane index, tape direction or splice handling. The
+  feeder loading report numbers packages from 1 in name order, but those slot
+  numbers are suggestions only: they do not describe a physical machine slot or
+  a tape layout, and the report never writes a feeder setup.
 - Reflow uses set-points, not measured thermocouple data, and models no
   convection or board thermal mass.
 - Only the top and bottom sides are supported.

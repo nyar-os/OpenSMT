@@ -121,6 +121,21 @@ open-smt feeder remove <file> --id <id>
 
 The only feeder of a package that has components reports `feeder/in-use`.
 
+## feeder report
+
+```shell
+open-smt feeder report <file>
+```
+
+Prints a read-only loading report aggregated by package. It does not read the
+feeder setup (a document without feeders is accepted) and writes nothing. The
+report contains `format` (`open-smt-feeder-report`), `version`, `totalPlacements`
+and `uniquePackages`, plus one `slots` entry per package in ascending package
+name order. Each slot is `slot` (1 to n), `package`, `count`, `refdes` in
+document order and `sides` deduplicated and sorted. An empty document reports
+zero placements, zero packages and no slots. Slot numbers are suggestions only:
+they do not describe a physical machine slot or a tape layout.
+
 ## profile set
 
 ```shell
@@ -276,6 +291,7 @@ open-smt component add panel.osmt --refdes R1 --package 0603 --x 10 --y 10
 open-smt component add panel.osmt --refdes U1 --package QFN-32 --x 50 --y 40 --side bottom
 open-smt feeder add panel.osmt --id F1 --package 0603 --pitch 4 --capacity 500
 open-smt feeder add panel.osmt --id F2 --package QFN-32 --pitch 12 --capacity 50
+open-smt feeder report panel.osmt
 open-smt validate panel.osmt
 open-smt placement panel.osmt
 open-smt schedule dual panel.osmt

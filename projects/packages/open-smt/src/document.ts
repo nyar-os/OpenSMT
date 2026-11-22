@@ -18,6 +18,7 @@ import type {
     DualLaneStrategy,
     ExportFormat,
     ExportReport,
+    FeederLoadingReport,
     FeederReport,
     FeederRequest,
     LanesReport,
@@ -144,6 +145,12 @@ export class SmtDocument {
     async feederSetup(): Promise<FeederReport> {
         this.assertOpen();
         return service.feeders(this.state.path);
+    }
+
+    /** Returns the read-only feeder loading report. */
+    async feederReport(): Promise<FeederLoadingReport> {
+        this.assertOpen();
+        return service.feederReport(this.state.path);
     }
 
     /** Returns the multi-machine line balance, optionally improved per machine. */

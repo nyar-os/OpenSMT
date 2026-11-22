@@ -135,6 +135,29 @@ export interface FeederReport {
     readonly unassigned: readonly string[];
 }
 
+/** One suggested tape slot of a feeder loading report. */
+export interface FeederSlot {
+    /** Suggested slot number, starting at 1 in package order. */
+    readonly slot: number;
+    readonly package: string;
+    /** Number of placements of this package. */
+    readonly count: number;
+    /** Reference designators in document order. */
+    readonly refdes: readonly string[];
+    /** Distinct board sides, sorted. */
+    readonly sides: readonly Side[];
+}
+
+/** Read-only feeder loading report aggregated by package. */
+export interface FeederLoadingReport {
+    readonly format: string;
+    readonly version: number;
+    readonly totalPlacements: number;
+    readonly uniquePackages: number;
+    /** One suggested slot per package, in package order. */
+    readonly slots: readonly FeederSlot[];
+}
+
 /** Placement program report. */
 export interface PlacementReport {
     readonly format: string;
