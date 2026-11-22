@@ -15,7 +15,7 @@
             "open-smt placement <file> [--out program.json] [--optimize]",
             "open-smt feeders <file> [--out setup.csv]",
             "open-smt balance <file> --machines <n> [--optimize]",
-            "open-smt schedule dual <file>",
+            "open-smt schedule dual <file> [--strategy greedy|lpt] [--improve]",
             "open-smt reflow <file>",
             "open-smt export <file> --format program|feeders|json|md --out <path>",
             "open-smt report <file>",
@@ -30,7 +30,8 @@
             "missingValue": "option `{option}` needs a value",
             "unknownOption": "unknown option `{option}`",
             "invalidNumber": "option `{option}` is not a number: `{value}`",
-            "unknownFormat": "unknown export format `{format}`; only program, feeders, json or md is supported"
+            "unknownFormat": "unknown export format `{format}`; only program, feeders, json or md is supported",
+            "invalidStrategy": "unknown dual-lane strategy `{strategy}`; only greedy or lpt is supported"
         }
     }
 }

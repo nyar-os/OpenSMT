@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import type { SmtDocument } from './document.js';
 import { NotImplementedError, OpenSMTError, type OpenSMTErrorCode } from './errors.js';
 import { OpenSMT } from './open-smt.js';
-import type { BalanceReport, ExportFormat, Side, Zone } from './types.js';
+import type { BalanceReport, DualLaneStrategy, ExportFormat, Side, Zone } from './types.js';
 
 interface CliLocale {
     readonly cli: {
@@ -140,6 +140,13 @@ function exportFormat(value: string): ExportFormat {
         throw new NotImplementedError(`${value} export`);
     }
     throw failure('cli/unknown-format', 'unknownFormat', { format: value });
+}
+
+function dualStrategy(value: string): DualLaneStrategy {
+    if (value === 'greedy' || value === 'lpt') {
+        return value;
+    }
+    throw failure('schedule/invalid-strategy', 'invalidStrategy', { strategy: value });
 }
 
 function side(value: string): Side {
@@ -396,9 +403,16 @@ async function scheduleCommand(args: readonly string[]): Promise<number> {
     if (args[0] !== 'dual') {
         throw failure('cli/missing-argument', 'missingArgument', { usage: 'schedule dual <file>' });
     }
-    return readDocument(args.slice(1), 'schedule dual <file>', [], async (document) => {
-        print(await document.dualLane());
-    });
+    return readDocument(
+        args.slice(1),
+        'schedule dual <file> [--strategy greedy|lpt] [--improve]',
+        ['--strategy'],
+        async (document, parsed) => {
+            const strategy = dualStrategy(parsed.options.get('--strategy') ?? 'greedy');
+            print(await document.dualLane(strategy, parsed.flags.has('--improve')));
+        },
+        ['--improve'],
+    );
 }
 
 async function profileCommand(args: readonly string[]): Promise<number> {

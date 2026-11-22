@@ -27,7 +27,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | paste aperture / stencil generation | ❌ not implemented |
 | vendor machine programs (Fuji, Yamaha, Juki, ASM) | ❌ not implemented |
 | line balancing | ✅ supported |
-| dual-lane scheduling | ✅ supported (greedy, not optimal) |
+| dual-lane scheduling | ✅ supported (greedy or LPT, optional swaps; not optimal) |
 | KiCad PCB (`.kicad_pcb`) import | ✅ supported |
 | Altium / ODB import | ❌ not implemented |
 
@@ -72,11 +72,16 @@ The machine-readable version is printed by `open-smt capabilities` and by
    task per placement step in the same nearest-neighbour program order. A task's
    fixed time is `0.6 s + distance from the previous step of the same side /
    200 mm·s⁻¹`; the times therefore sum to the single-lane placement estimate.
-   Tasks are visited in program order and each joins the lane with the smaller
-   accumulated time; a tie goes to the first lane (index 0). Each lane keeps
-   its tasks in program order. `makespan` is `max` of the two lane totals and
-   `balanceRatio` is `makespan / singleLaneSeconds`, or zero for an empty
-   document. The pass is greedy and is not an optimal two-lane partition.
+   The `greedy` strategy (default) visits tasks in program order and the `lpt`
+   strategy visits them by decreasing task time, ties keeping program order.
+   Both give each task to the lane with the smaller accumulated time; a tie goes
+   to the first lane (index 0). Each lane keeps its tasks in program order.
+   `--improve` (or `improve: true`) then exchanges one task of each lane while
+   the slower lane gets faster, up to 64 rounds, and still reports each lane in
+   program order. `makespan` is `max` of the two lane totals and `balanceRatio`
+   is `makespan / singleLaneSeconds`, or zero for an empty document. The report
+   names the assignment in `strategy`. Both strategies and the swap pass are
+   heuristics; none is an optimal two-lane partition.
 7. **Panel arithmetic.** `boardCount = rows × columns`,
    `panelWidth = columns × width + (columns − 1) × gapX`, and
    `panelDepth = rows × depth + (rows − 1) × gapY`.
@@ -160,7 +165,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 |------|---------|
 | `tests/place.rs` | allocation order, nearest-first sequence, tie-breaks, panel size, multi-feeder split, determinism, 2-opt never longer than nearest neighbour, an improving crossing route, unchanged single/empty documents, additive report fields, byte-identical default output |
 | `tests/balance.rs` | single-machine parity, component conservation, side order, determinism, empty machines, invalid counts, per-machine feeder shortages, independent per-machine 2-opt, imbalance identity |
-| `tests/dual_lane.rs` | greedy lane assignment, one empty lane, empty input, work/ratio arithmetic, per-lane order preservation, placement-program parity, determinism |
+| `tests/dual_lane.rs` | greedy lane assignment, LPT beating greedy, swap-pass improvement and order preservation, explicit greedy parity, one empty lane, empty input, work/ratio arithmetic, per-lane order preservation, placement-program parity, invalid strategy, determinism |
 | `tests/reflow.rs` | default profile numbers, exact single-zone integral, below-liquidus profile, zone order |
 | `tests/validation.rs` | every code above and warning-only documents |
 | `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as |
@@ -178,8 +183,9 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   convection or board thermal mass.
 - Only the top and bottom sides are supported.
 - Dual-lane scheduling assigns whole placement tasks to two lanes with a greedy
-  cumulative-time rule. It does not model conveyor lanes, lane transfer, nozzle
-  counts or per-lane re-sequencing, and its result is not an optimal partition.
+  or longest-processing-time-first rule and an optional single-swap pass. It
+  does not model conveyor lanes, lane transfer, nozzle counts or per-lane
+  re-sequencing, and its result is not an optimal partition.
 - Line balancing distributes whole components across 1–64 machines but does not
   emit vendor machine programs, model conveyor lanes or account for line
   changeover time.

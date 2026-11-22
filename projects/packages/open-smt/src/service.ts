@@ -13,6 +13,7 @@ import type {
     ComponentRequest,
     DocumentSummary,
     DualLaneReport,
+    DualLaneStrategy,
     ExportFormat,
     ExportReport,
     FeederReport,
@@ -158,9 +159,18 @@ export function balance(path: string, machines: number, optimize = false): Balan
     return decode<BalanceReport>(() => binding('balance').balance(path, machines, optimize));
 }
 
-/** Returns the dual-lane schedule. */
-export function dualLane(path: string): DualLaneReport {
-    return decode<DualLaneReport>(() => binding('dual-lane').dual_lane(path));
+/** Returns the dual-lane schedule, optionally with another strategy and swaps. */
+export function dualLane(path: string, strategy: DualLaneStrategy = 'greedy', improve = false): DualLaneReport {
+    return decode<DualLaneReport>(() => {
+        const native = binding('dual-lane');
+        if (strategy === 'greedy' && !improve) {
+            return native.dual_lane(path);
+        }
+        if (!improve) {
+            return native.dual_lane(path, strategy);
+        }
+        return native.dual_lane(path, strategy, improve);
+    });
 }
 
 /** Returns the reflow evaluation. */

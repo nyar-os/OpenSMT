@@ -1,6 +1,6 @@
 use smt_model::{
-    Board, Component, DualLaneTask, Feeder, Side, SmtDocument, allocate_feeders, plan_dual_lane, plan_dual_lane_tasks,
-    sequence_placement,
+    Board, Component, DualLaneStrategy, DualLaneTask, Feeder, Side, SmtDocument, allocate_feeders, plan_dual_lane,
+    plan_dual_lane_tasks, plan_dual_lane_tasks_with_strategy, plan_dual_lane_with_strategy, sequence_placement,
 };
 
 fn tasks(values: &[(&str, f64)]) -> Vec<DualLaneTask> {
@@ -26,6 +26,7 @@ fn greedy_assignment_balances_the_known_task_set() {
 
     assert_eq!(report.format, "open-smt-dual-lane");
     assert_eq!(report.version, 1);
+    assert_eq!(report.strategy, DualLaneStrategy::Greedy);
     assert_eq!(report.lanes.len(), 2);
 
     assert_eq!(report.lanes[0].index, 0);
@@ -148,4 +149,101 @@ fn dual_lane_scheduling_is_deterministic_and_read_only() {
     let second = plan_dual_lane(&document).expect("dual lane");
     assert_eq!(serde_json::to_string(&first).expect("json"), serde_json::to_string(&second).expect("json"));
     assert_eq!(before, serde_json::to_string(&document).expect("json"));
+}
+
+#[test]
+fn lpt_assigns_the_longest_tasks_first_and_beats_greedy() {
+    let tasks = tasks(&[("A", 4.0), ("B", 5.0), ("C", 6.0), ("D", 7.0), ("E", 8.0)]);
+    let greedy = plan_dual_lane_tasks(&tasks);
+    let lpt = plan_dual_lane_tasks_with_strategy(&tasks, DualLaneStrategy::Lpt, false);
+
+    assert_eq!(greedy.strategy, DualLaneStrategy::Greedy);
+    assert_eq!(lpt.strategy, DualLaneStrategy::Lpt);
+    assert!((greedy.makespan - 18.0).abs() < 1e-9);
+    assert!((lpt.makespan - 17.0).abs() < 1e-9);
+    assert!(lpt.makespan < greedy.makespan);
+    assert!((lpt.single_lane_seconds - greedy.single_lane_seconds).abs() < 1e-9);
+
+    // LPT visits E, D, C, B, A and still reports each lane in program order.
+    assert_eq!(lpt.lanes[0].tasks, vec!["A", "B", "E"]);
+    assert_eq!(lpt.lanes[1].tasks, vec!["C", "D"]);
+    assert!((lpt.lanes[0].seconds - 17.0).abs() < 1e-9);
+    assert!((lpt.lanes[1].seconds - 13.0).abs() < 1e-9);
+    assert!((lpt.balance_ratio - 17.0 / 30.0).abs() < 1e-9);
+}
+
+#[test]
+fn the_swap_pass_lowers_the_lpt_makespan_without_reordering_a_lane() {
+    let order = ["A", "B", "C", "D", "E"];
+    let tasks = tasks(&[("A", 4.0), ("B", 5.0), ("C", 6.0), ("D", 7.0), ("E", 8.0)]);
+    let lpt = plan_dual_lane_tasks_with_strategy(&tasks, DualLaneStrategy::Lpt, false);
+    let improved = plan_dual_lane_tasks_with_strategy(&tasks, DualLaneStrategy::Lpt, true);
+
+    assert!(improved.makespan < lpt.makespan);
+    assert!(improved.makespan >= 15.0 - 1e-9);
+    assert!((improved.single_lane_seconds - 30.0).abs() < 1e-9);
+    assert_eq!(improved.strategy, DualLaneStrategy::Lpt);
+
+    let mut scheduled: Vec<&str> = improved.lanes.iter().flat_map(|lane| lane.tasks.iter().map(String::as_str)).collect();
+    scheduled.sort_unstable();
+    assert_eq!(scheduled, order.to_vec());
+    for lane in &improved.lanes {
+        let mut last = None;
+        for id in &lane.tasks {
+            let position = order.iter().position(|candidate| candidate == id).expect("known task");
+            if let Some(last) = last {
+                assert!(position > last, "lane {} reordered {id}", lane.index);
+            }
+            last = Some(position);
+        }
+    }
+}
+
+#[test]
+fn the_explicit_greedy_strategy_matches_the_default_schedule() {
+    let tasks = tasks(&[("A", 10.0), ("B", 20.0), ("C", 5.0), ("D", 15.0)]);
+
+    let explicit = plan_dual_lane_tasks_with_strategy(&tasks, DualLaneStrategy::Greedy, false);
+
+    assert_eq!(explicit, plan_dual_lane_tasks(&tasks));
+}
+
+#[test]
+fn lpt_and_the_swap_pass_keep_an_empty_schedule_empty() {
+    let report = plan_dual_lane_tasks_with_strategy(&[], DualLaneStrategy::Lpt, true);
+
+    assert_eq!(report.strategy, DualLaneStrategy::Lpt);
+    assert_eq!(report.lanes.len(), 2);
+    for lane in &report.lanes {
+        assert!(lane.tasks.is_empty());
+        assert_eq!(lane.seconds, 0.0);
+    }
+    assert_eq!(report.single_lane_seconds, 0.0);
+    assert_eq!(report.makespan, 0.0);
+    assert_eq!(report.balance_ratio, 0.0);
+}
+
+#[test]
+fn an_unknown_strategy_is_rejected_with_a_stable_code() {
+    let error = "optimal".parse::<DualLaneStrategy>().expect_err("unknown strategy");
+
+    assert_eq!(error.code, "schedule/invalid-strategy");
+    assert_eq!("greedy".parse::<DualLaneStrategy>().expect("greedy"), DualLaneStrategy::Greedy);
+    assert_eq!("lpt".parse::<DualLaneStrategy>().expect("lpt"), DualLaneStrategy::Lpt);
+}
+
+#[test]
+fn a_document_accepts_the_lpt_strategy_with_the_swap_pass() {
+    let document = document();
+    let greedy = plan_dual_lane(&document).expect("dual lane");
+    let lpt = plan_dual_lane_with_strategy(&document, DualLaneStrategy::Lpt, true).expect("dual lane");
+
+    assert_eq!(lpt.strategy, DualLaneStrategy::Lpt);
+    assert!((lpt.single_lane_seconds - greedy.single_lane_seconds).abs() < 1e-9);
+    let lane_total: f64 = lpt.lanes.iter().map(|lane| lane.seconds).sum();
+    assert!((lane_total - lpt.single_lane_seconds).abs() < 1e-9);
+    assert!(lpt.makespan <= lpt.single_lane_seconds + 1e-9);
+    let mut scheduled: Vec<&str> = lpt.lanes.iter().flat_map(|lane| lane.tasks.iter().map(String::as_str)).collect();
+    scheduled.sort_unstable();
+    assert_eq!(scheduled, vec!["C1", "R1", "R2", "U1"]);
 }

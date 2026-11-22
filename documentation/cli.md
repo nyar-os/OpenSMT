@@ -159,16 +159,21 @@ Assignments, component counts, total and imbalance arithmetic do not change.
 ## schedule dual
 
 ```shell
-open-smt schedule dual <file>
+open-smt schedule dual <file> [--strategy greedy|lpt] [--improve]
 ```
 
 Prints the dual-lane schedule as JSON. Each placement step becomes one task with
 a fixed time of `0.6 s + travel / 200 mm·s⁻¹` from the previous step of the same
-side. Tasks are visited in program order and join the lane with the smaller
-accumulated time; a tie goes to the first lane. The report contains `lanes`
-(`index`, `tasks` in program order and `seconds`), `singleLaneSeconds`,
-`makespan` and `balanceRatio` (`makespan / singleLaneSeconds`, zero for an empty
-document). The assignment is greedy and is not an optimal partition.
+side. `--strategy greedy` (the default) visits tasks in program order; `--strategy
+lpt` visits them by decreasing task time, ties keeping program order. Both give
+each task to the lane with the smaller accumulated time; a tie goes to the first
+lane. `--improve` exchanges one task of each lane while the slower lane gets
+faster, up to 64 rounds; a lane always keeps its tasks in program order. Any
+other strategy reports `schedule/invalid-strategy` and exits with code `1`. The
+report contains `strategy`, `lanes` (`index`, `tasks` in program order and
+`seconds`), `singleLaneSeconds`, `makespan` and `balanceRatio`
+(`makespan / singleLaneSeconds`, zero for an empty document). The assignment is a
+heuristic and is not an optimal partition.
 
 ## reflow
 

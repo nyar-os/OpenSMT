@@ -14,7 +14,9 @@ use std::path::Path;
 
 use serde::Serialize;
 use serde_json::Value;
-use smt_model::{Board, Component, ExportFormat, Feeder, OpenSmt, Panel, ReflowProfile, Side, SmtError, Zone};
+use smt_model::{
+    Board, Component, DualLaneStrategy, ExportFormat, Feeder, OpenSmt, Panel, ReflowProfile, Side, SmtError, Zone,
+};
 use wae::{CallContext, Error, JsValue, Result, function, register_module};
 
 fn argument_error(message: &str) -> Error {
@@ -311,12 +313,20 @@ fn balance(ctx: CallContext) -> Result<JsValue> {
 }
 
 /// Returns the dual-lane schedule.
+///
+/// An optional second argument selects the strategy (`greedy`, the default, or
+/// `lpt`); an optional third argument enables the single-swap improvement pass.
 #[function]
 fn dual_lane(ctx: CallContext) -> Result<JsValue> {
     let path = text(&ctx, 0)?;
+    let strategy = match optional_text(&ctx, 1)? {
+        Some(raw) => raw.parse::<DualLaneStrategy>().map_err(fail)?,
+        None => DualLaneStrategy::Greedy,
+    };
+    let improve = optional_bool(&ctx, 2)?;
     let mut session = OpenSmt::new();
     session.open(Path::new(&path)).map_err(fail)?;
-    let report = session.dual_lane().map_err(fail)?;
+    let report = session.dual_lane_with(strategy, improve).map_err(fail)?;
     respond(&ctx, &report)
 }
 

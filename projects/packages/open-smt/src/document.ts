@@ -15,6 +15,7 @@ import type {
     ComponentRequest,
     DocumentSummary,
     DualLaneReport,
+    DualLaneStrategy,
     ExportFormat,
     ExportReport,
     FeederReport,
@@ -150,10 +151,10 @@ export class SmtDocument {
         return service.balance(this.state.path, machines, optimize);
     }
 
-    /** Returns the dual-lane schedule. */
-    async dualLane(): Promise<DualLaneReport> {
+    /** Returns the dual-lane schedule, optionally with another strategy and swaps. */
+    async dualLane(strategy: DualLaneStrategy = 'greedy', improve = false): Promise<DualLaneReport> {
         this.assertOpen();
-        return service.dualLane(this.state.path);
+        return service.dualLane(this.state.path, strategy, improve);
     }
 
     /** Returns the reflow evaluation. */

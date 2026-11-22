@@ -15,7 +15,7 @@ use serde::Serialize;
 use crate::{
     CAPABILITIES_JSON, SmtError,
     balance::{self, BalanceReport},
-    dual::{self, DualLaneReport},
+    dual::{self, DualLaneReport, DualLaneStrategy},
     export::{feeder_csv, markdown, program_csv, write_atomic},
     import::ImportReport,
     model::{Board, Component, Feeder, Panel, ReflowProfile, SmtDocument, UNITS},
@@ -328,7 +328,13 @@ impl OpenSmt {
 
     /// Returns the dual-lane schedule of the open document.
     pub fn dual_lane(&self) -> Result<DualLaneReport, SmtError> {
-        dual::plan_dual_lane(self.document()?)
+        self.dual_lane_with(DualLaneStrategy::Greedy, false)
+    }
+
+    /// Returns the dual-lane schedule with an explicit strategy and an optional
+    /// single-swap improvement pass.
+    pub fn dual_lane_with(&self, strategy: DualLaneStrategy, improve: bool) -> Result<DualLaneReport, SmtError> {
+        dual::plan_dual_lane_with_strategy(self.document()?, strategy, improve)
     }
 
     /// Returns the reflow evaluation of the open document.

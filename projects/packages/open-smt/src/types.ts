@@ -184,6 +184,9 @@ export interface BalanceReport {
     readonly ok: boolean;
 }
 
+/** Assignment strategy of a dual-lane schedule. */
+export type DualLaneStrategy = 'greedy' | 'lpt';
+
 /** One lane of a dual-lane schedule. */
 export interface LaneSchedule {
     readonly index: number;
@@ -196,6 +199,8 @@ export interface LaneSchedule {
 export interface DualLaneReport {
     readonly format: string;
     readonly version: number;
+    /** Assignment strategy that produced the report. */
+    readonly strategy: DualLaneStrategy;
     readonly lanes: readonly LaneSchedule[];
     readonly singleLaneSeconds: number;
     readonly makespan: number;

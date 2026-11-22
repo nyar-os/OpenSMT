@@ -10,8 +10,9 @@
 //! * a multi-machine line balance that assigns components in reference
 //!   designator order to the machine with the smallest estimated completion
 //!   time;
-//! * a dual-lane schedule that assigns placement tasks in program order to the
-//!   lane with the smaller accumulated time;
+//! * a dual-lane schedule that assigns placement tasks to the lane with the
+//!   smaller accumulated time, in program order (greedy) or longest-first (LPT),
+//!   with an optional single-swap improvement pass;
 //! * a reflow profile evaluator that integrates time above liquidus over linear
 //!   zone ramps;
 //! * CSV program and feeder sheets, plus JSON and Markdown reports.
@@ -34,7 +35,10 @@ pub mod validate;
 
 pub use crate::{
     balance::{BalanceReport, MAX_MACHINES, MIN_MACHINES, MachineFeeder, MachineReport, balance, balance_with},
-    dual::{DualLaneReport, DualLaneTask, LANES, LaneSchedule, plan_dual_lane, plan_dual_lane_tasks},
+    dual::{
+        DualLaneReport, DualLaneStrategy, DualLaneTask, LANES, LaneSchedule, plan_dual_lane, plan_dual_lane_tasks,
+        plan_dual_lane_tasks_with_strategy, plan_dual_lane_with_strategy,
+    },
     error::{SmtError, not_implemented},
     export::{feeder_csv, markdown, program_csv, write_atomic},
     import::{ImportLoss, ImportReport},
@@ -76,6 +80,6 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "kicad_pcb": "supported"
   },
   "limitations": {
-    "dualLane": "greedy assignment by cumulative task seconds, not an optimal schedule"
+    "dualLane": "greedy or LPT heuristic with an optional single-swap pass, not an optimal schedule"
   }
 }"#;
