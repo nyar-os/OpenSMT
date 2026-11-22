@@ -208,6 +208,21 @@ export interface DualLaneReport {
     readonly balanceRatio: number;
 }
 
+/** Multi-lane schedule report. */
+export interface LanesReport {
+    readonly format: string;
+    readonly version: number;
+    /** Assignment strategy that produced the report. */
+    readonly strategy: DualLaneStrategy;
+    /** Number of lanes the schedule uses, between 2 and 16. */
+    readonly laneCount: number;
+    readonly lanes: readonly LaneSchedule[];
+    readonly singleLaneSeconds: number;
+    readonly makespan: number;
+    /** `makespan / singleLaneSeconds`, or zero when every task takes zero seconds. */
+    readonly balanceRatio: number;
+}
+
 /** One evaluated reflow zone. */
 export interface ZoneReport {
     readonly name: string;

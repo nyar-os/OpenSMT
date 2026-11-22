@@ -26,6 +26,7 @@ export const errorCodes = [
     'panel/invalid',
     'balance/invalid-machines',
     'schedule/invalid-strategy',
+    'schedule/invalid-lanes',
     'component/invalid',
     'component/duplicate-refdes',
     'component/unknown-refdes',

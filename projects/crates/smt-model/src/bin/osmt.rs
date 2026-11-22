@@ -26,6 +26,7 @@ Usage:
   osmt feeders <file> [--out setup.csv]
   osmt balance <file> --machines <n> [--optimize]
   osmt schedule dual <file> [--strategy greedy|lpt] [--improve]
+  osmt schedule lanes <file> --count <n> [--strategy greedy|lpt] [--improve]
   osmt reflow <file>
   osmt export <file> --format program|feeders|json|md --out <path>
   osmt report <file>
@@ -214,16 +215,28 @@ fn profile_command(args: &[String]) -> Result<i32, SmtError> {
 }
 
 fn schedule_command(args: &[String]) -> Result<i32, SmtError> {
-    if args.get(1).map(String::as_str) != Some("dual") {
-        return Err(SmtError::new("cli/missing-argument", "usage: osmt schedule dual <file>"));
+    match args.get(1).map(String::as_str) {
+        Some("dual") => {
+            let file = positional(args, 2, "schedule dual <file>")?;
+            let values = Options::parse(&args[3..], &["--strategy"], &["--improve"])?;
+            let strategy = match values.value("--strategy") {
+                Some(raw) => raw.parse::<DualLaneStrategy>()?,
+                None => DualLaneStrategy::Greedy,
+            };
+            print_json(&session(file)?.dual_lane_with(strategy, values.flag("--improve"))?)
+        }
+        Some("lanes") => {
+            let file = positional(args, 2, "schedule lanes <file> --count <n>")?;
+            let values = Options::parse(&args[3..], &["--count", "--strategy"], &["--improve"])?;
+            let strategy = match values.value("--strategy") {
+                Some(raw) => raw.parse::<DualLaneStrategy>()?,
+                None => DualLaneStrategy::Greedy,
+            };
+            let report = session(file)?.lanes(values.integer("--count")?, strategy, values.flag("--improve"))?;
+            print_json(&report)
+        }
+        _ => Err(SmtError::new("cli/missing-argument", "usage: osmt schedule dual|lanes <file> ...")),
     }
-    let file = positional(args, 2, "schedule dual <file>")?;
-    let values = Options::parse(&args[3..], &["--strategy"], &["--improve"])?;
-    let strategy = match values.value("--strategy") {
-        Some(raw) => raw.parse::<DualLaneStrategy>()?,
-        None => DualLaneStrategy::Greedy,
-    };
-    print_json(&session(file)?.dual_lane_with(strategy, values.flag("--improve"))?)
 }
 
 fn parse_zones(raw: &str) -> Result<Vec<Zone>, SmtError> {

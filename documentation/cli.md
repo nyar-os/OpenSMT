@@ -173,7 +173,27 @@ other strategy reports `schedule/invalid-strategy` and exits with code `1`. The
 report contains `strategy`, `lanes` (`index`, `tasks` in program order and
 `seconds`), `singleLaneSeconds`, `makespan` and `balanceRatio`
 (`makespan / singleLaneSeconds`, zero for an empty document). The assignment is a
-heuristic and is not an optimal partition.
+heuristic and is not an optimal partition. `schedule dual` is the two-lane
+special case and keeps this exact report shape.
+
+## schedule lanes
+
+```shell
+open-smt schedule lanes <file> --count <n> [--strategy greedy|lpt] [--improve]
+```
+
+Prints a multi-lane schedule as JSON for 2 to 16 lanes. Task times and both
+strategies follow `schedule dual`: `--strategy greedy` (the default) visits tasks
+in program order, `--strategy lpt` visits them by decreasing task time with ties
+in program order, and every task joins the lane with the smaller accumulated
+time (a tie goes to the lowest lane index). `--improve` exchanges one task of
+each lane pair while the slowest lane gets faster, up to 64 rounds, and each lane
+always keeps its tasks in program order. A count outside 2–16 reports
+`schedule/invalid-lanes`; any other strategy reports `schedule/invalid-strategy`.
+Both exit with code `1`. The report contains `strategy`, `laneCount`, `lanes`
+(`index`, `tasks` in program order and `seconds`), `singleLaneSeconds`,
+`makespan` and `balanceRatio` (`makespan / singleLaneSeconds`, zero for an empty
+document). The assignment is a heuristic and is not an optimal partition.
 
 ## reflow
 
@@ -232,6 +252,7 @@ open-smt feeder add panel.osmt --id F2 --package QFN-32 --pitch 12 --capacity 50
 open-smt validate panel.osmt
 open-smt placement panel.osmt
 open-smt schedule dual panel.osmt
+open-smt schedule lanes panel.osmt --count 3 --strategy lpt --improve
 open-smt reflow panel.osmt
 open-smt export panel.osmt --format program --out program.csv
 ```

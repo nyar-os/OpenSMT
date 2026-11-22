@@ -400,19 +400,35 @@ async function feederCommand(args: readonly string[]): Promise<number> {
 }
 
 async function scheduleCommand(args: readonly string[]): Promise<number> {
-    if (args[0] !== 'dual') {
-        throw failure('cli/missing-argument', 'missingArgument', { usage: 'schedule dual <file>' });
+    if (args[0] === 'dual') {
+        return readDocument(
+            args.slice(1),
+            'schedule dual <file> [--strategy greedy|lpt] [--improve]',
+            ['--strategy'],
+            async (document, parsed) => {
+                const strategy = dualStrategy(parsed.options.get('--strategy') ?? 'greedy');
+                print(await document.dualLane(strategy, parsed.flags.has('--improve')));
+            },
+            ['--improve'],
+        );
     }
-    return readDocument(
-        args.slice(1),
-        'schedule dual <file> [--strategy greedy|lpt] [--improve]',
-        ['--strategy'],
-        async (document, parsed) => {
-            const strategy = dualStrategy(parsed.options.get('--strategy') ?? 'greedy');
-            print(await document.dualLane(strategy, parsed.flags.has('--improve')));
-        },
-        ['--improve'],
-    );
+    if (args[0] === 'lanes') {
+        return readDocument(
+            args.slice(1),
+            'schedule lanes <file> --count <n> [--strategy greedy|lpt] [--improve]',
+            ['--count', '--strategy'],
+            async (document, parsed) => {
+                const count = integer(parsed, '--count');
+                if (count < 2 || count > 16) {
+                    throw failure('schedule/invalid-lanes', 'invalidLanes', { count: String(count) });
+                }
+                const strategy = dualStrategy(parsed.options.get('--strategy') ?? 'greedy');
+                print(await document.lanes(count, strategy, parsed.flags.has('--improve')));
+            },
+            ['--improve'],
+        );
+    }
+    throw failure('cli/missing-argument', 'missingArgument', { usage: 'schedule dual|lanes <file> ...' });
 }
 
 async function profileCommand(args: readonly string[]): Promise<number> {

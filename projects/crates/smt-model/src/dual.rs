@@ -1,16 +1,17 @@
-//! Dual-lane placement scheduling.
+//! Multi-lane placement scheduling.
 //!
-//! The tasks of a dual-lane schedule are the steps of the existing placement
-//! program. Each task carries a fixed time: the placement overhead plus the
-//! travel from the previous step of the same side, so the task times add up to
-//! the single-lane placement estimate. Two deterministic strategies assign the
+//! The tasks of a schedule are the steps of the existing placement program.
+//! Each task carries a fixed time: the placement overhead plus the travel from
+//! the previous step of the same side, so the task times add up to the
+//! single-lane placement estimate. Two deterministic strategies assign the
 //! tasks: `greedy` visits them in program order, `lpt` visits them by
 //! decreasing task time (ties by program index). Both give every task to the
-//! lane with the smaller accumulated time; a tie stays on the first lane.
-//! Relative order inside a lane is always the program order. An optional swap
-//! pass exchanges one task of each lane while that lowers the slower lane.
-//! The report is a load estimate and does not model conveyor transfer, lane
-//! hardware or re-sequencing inside a lane.
+//! lane with the smaller accumulated time; a tie stays on the lowest lane
+//! index. Relative order inside a lane is always the program order. An optional
+//! swap pass exchanges one task of each lane pair while that lowers the slower
+//! lane. `plan_dual_lane*` is the two-lane special case and keeps its report
+//! shape. The report is a load estimate and does not model conveyor transfer,
+//! lane hardware or re-sequencing inside a lane.
 
 use std::str::FromStr;
 
@@ -25,6 +26,12 @@ use crate::{
 
 /// Number of parallel lanes a dual-lane schedule uses.
 pub const LANES: usize = 2;
+
+/// Smallest number of lanes a multi-lane schedule accepts.
+pub const MIN_LANES: usize = 2;
+
+/// Largest number of lanes a multi-lane schedule accepts.
+pub const MAX_LANES: usize = 16;
 
 /// Difference in accumulated seconds at or below which two lanes count as tied.
 const TIE_EPSILON: f64 = 1e-9;
@@ -110,6 +117,28 @@ pub struct DualLaneReport {
     pub balance_ratio: f64,
 }
 
+/// Multi-lane schedule report.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LanesReport {
+    /// Report format identifier.
+    pub format: String,
+    /// Report version.
+    pub version: u32,
+    /// Assignment strategy that produced the report.
+    pub strategy: DualLaneStrategy,
+    /// Number of lanes the schedule uses, between 2 and 16.
+    pub lane_count: u32,
+    /// One entry per lane, in index order.
+    pub lanes: Vec<LaneSchedule>,
+    /// Single-lane program time, in seconds; the sum of every task time.
+    pub single_lane_seconds: f64,
+    /// Slowest lane's total task time, in seconds.
+    pub makespan: f64,
+    /// `makespan / singleLaneSeconds`, or zero when every task takes zero seconds.
+    pub balance_ratio: f64,
+}
+
 /// Schedules the placement tasks of `document` on two parallel lanes.
 ///
 /// The task times come from the same nearest-neighbour program and cycle estimate
@@ -128,17 +157,47 @@ pub fn plan_dual_lane_with_strategy(
     strategy: DualLaneStrategy,
     improve: bool,
 ) -> Result<DualLaneReport, SmtError> {
-    let report = validate(document);
-    // Dual-lane scheduling does not read feeders, so an incomplete or short
-    // setup must not block it. Structural errors still do.
-    if let Some(issue) = report
-        .issues
-        .iter()
-        .find(|issue| issue.severity == Severity::Error && issue.code != "feeder/missing" && issue.code != "feeder/capacity")
-    {
-        return Err(SmtError::new(issue.code.clone(), issue.message.clone()));
-    }
-    Ok(plan_dual_lane_tasks_with_strategy(&document_tasks(document), strategy, improve))
+    check_structure(document)?;
+    Ok(dual_report(schedule_lanes(&document_tasks(document), LANES, strategy, improve)))
+}
+
+/// Schedules the placement tasks of `document` on `lane_count` parallel lanes.
+///
+/// The lane count must be between [`MIN_LANES`] and [`MAX_LANES`]; any other
+/// value reports `schedule/invalid-lanes`. Task times come from the same
+/// nearest-neighbour program and cycle estimate as [`crate::sequence_placement`].
+/// Structural validation errors are returned; feeder coverage does not block the
+/// schedule, exactly like a line balance.
+pub fn plan_document_lanes(
+    document: &SmtDocument,
+    lane_count: usize,
+    strategy: DualLaneStrategy,
+    improve: bool,
+) -> Result<LanesReport, SmtError> {
+    check_lane_count(lane_count)?;
+    check_structure(document)?;
+    Ok(schedule_lanes(&document_tasks(document), lane_count, strategy, improve))
+}
+
+/// Assigns `tasks` to `lane_count` lanes with an explicit strategy and an
+/// optional pairwise-swap improvement pass.
+///
+/// The lane count must be between [`MIN_LANES`] and [`MAX_LANES`]; any other
+/// value reports `schedule/invalid-lanes`. The greedy strategy visits tasks in
+/// slice order; the LPT strategy visits them by decreasing task time, ties
+/// keeping the slice order. Both give each task to the lane with the smaller
+/// accumulated time, a tie going to the lowest lane index. With `improve`, one
+/// task of each lane pair is exchanged while that lowers the slowest lane, up to
+/// a fixed number of rounds. Lane contents are always reported in slice order.
+/// Task times are assumed to be finite and non-negative.
+pub fn plan_lanes(
+    tasks: &[DualLaneTask],
+    lane_count: usize,
+    strategy: DualLaneStrategy,
+    improve: bool,
+) -> Result<LanesReport, SmtError> {
+    check_lane_count(lane_count)?;
+    Ok(schedule_lanes(tasks, lane_count, strategy, improve))
 }
 
 /// Assigns `tasks` to two lanes by cumulative time with the greedy strategy.
@@ -161,13 +220,55 @@ pub fn plan_dual_lane_tasks(tasks: &[DualLaneTask]) -> DualLaneReport {
 /// reported in slice order. Task times are assumed to be finite and
 /// non-negative.
 pub fn plan_dual_lane_tasks_with_strategy(tasks: &[DualLaneTask], strategy: DualLaneStrategy, improve: bool) -> DualLaneReport {
-    let mut members: [Vec<usize>; LANES] = std::array::from_fn(|_| Vec::new());
-    let mut seconds = [0.0f64; LANES];
+    dual_report(schedule_lanes(tasks, LANES, strategy, improve))
+}
+
+fn dual_report(report: LanesReport) -> DualLaneReport {
+    let LanesReport { strategy, lanes, single_lane_seconds, makespan, balance_ratio, .. } = report;
+    DualLaneReport {
+        format: "open-smt-dual-lane".to_string(),
+        version: 1,
+        strategy,
+        lanes,
+        single_lane_seconds,
+        makespan,
+        balance_ratio,
+    }
+}
+
+fn check_structure(document: &SmtDocument) -> Result<(), SmtError> {
+    let report = validate(document);
+    // Lane scheduling does not read feeders, so an incomplete or short setup
+    // must not block it. Structural errors still do.
+    if let Some(issue) = report
+        .issues
+        .iter()
+        .find(|issue| issue.severity == Severity::Error && issue.code != "feeder/missing" && issue.code != "feeder/capacity")
+    {
+        return Err(SmtError::new(issue.code.clone(), issue.message.clone()));
+    }
+    Ok(())
+}
+
+fn check_lane_count(lane_count: usize) -> Result<(), SmtError> {
+    if (MIN_LANES..=MAX_LANES).contains(&lane_count) {
+        Ok(())
+    } else {
+        Err(SmtError::new(
+            "schedule/invalid-lanes",
+            format!("lane count {lane_count} must be between {MIN_LANES} and {MAX_LANES}"),
+        ))
+    }
+}
+
+fn schedule_lanes(tasks: &[DualLaneTask], lane_count: usize, strategy: DualLaneStrategy, improve: bool) -> LanesReport {
+    let mut members: Vec<Vec<usize>> = vec![Vec::new(); lane_count];
+    let mut seconds = vec![0.0f64; lane_count];
 
     match strategy {
         DualLaneStrategy::Greedy => {
             for (index, task) in tasks.iter().enumerate() {
-                let lane = lighter_lane(seconds);
+                let lane = lighter_lane(&seconds);
                 seconds[lane] += task.seconds;
                 members[lane].push(index);
             }
@@ -176,7 +277,7 @@ pub fn plan_dual_lane_tasks_with_strategy(tasks: &[DualLaneTask], strategy: Dual
             let mut order: Vec<usize> = (0..tasks.len()).collect();
             order.sort_by(|&left, &right| tasks[right].seconds.total_cmp(&tasks[left].seconds).then(left.cmp(&right)));
             for index in order {
-                let lane = lighter_lane(seconds);
+                let lane = lighter_lane(&seconds);
                 seconds[lane] += tasks[index].seconds;
                 members[lane].push(index);
             }
@@ -205,10 +306,11 @@ pub fn plan_dual_lane_tasks_with_strategy(tasks: &[DualLaneTask], strategy: Dual
         })
         .collect();
 
-    DualLaneReport {
-        format: "open-smt-dual-lane".to_string(),
+    LanesReport {
+        format: "open-smt-lanes".to_string(),
         version: 1,
         strategy,
+        lane_count: lane_count as u32,
         lanes,
         single_lane_seconds,
         makespan,
@@ -216,34 +318,49 @@ pub fn plan_dual_lane_tasks_with_strategy(tasks: &[DualLaneTask], strategy: Dual
     }
 }
 
-fn lighter_lane(seconds: [f64; LANES]) -> usize {
-    if seconds[0] <= seconds[1] + TIE_EPSILON { 0 } else { 1 }
+fn lighter_lane(seconds: &[f64]) -> usize {
+    let mut lane = 0;
+    for candidate in 1..seconds.len() {
+        if seconds[candidate] < seconds[lane] - TIE_EPSILON {
+            lane = candidate;
+        }
+    }
+    lane
 }
 
-fn improve_swaps(tasks: &[DualLaneTask], members: &mut [Vec<usize>; LANES], seconds: &mut [f64; LANES]) {
-    let [first, second] = members;
+fn improve_swaps(tasks: &[DualLaneTask], members: &mut [Vec<usize>], seconds: &mut [f64]) {
     for _ in 0..MAX_SWAP_ROUNDS {
-        let current = seconds[0].max(seconds[1]);
+        let current = seconds.iter().copied().fold(0.0, f64::max);
         let mut swap = None;
-        'search: for left in 0..first.len() {
-            for right in 0..second.len() {
-                let left_seconds = tasks[first[left]].seconds;
-                let right_seconds = tasks[second[right]].seconds;
-                let candidate_left = seconds[0] - left_seconds + right_seconds;
-                let candidate_right = seconds[1] - right_seconds + left_seconds;
-                if candidate_left.max(candidate_right) < current - TIE_EPSILON {
-                    swap = Some((left, right, candidate_left, candidate_right));
-                    break 'search;
+        'search: for (left_lane, left_members) in members.iter().enumerate() {
+            for (right_lane, right_members) in members.iter().enumerate().skip(left_lane + 1) {
+                for (left, &left_task) in left_members.iter().enumerate() {
+                    for (right, &right_task) in right_members.iter().enumerate() {
+                        let left_seconds = tasks[left_task].seconds;
+                        let right_seconds = tasks[right_task].seconds;
+                        let candidate_left = seconds[left_lane] - left_seconds + right_seconds;
+                        let candidate_right = seconds[right_lane] - right_seconds + left_seconds;
+                        let mut candidate = candidate_left.max(candidate_right);
+                        for (lane, lane_seconds) in seconds.iter().enumerate() {
+                            if lane != left_lane && lane != right_lane {
+                                candidate = candidate.max(*lane_seconds);
+                            }
+                        }
+                        if candidate < current - TIE_EPSILON {
+                            swap = Some((left_lane, right_lane, left, right, candidate_left, candidate_right));
+                            break 'search;
+                        }
+                    }
                 }
             }
         }
-        let Some((left, right, candidate_left, candidate_right)) = swap
-        else {
+        let Some((left_lane, right_lane, left, right, candidate_left, candidate_right)) = swap else {
             break;
         };
-        std::mem::swap(&mut first[left], &mut second[right]);
-        seconds[0] = candidate_left;
-        seconds[1] = candidate_right;
+        let (before, after) = members.split_at_mut(right_lane);
+        std::mem::swap(&mut before[left_lane][left], &mut after[0][right]);
+        seconds[left_lane] = candidate_left;
+        seconds[right_lane] = candidate_right;
     }
 }
 

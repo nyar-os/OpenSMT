@@ -19,6 +19,7 @@ import type {
     FeederReport,
     FeederRequest,
     ImportReport,
+    LanesReport,
     PanelRequest,
     PlacementReport,
     ReflowProfileRequest,
@@ -171,6 +172,16 @@ export function dualLane(path: string, strategy: DualLaneStrategy = 'greedy', im
         }
         return native.dual_lane(path, strategy, improve);
     });
+}
+
+/** Returns the multi-lane schedule, optionally with another strategy and swaps. */
+export function lanes(
+    path: string,
+    laneCount: number,
+    strategy: DualLaneStrategy = 'greedy',
+    improve = false,
+): LanesReport {
+    return decode<LanesReport>(() => binding('schedule-lanes').schedule_lanes(path, laneCount, strategy, improve));
 }
 
 /** Returns the reflow evaluation. */

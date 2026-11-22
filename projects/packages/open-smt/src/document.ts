@@ -20,6 +20,7 @@ import type {
     ExportReport,
     FeederReport,
     FeederRequest,
+    LanesReport,
     Panel,
     PanelRequest,
     PlacementReport,
@@ -155,6 +156,12 @@ export class SmtDocument {
     async dualLane(strategy: DualLaneStrategy = 'greedy', improve = false): Promise<DualLaneReport> {
         this.assertOpen();
         return service.dualLane(this.state.path, strategy, improve);
+    }
+
+    /** Returns the multi-lane schedule, optionally with another strategy and swaps. */
+    async lanes(laneCount: number, strategy: DualLaneStrategy = 'greedy', improve = false): Promise<LanesReport> {
+        this.assertOpen();
+        return service.lanes(this.state.path, laneCount, strategy, improve);
     }
 
     /** Returns the reflow evaluation. */

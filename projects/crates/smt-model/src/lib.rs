@@ -10,9 +10,9 @@
 //! * a multi-machine line balance that assigns components in reference
 //!   designator order to the machine with the smallest estimated completion
 //!   time;
-//! * a dual-lane schedule that assigns placement tasks to the lane with the
-//!   smaller accumulated time, in program order (greedy) or longest-first (LPT),
-//!   with an optional single-swap improvement pass;
+//! * a multi-lane schedule (2 to 16 lanes) that assigns placement tasks to the
+//!   lane with the smaller accumulated time, in program order (greedy) or
+//!   longest-first (LPT), with an optional pairwise-swap improvement pass;
 //! * a reflow profile evaluator that integrates time above liquidus over linear
 //!   zone ramps;
 //! * CSV program and feeder sheets, plus JSON and Markdown reports.
@@ -36,8 +36,9 @@ pub mod validate;
 pub use crate::{
     balance::{BalanceReport, MAX_MACHINES, MIN_MACHINES, MachineFeeder, MachineReport, balance, balance_with},
     dual::{
-        DualLaneReport, DualLaneStrategy, DualLaneTask, LANES, LaneSchedule, plan_dual_lane, plan_dual_lane_tasks,
-        plan_dual_lane_tasks_with_strategy, plan_dual_lane_with_strategy,
+        DualLaneReport, DualLaneStrategy, DualLaneTask, LANES, LaneSchedule, LanesReport, MAX_LANES, MIN_LANES,
+        plan_document_lanes, plan_dual_lane, plan_dual_lane_tasks, plan_dual_lane_tasks_with_strategy,
+        plan_dual_lane_with_strategy, plan_lanes,
     },
     error::{SmtError, not_implemented},
     export::{feeder_csv, markdown, program_csv, write_atomic},
@@ -64,7 +65,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "pasteAperture": "unsupported",
     "machineProgram": "unsupported",
     "lineBalance": "supported",
-    "dualLane": "supported"
+    "dualLane": "supported",
+    "multiLane": "supported"
   },
   "io": {
     "osmt": "supported",
@@ -80,6 +82,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "kicad_pcb": "supported"
   },
   "limitations": {
-    "dualLane": "greedy or LPT heuristic with an optional single-swap pass, not an optimal schedule"
+    "dualLane": "greedy or LPT heuristic with an optional single-swap pass, not an optimal schedule",
+    "multiLane": "greedy or LPT heuristic on 2 to 16 lanes with an optional pairwise-swap pass, not an optimal schedule"
   }
 }"#;

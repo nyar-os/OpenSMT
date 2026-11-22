@@ -1,6 +1,7 @@
 use smt_model::{
-    Board, Component, DualLaneStrategy, DualLaneTask, Feeder, Side, SmtDocument, allocate_feeders, plan_dual_lane,
-    plan_dual_lane_tasks, plan_dual_lane_tasks_with_strategy, plan_dual_lane_with_strategy, sequence_placement,
+    Board, Component, DualLaneStrategy, DualLaneTask, Feeder, Side, SmtDocument, allocate_feeders, plan_document_lanes,
+    plan_dual_lane, plan_dual_lane_tasks, plan_dual_lane_tasks_with_strategy, plan_dual_lane_with_strategy, plan_lanes,
+    sequence_placement,
 };
 
 fn tasks(values: &[(&str, f64)]) -> Vec<DualLaneTask> {
@@ -246,4 +247,139 @@ fn a_document_accepts_the_lpt_strategy_with_the_swap_pass() {
     let mut scheduled: Vec<&str> = lpt.lanes.iter().flat_map(|lane| lane.tasks.iter().map(String::as_str)).collect();
     scheduled.sort_unstable();
     assert_eq!(scheduled, vec!["C1", "R1", "R2", "U1"]);
+}
+
+#[test]
+fn lpt_beats_greedy_on_three_lanes_and_conserves_the_tasks() {
+    let order = ["A", "B", "C", "D", "E", "F"];
+    let tasks = tasks(&[("A", 4.0), ("B", 5.0), ("C", 6.0), ("D", 7.0), ("E", 8.0), ("F", 9.0)]);
+    let greedy = plan_lanes(&tasks, 3, DualLaneStrategy::Greedy, false).expect("three lanes");
+    let lpt = plan_lanes(&tasks, 3, DualLaneStrategy::Lpt, false).expect("three lanes");
+
+    assert_eq!(greedy.format, "open-smt-lanes");
+    assert_eq!(greedy.version, 1);
+    assert_eq!(greedy.lane_count, 3);
+    assert_eq!(greedy.lanes.len(), 3);
+    assert!((greedy.makespan - 15.0).abs() < 1e-9);
+    assert!((lpt.makespan - 13.0).abs() < 1e-9);
+    assert!(lpt.makespan < greedy.makespan);
+
+    assert_eq!(lpt.lanes[0].tasks, vec!["A", "F"]);
+    assert_eq!(lpt.lanes[1].tasks, vec!["B", "E"]);
+    assert_eq!(lpt.lanes[2].tasks, vec!["C", "D"]);
+    for lane in &lpt.lanes {
+        assert!((lane.seconds - 13.0).abs() < 1e-9);
+    }
+
+    for report in [&greedy, &lpt] {
+        let mut scheduled: Vec<&str> = report.lanes.iter().flat_map(|lane| lane.tasks.iter().map(String::as_str)).collect();
+        scheduled.sort_unstable();
+        assert_eq!(scheduled, order.to_vec());
+        for lane in &report.lanes {
+            let mut last = None;
+            for id in &lane.tasks {
+                let position = order.iter().position(|candidate| candidate == id).expect("known task");
+                if let Some(last) = last {
+                    assert!(position > last, "lane {} reordered {id}", lane.index);
+                }
+                last = Some(position);
+            }
+        }
+        let lane_total: f64 = report.lanes.iter().map(|lane| lane.seconds).sum();
+        assert!((lane_total - report.single_lane_seconds).abs() < 1e-9);
+    }
+}
+
+#[test]
+fn multi_lane_makespan_and_ratio_are_exact() {
+    let tasks = tasks(&[("A", 1.0), ("B", 2.0), ("C", 3.0), ("D", 4.0), ("E", 5.0), ("F", 6.0)]);
+    let report = plan_lanes(&tasks, 3, DualLaneStrategy::Greedy, false).expect("three lanes");
+
+    let expected_makespan = report.lanes.iter().map(|lane| lane.seconds).fold(0.0, f64::max);
+    assert!((report.makespan - expected_makespan).abs() < 1e-12);
+    assert!((report.single_lane_seconds - 21.0).abs() < 1e-9);
+    assert!((report.balance_ratio - report.makespan / report.single_lane_seconds).abs() < 1e-12);
+    assert!((report.single_lane_seconds - report.lanes.iter().map(|lane| lane.seconds).sum::<f64>()).abs() < 1e-9);
+}
+
+#[test]
+fn two_lane_plans_match_the_dual_reports() {
+    let tasks = tasks(&[("A", 4.0), ("B", 5.0), ("C", 6.0), ("D", 7.0), ("E", 8.0)]);
+    for strategy in [DualLaneStrategy::Greedy, DualLaneStrategy::Lpt] {
+        for improve in [false, true] {
+            let lanes = plan_lanes(&tasks, 2, strategy, improve).expect("two lanes");
+            let dual = plan_dual_lane_tasks_with_strategy(&tasks, strategy, improve);
+
+            assert_eq!(lanes.strategy, dual.strategy);
+            assert_eq!(lanes.lanes, dual.lanes);
+            assert_eq!(lanes.single_lane_seconds, dual.single_lane_seconds);
+            assert_eq!(lanes.makespan, dual.makespan);
+            assert_eq!(lanes.balance_ratio, dual.balance_ratio);
+            assert_eq!(serde_json::to_string(&lanes.lanes).expect("json"), serde_json::to_string(&dual.lanes).expect("json"));
+        }
+    }
+}
+
+#[test]
+fn the_pairwise_swap_pass_lowers_a_three_lane_makespan() {
+    let order = ["A", "B", "C", "D", "E"];
+    let tasks = tasks(&[("A", 4.0), ("B", 5.0), ("C", 6.0), ("D", 7.0), ("E", 8.0)]);
+    let greedy = plan_lanes(&tasks, 3, DualLaneStrategy::Greedy, false).expect("three lanes");
+    let improved = plan_lanes(&tasks, 3, DualLaneStrategy::Greedy, true).expect("three lanes");
+
+    assert!(improved.makespan < greedy.makespan);
+    assert!((improved.single_lane_seconds - greedy.single_lane_seconds).abs() < 1e-9);
+    let mut scheduled: Vec<&str> = improved.lanes.iter().flat_map(|lane| lane.tasks.iter().map(String::as_str)).collect();
+    scheduled.sort_unstable();
+    assert_eq!(scheduled, order.to_vec());
+    for lane in &improved.lanes {
+        let mut last = None;
+        for id in &lane.tasks {
+            let position = order.iter().position(|candidate| candidate == id).expect("known task");
+            if let Some(last) = last {
+                assert!(position > last, "lane {} reordered {id}", lane.index);
+            }
+            last = Some(position);
+        }
+    }
+}
+
+#[test]
+fn multi_lane_edge_cases_stay_empty_and_deterministic() {
+    let empty = plan_lanes(&[], 4, DualLaneStrategy::Lpt, true).expect("empty lanes");
+    assert_eq!(empty.lane_count, 4);
+    assert_eq!(empty.lanes.len(), 4);
+    for lane in &empty.lanes {
+        assert!(lane.tasks.is_empty());
+        assert_eq!(lane.seconds, 0.0);
+    }
+    assert_eq!(empty.single_lane_seconds, 0.0);
+    assert_eq!(empty.makespan, 0.0);
+    assert_eq!(empty.balance_ratio, 0.0);
+
+    let document = document();
+    let before = serde_json::to_string(&document).expect("json");
+    let first = plan_document_lanes(&document, 3, DualLaneStrategy::Lpt, true).expect("three lanes");
+    let second = plan_document_lanes(&document, 3, DualLaneStrategy::Lpt, true).expect("three lanes");
+    assert_eq!(serde_json::to_string(&first).expect("json"), serde_json::to_string(&second).expect("json"));
+    assert_eq!(before, serde_json::to_string(&document).expect("json"));
+
+    let feeders = allocate_feeders(&document).expect("valid");
+    let placement = sequence_placement(&document, &feeders).expect("sequence");
+    assert!((first.single_lane_seconds - placement.placement_seconds).abs() < 1e-9);
+    let mut scheduled: Vec<&str> = first.lanes.iter().flat_map(|lane| lane.tasks.iter().map(String::as_str)).collect();
+    scheduled.sort_unstable();
+    let mut expected: Vec<&str> = placement.entries.iter().map(|entry| entry.refdes.as_str()).collect();
+    expected.sort_unstable();
+    assert_eq!(scheduled, expected);
+}
+
+#[test]
+fn an_invalid_lane_count_is_rejected_with_a_stable_code() {
+    for lane_count in [0usize, 1, 17, usize::MAX] {
+        let error = plan_lanes(&[], lane_count, DualLaneStrategy::Greedy, false).expect_err("invalid lane count");
+        assert_eq!(error.code, "schedule/invalid-lanes");
+    }
+    assert!(plan_lanes(&[], 2, DualLaneStrategy::Greedy, false).is_ok());
+    assert!(plan_lanes(&[], 16, DualLaneStrategy::Lpt, true).is_ok());
 }

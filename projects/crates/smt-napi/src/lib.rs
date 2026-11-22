@@ -330,6 +330,27 @@ fn dual_lane(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the multi-lane schedule.
+///
+/// A second argument is the lane count (2 to 16); an optional third argument
+/// selects the strategy (`greedy`, the default, or `lpt`) and an optional fourth
+/// argument enables the pairwise-swap improvement pass.
+#[function]
+fn schedule_lanes(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let lanes = argument(&ctx, 1)?.as_i64()?;
+    let lanes = u32::try_from(lanes).unwrap_or(0);
+    let strategy = match optional_text(&ctx, 2)? {
+        Some(raw) => raw.parse::<DualLaneStrategy>().map_err(fail)?,
+        None => DualLaneStrategy::Greedy,
+    };
+    let improve = optional_bool(&ctx, 3)?;
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.lanes(lanes, strategy, improve).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Returns the reflow evaluation.
 #[function]
 fn reflow(ctx: CallContext) -> Result<JsValue> {
@@ -381,6 +402,7 @@ register_module![
     feeders,
     balance,
     dual_lane,
+    schedule_lanes,
     reflow,
     export,
     report

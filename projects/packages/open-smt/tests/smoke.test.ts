@@ -47,6 +47,8 @@ test('the error surface includes coverage and capability codes', () => {
     assert.ok(errorCodes.includes('feeder/capacity'));
     assert.ok(errorCodes.includes('component/outside-board'));
     assert.ok(errorCodes.includes('balance/invalid-machines'));
+    assert.ok(errorCodes.includes('schedule/invalid-strategy'));
+    assert.ok(errorCodes.includes('schedule/invalid-lanes'));
 });
 
 test('balance splits components and rejects zero machines', { skip: skipWithoutNative }, async () => {
@@ -76,6 +78,43 @@ test('balance splits components and rejects zero machines', { skip: skipWithoutN
         await assert.rejects(document.balance(0), (error: unknown) => {
             assert.ok(isOpenSMTError(error));
             assert.equal(error.code, 'balance/invalid-machines');
+            return true;
+        });
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('schedule lanes splits the program and rejects an invalid count', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-lanes-'));
+    const file = path.join(directory, 'panel.osmt');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'R2', package: '0603', x: 50, y: 10 });
+        await document.addComponent({ refdes: 'R3', package: '0603', x: 50, y: 50 });
+
+        const report = await document.lanes(3, 'lpt', true);
+        assert.equal(report.format, 'open-smt-lanes');
+        assert.equal(report.version, 1);
+        assert.equal(report.strategy, 'lpt');
+        assert.equal(report.laneCount, 3);
+        assert.equal(report.lanes.length, 3);
+        assert.deepEqual(
+            report.lanes.flatMap((lane) => lane.tasks).sort(),
+            ['R1', 'R2', 'R3'],
+        );
+        for (const lane of report.lanes) {
+            assert.ok(lane.index < 3);
+        }
+        assert.ok(Math.abs(report.makespan - Math.max(...report.lanes.map((lane) => lane.seconds))) < 1e-9);
+        assert.ok(Math.abs(report.balanceRatio - report.makespan / report.singleLaneSeconds) < 1e-12);
+
+        await assert.rejects(document.lanes(1), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'schedule/invalid-lanes');
             return true;
         });
     } finally {

@@ -27,7 +27,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | paste aperture / stencil generation | ❌ not implemented |
 | vendor machine programs (Fuji, Yamaha, Juki, ASM) | ❌ not implemented |
 | line balancing | ✅ supported |
-| dual-lane scheduling | ✅ supported (greedy or LPT, optional swaps; not optimal) |
+| multi-lane scheduling (2–16 lanes, including the dual-lane report) | ✅ supported (greedy or LPT, optional swaps; not optimal) |
 | KiCad PCB (`.kicad_pcb`) import | ✅ supported |
 | Altium / ODB import | ❌ not implemented |
 
@@ -68,20 +68,23 @@ The machine-readable version is printed by `open-smt capabilities` and by
    produced and the top-level `ok` becomes false. With `optimize` enabled, each
    machine's own program is 2-opt improved independently; assignments, component
    counts, `totalSeconds` conservation and the `imbalance` formula are unchanged.
-6. **Dual-lane schedule.** `planDualLane` (CLI `schedule dual`) derives one
-   task per placement step in the same nearest-neighbour program order. A task's
-   fixed time is `0.6 s + distance from the previous step of the same side /
-   200 mm·s⁻¹`; the times therefore sum to the single-lane placement estimate.
-   The `greedy` strategy (default) visits tasks in program order and the `lpt`
-   strategy visits them by decreasing task time, ties keeping program order.
-   Both give each task to the lane with the smaller accumulated time; a tie goes
-   to the first lane (index 0). Each lane keeps its tasks in program order.
-   `--improve` (or `improve: true`) then exchanges one task of each lane while
-   the slower lane gets faster, up to 64 rounds, and still reports each lane in
-   program order. `makespan` is `max` of the two lane totals and `balanceRatio`
-   is `makespan / singleLaneSeconds`, or zero for an empty document. The report
-   names the assignment in `strategy`. Both strategies and the swap pass are
-   heuristics; none is an optimal two-lane partition.
+6. **Multi-lane schedule.** `planLanes` (CLI `schedule lanes --count <n>`)
+   accepts 2–16 lanes and rejects anything else with `schedule/invalid-lanes`;
+   `planDualLane` (CLI `schedule dual`) is the two-lane special case and keeps
+   its report shape. Both derive one task per placement step in the same
+   nearest-neighbour program order. A task's fixed time is `0.6 s + distance
+   from the previous step of the same side / 200 mm·s⁻¹`; the times therefore
+   sum to the single-lane placement estimate. The `greedy` strategy (default)
+   visits tasks in program order and the `lpt` strategy visits them by
+   decreasing task time, ties keeping program order. Both give each task to the
+   lane with the smaller accumulated time; a tie goes to the lowest lane index.
+   Each lane keeps its tasks in program order. `--improve` (or `improve: true`)
+   then exchanges one task of each lane pair while the slowest lane gets faster,
+   up to 64 rounds, and still reports each lane in program order. `makespan` is
+   the slowest lane total and `balanceRatio` is `makespan / singleLaneSeconds`,
+   or zero for an empty document. The report names the assignment in `strategy`
+   and the lane count in `laneCount`. Both strategies and the swap pass are
+   heuristics; none is an optimal multi-lane partition.
 7. **Panel arithmetic.** `boardCount = rows × columns`,
    `panelWidth = columns × width + (columns − 1) × gapX`, and
    `panelDepth = rows × depth + (rows − 1) × gapY`.
@@ -146,6 +149,8 @@ target file is never overwritten (`file/exists`).
 | `board/invalid` | a board size is not finite and positive |
 | `panel/invalid` | zero rows/columns or a negative gap |
 | `balance/invalid-machines` | a balance requested fewer than 1 or more than 64 machines |
+| `schedule/invalid-strategy` | a schedule requested a strategy other than `greedy` or `lpt` |
+| `schedule/invalid-lanes` | a multi-lane schedule requested fewer than 2 or more than 16 lanes |
 | `component/invalid` | empty refdes/package, non-finite values or bad rotation |
 | `component/duplicate-refdes` | a reference designator is declared twice |
 | `component/outside-board` | a component lies outside the board |
@@ -165,7 +170,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 |------|---------|
 | `tests/place.rs` | allocation order, nearest-first sequence, tie-breaks, panel size, multi-feeder split, determinism, 2-opt never longer than nearest neighbour, an improving crossing route, unchanged single/empty documents, additive report fields, byte-identical default output |
 | `tests/balance.rs` | single-machine parity, component conservation, side order, determinism, empty machines, invalid counts, per-machine feeder shortages, independent per-machine 2-opt, imbalance identity |
-| `tests/dual_lane.rs` | greedy lane assignment, LPT beating greedy, swap-pass improvement and order preservation, explicit greedy parity, one empty lane, empty input, work/ratio arithmetic, per-lane order preservation, placement-program parity, invalid strategy, determinism |
+| `tests/dual_lane.rs` | greedy lane assignment, LPT beating greedy, swap-pass improvement and order preservation, explicit greedy parity, one empty lane, empty input, work/ratio arithmetic, per-lane order preservation, placement-program parity, invalid strategy, determinism, three-lane LPT, task conservation, exact two-lane parity, invalid lane counts |
 | `tests/reflow.rs` | default profile numbers, exact single-zone integral, below-liquidus profile, zone order |
 | `tests/validation.rs` | every code above and warning-only documents |
 | `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as |
@@ -182,10 +187,11 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 - Reflow uses set-points, not measured thermocouple data, and models no
   convection or board thermal mass.
 - Only the top and bottom sides are supported.
-- Dual-lane scheduling assigns whole placement tasks to two lanes with a greedy
-  or longest-processing-time-first rule and an optional single-swap pass. It
-  does not model conveyor lanes, lane transfer, nozzle counts or per-lane
-  re-sequencing, and its result is not an optimal partition.
+- Multi-lane scheduling assigns whole placement tasks to 2–16 lanes with a
+  greedy or longest-processing-time-first rule and an optional pairwise-swap
+  pass. The two-lane report is the special case of the same engine. It does not
+  model conveyor lanes, lane transfer, nozzle counts or per-lane re-sequencing,
+  and its result is not an optimal partition.
 - Line balancing distributes whole components across 1–64 machines but does not
   emit vendor machine programs, model conveyor lanes or account for line
   changeover time.
