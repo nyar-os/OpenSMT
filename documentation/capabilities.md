@@ -15,6 +15,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | component list with side, rotation and height | ✅ supported |
 | partial component update (in-place edit) | ✅ supported |
 | feeder setup with package, pitch, capacity and loaded quantity | ✅ supported |
+| partial feeder update (in-place edit) | ✅ supported |
 | deterministic placement sequence | ✅ supported |
 | optional 2-opt placement optimisation | ✅ supported |
 | feeder allocation by id and loaded quantity | ✅ supported |
@@ -134,6 +135,19 @@ The machine-readable version is printed by `open-smt capabilities` and by
     reports `component/unknown-refdes`. The edited document is validated with the
     same board-bounds, finite-value, side, rotation, package and height rules as
     `component add`, so a failed update writes nothing and keeps the revision.
+12. **Feeder update.** `updateFeeder` (CLI `feeder update <file> --id <id> ...`)
+    applies a partial edit to one feeder and saves one revision. The feeder id
+    identifies the lane and never changes. At least one of `package`, `pitch`,
+    `capacity` or `loaded` must be supplied; omitted fields keep their value. An
+    empty request, an empty package, a non-positive or non-finite pitch, a zero
+    capacity or a loaded quantity above the capacity reports `feeder/invalid`,
+    so lowering `capacity` below the current `loaded` is rejected the same way
+    as `feeder add` rejects `loaded > capacity`. An unknown id reports
+    `feeder/unknown-id`. The edited document is validated with the same feeder
+    rules as `feeder add`, so a failed update writes nothing and keeps the
+    revision. Allocation and the placement program are recomputed from the
+    edited document, so a changed package is reflected by the next
+    `feeders`/`placement` call.
 
 ## KiCad PCB import
 
@@ -249,7 +263,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/dual_lane.rs` | greedy lane assignment, LPT beating greedy, swap-pass improvement and order preservation, explicit greedy parity, one empty lane, empty input, work/ratio arithmetic, per-lane order preservation, placement-program parity, invalid strategy, determinism, three-lane LPT, task conservation, exact two-lane parity, invalid lane counts |
 | `tests/reflow.rs` | default profile numbers, exact single-zone integral, below-liquidus profile, zone order |
 | `tests/validation.rs` | every code above and warning-only documents |
-| `tests/feeder.rs` | package counts, slot numbering in package order, reference designator document order, deduplicated sorted sides, empty document, determinism |
+| `tests/feeder.rs` | package counts, slot numbering in package order, reference designator document order, deduplicated sorted sides, empty document, determinism; partial feeder update (pitch/capacity/loaded, package move reflected by allocation, invalid capacity/loaded/pitch/package, unknown id, empty request, one revision, untouched fields, round trip, determinism) |
 | `tests/panel_fit.rs` | exact-fit 2 × 3 arithmetic, leftover gaps, too-small dimensions, zero waste, gap effects, utilization, stored-gap default versus override, invalid maxima and gaps, determinism, unchanged document |
 | `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as; partial component update (move, rotation normalisation, side and package changes, height set and cleared, untouched fields, invalid requests, one revision, determinism, round trip) |
 | `tests/import.rs` | KiCad footprint mapping, rotation, both sides, reference sources, loss ledger, outline errors, duplicate/missing references, empty board, determinism, existing target; CSV row order, reordered/quoted/UPPERCASE columns, empty lines, side and rotation defaults, duplicate refdes, missing column, invalid number, invalid side, line numbers, negative coordinate, determinism, one revision, existing target |

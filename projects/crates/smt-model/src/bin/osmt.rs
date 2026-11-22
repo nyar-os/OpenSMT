@@ -3,8 +3,8 @@
 use std::{collections::HashMap, env, path::Path, process};
 
 use smt_model::{
-    BalanceReport, Board, Component, ComponentUpdate, DualLaneStrategy, ExportFormat, Feeder, OpenSmt, Panel, ReflowProfile,
-    Side, SmtError, Zone,
+    BalanceReport, Board, Component, ComponentUpdate, DualLaneStrategy, ExportFormat, Feeder, FeederUpdate, OpenSmt, Panel,
+    ReflowProfile, Side, SmtError, Zone,
 };
 
 const USAGE: &str = "\
@@ -23,6 +23,7 @@ Usage:
                      [--x <x>] [--y <y>] [--rotation <deg>] [--height <h>] [--clear-height]
   osmt component remove <file> --refdes <R1>
   osmt feeder add <file> --id <id> --package <pkg> --pitch <mm> --capacity <n> [--loaded <n>]
+  osmt feeder update <file> --id <id> [--package <pkg>] [--pitch <mm>] [--capacity <n>] [--loaded <n>]
   osmt feeder remove <file> --id <id>
   osmt feeder report <file>
   osmt profile set <file> --speed <mm/min> --liquidus <c> --zones \"name:length:temp;...\"
@@ -243,6 +244,17 @@ fn feeder_command(args: &[String]) -> Result<i32, SmtError> {
             }
             print_json(&session(file)?.add_feeder(feeder)?)
         }
+        "update" => {
+            let file = positional(args, 2, "feeder update <file> --id <id>")?;
+            let values = Options::parse(&args[3..], &["--id", "--package", "--pitch", "--capacity", "--loaded"], &[])?;
+            let update = FeederUpdate {
+                package: values.value("--package").map(str::to_string),
+                pitch: values.optional_number("--pitch")?,
+                capacity: values.optional_integer("--capacity")?,
+                loaded: values.optional_integer("--loaded")?,
+            };
+            print_json(&session(file)?.update_feeder(values.require("--id")?, update)?)
+        }
         "remove" => {
             let file = positional(args, 2, "feeder remove <file>")?;
             let values = Options::parse(&args[3..], &["--id"], &[])?;
@@ -252,7 +264,7 @@ fn feeder_command(args: &[String]) -> Result<i32, SmtError> {
             let file = positional(args, 2, "feeder report <file>")?;
             print_json(&session(file)?.feeder_report()?)
         }
-        _ => Err(SmtError::new("cli/missing-argument", "usage: osmt feeder add|remove|report <file> ...")),
+        _ => Err(SmtError::new("cli/missing-argument", "usage: osmt feeder add|update|remove|report <file> ...")),
     }
 }
 

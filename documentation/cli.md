@@ -152,6 +152,25 @@ open-smt feeder add <file> --id <id> --package <pkg> --pitch <mm> --capacity <n>
 `--loaded` defaults to `--capacity`. A loaded quantity larger than the capacity
 is rejected with `feeder/invalid`.
 
+## feeder update
+
+```shell
+open-smt feeder update <file> --id <id> [--package <pkg>] [--pitch <mm>]
+                     [--capacity <n>] [--loaded <n>]
+```
+
+Applies a partial edit to one feeder and writes one revision. `--id` selects the
+feeder and never changes. Every supplied option replaces the stored value and
+omitted options keep theirs, so the command must name at least one field. An
+empty edit, an empty package, a non-positive or non-finite pitch, a capacity
+below 1 or a loaded quantity above the capacity reports `feeder/invalid`; an
+unknown `--id` reports `feeder/unknown-id`. Lowering `--capacity` below the
+current loaded quantity is rejected the same way as `feeder add` rejects
+`--loaded` above `--capacity`. The edited document is checked with the same
+feeder rules as `feeder add`, so a failed update writes nothing and keeps the
+revision. Allocation and the placement program are recomputed from the document,
+so a changed package is visible to the next `feeders` and `placement` call.
+
 ## feeder remove
 
 ```shell
@@ -333,6 +352,7 @@ open-smt component update panel.osmt --refdes R1 --x 20 --y 15 --rotation 90
 open-smt component update panel.osmt --refdes U1 --clear-height
 open-smt feeder add panel.osmt --id F1 --package 0603 --pitch 4 --capacity 500
 open-smt feeder add panel.osmt --id F2 --package QFN-32 --pitch 12 --capacity 50
+open-smt feeder update panel.osmt --id F1 --loaded 300
 open-smt feeder report panel.osmt
 open-smt validate panel.osmt
 open-smt placement panel.osmt

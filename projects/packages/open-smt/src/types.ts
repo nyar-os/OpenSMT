@@ -418,6 +418,19 @@ export interface FeederRequest {
     readonly loaded?: number;
 }
 
+/**
+ * Request of `updateFeeder()`; the id identifies the feeder.
+ *
+ * Every supplied field replaces the stored value and omitted fields keep
+ * theirs, so at least one field must be supplied.
+ */
+export interface FeederUpdateRequest {
+    readonly package?: string;
+    readonly pitch?: number;
+    readonly capacity?: number;
+    readonly loaded?: number;
+}
+
 /** Request of `setProfile()`. */
 export interface ReflowProfileRequest {
     readonly conveyorSpeed: number;

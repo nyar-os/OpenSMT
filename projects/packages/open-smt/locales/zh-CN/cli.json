@@ -12,6 +12,7 @@
             "open-smt component update <file> --refdes <R1> [--package <pkg>] [--side top|bottom] [--x <x>] [--y <y>] [--rotation <deg>] [--height <h>] [--clear-height]",
             "open-smt component remove <file> --refdes <R1>",
             "open-smt feeder add <file> --id <id> --package <pkg> --pitch <mm> --capacity <n> [--loaded <n>]",
+            "open-smt feeder update <file> --id <id> [--package <pkg>] [--pitch <mm>] [--capacity <n>] [--loaded <n>]",
             "open-smt feeder remove <file> --id <id>",
             "open-smt feeder report <file>",
             "open-smt profile set <file> --speed <mm/min> --liquidus <c> --zones \"name:length:temp;...\"",

@@ -443,6 +443,23 @@ async function feederCommand(args: readonly string[]): Promise<number> {
             },
         );
     }
+    if (action === 'update') {
+        return editDocument(
+            args.slice(1),
+            'feeder update <file> --id <id> [--package <pkg>] [--pitch <mm>] [--capacity <n>] [--loaded <n>]',
+            ['--id', '--package', '--pitch', '--capacity', '--loaded'],
+            async (document, parsed) => {
+                print(
+                    await document.updateFeeder(required(parsed, '--id'), {
+                        package: parsed.options.get('--package'),
+                        pitch: number(parsed, '--pitch'),
+                        capacity: parsed.options.has('--capacity') ? integer(parsed, '--capacity') : undefined,
+                        loaded: parsed.options.has('--loaded') ? integer(parsed, '--loaded') : undefined,
+                    }),
+                );
+            },
+        );
+    }
     if (action === 'remove') {
         return editDocument(args.slice(1), 'feeder remove <file>', ['--id'], async (document, parsed) => {
             print(await document.removeFeeder(required(parsed, '--id')));
@@ -453,7 +470,7 @@ async function feederCommand(args: readonly string[]): Promise<number> {
             print(await document.feederReport());
         });
     }
-    throw failure('cli/missing-argument', 'missingArgument', { usage: 'feeder add|remove|report <file> ...' });
+    throw failure('cli/missing-argument', 'missingArgument', { usage: 'feeder add|update|remove|report <file> ...' });
 }
 
 async function scheduleCommand(args: readonly string[]): Promise<number> {

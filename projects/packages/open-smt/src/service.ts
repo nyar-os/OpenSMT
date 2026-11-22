@@ -20,6 +20,7 @@ import type {
     FeederLoadingReport,
     FeederReport,
     FeederRequest,
+    FeederUpdateRequest,
     ImportReport,
     LanesReport,
     PanelFitReport,
@@ -145,6 +146,13 @@ export function removeComponent(path: string, refdes: string): DocumentSummary {
 /** Adds a feeder and returns the updated summary. */
 export function addFeeder(path: string, request: FeederRequest): DocumentSummary {
     return decode<DocumentSummary>(() => binding('feeder.add').feeder_add(path, JSON.stringify(request)));
+}
+
+/** Applies a partial edit to a feeder and returns the updated summary. */
+export function updateFeeder(path: string, id: string, request: FeederUpdateRequest): DocumentSummary {
+    return decode<DocumentSummary>(() =>
+        binding('feeder.update').feeder_update(path, JSON.stringify({ id, ...request })),
+    );
 }
 
 /** Removes a feeder and returns the updated summary. */

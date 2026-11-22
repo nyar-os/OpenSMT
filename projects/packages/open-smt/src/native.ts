@@ -26,6 +26,7 @@ export interface NativeBinding {
     component_update(path: string, requestJson: string): string;
     component_remove(path: string, requestJson: string): string;
     feeder_add(path: string, requestJson: string): string;
+    feeder_update(path: string, requestJson: string): string;
     feeder_remove(path: string, requestJson: string): string;
     profile_set(path: string, requestJson: string): string;
     validate(path: string): string;

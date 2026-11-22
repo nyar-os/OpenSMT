@@ -170,6 +170,29 @@ impl ComponentUpdate {
     }
 }
 
+/// Partial in-place edit of one feeder.
+///
+/// Every supplied field replaces the stored value; omitted fields keep theirs.
+/// The feeder id is never part of the request because it identifies the feeder.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FeederUpdate {
+    /// Replacement package identifier.
+    pub package: Option<String>,
+    /// Replacement tape pitch in millimetres.
+    pub pitch: Option<f64>,
+    /// Replacement maximum lane capacity.
+    pub capacity: Option<u32>,
+    /// Replacement loaded quantity.
+    pub loaded: Option<u32>,
+}
+
+impl FeederUpdate {
+    /// Returns whether the request names no field at all.
+    pub const fn is_empty(&self) -> bool {
+        self.package.is_none() && self.pitch.is_none() && self.capacity.is_none() && self.loaded.is_none()
+    }
+}
+
 /// One document session.
 #[derive(Debug, Default)]
 pub struct OpenSmt {
@@ -382,6 +405,38 @@ impl OpenSmt {
             return Err(SmtError::new("feeder/duplicate-id", format!("feeder `{}` already exists", feeder.id)));
         }
         document.feeders.push(feeder);
+        self.persist(document)
+    }
+
+    /// Applies a partial edit to a feeder and saves the document.
+    ///
+    /// `id` selects the feeder and never changes. The request must name at
+    /// least one field; an empty request reports `feeder/invalid`. An unknown
+    /// id reports `feeder/unknown-id`. The edited document is validated with
+    /// the same feeder rules as [`OpenSmt::add_feeder`], so an empty package, a
+    /// non-positive or non-finite pitch, a zero capacity or a loaded quantity
+    /// above the capacity reports `feeder/invalid` and nothing is written.
+    pub fn update_feeder(&mut self, id: &str, request: FeederUpdate) -> Result<DocumentSummary, SmtError> {
+        let mut document = self.document()?.clone();
+        if request.is_empty() {
+            return Err(SmtError::new("feeder/invalid", "feeder update needs at least one field"));
+        }
+        let Some(feeder) = document.feeders.iter_mut().find(|feeder| feeder.id == id)
+        else {
+            return Err(SmtError::new("feeder/unknown-id", format!("feeder `{id}` does not exist")));
+        };
+        if let Some(package) = request.package {
+            feeder.package = package;
+        }
+        if let Some(pitch) = request.pitch {
+            feeder.pitch = pitch;
+        }
+        if let Some(capacity) = request.capacity {
+            feeder.capacity = capacity;
+        }
+        if let Some(loaded) = request.loaded {
+            feeder.loaded = loaded;
+        }
         self.persist(document)
     }
 

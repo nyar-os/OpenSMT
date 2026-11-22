@@ -28,6 +28,8 @@ open-smt component update <file> --refdes <R1> [--package <pkg>]
 open-smt component remove <file> --refdes <R1>
 open-smt feeder add <file> --id <id> --package <pkg> --pitch <mm> --capacity <n>
                      [--loaded <n>]
+open-smt feeder update <file> --id <id> [--package <pkg>] [--pitch <mm>]
+                     [--capacity <n>] [--loaded <n>]
 open-smt feeder remove <file> --id <id>
 open-smt profile set <file> --speed <mm/min> --liquidus <c>
                      --zones "name:length:temp;..."
@@ -85,6 +87,7 @@ await document.updateComponent('R1', { x: 20, y: 15, rotation: 450, height: 0.8 
 await document.updateComponent('U1', { clearHeight: true });
 await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 500 });
 await document.addFeeder({ id: 'F2', package: 'QFN-32', pitch: 12, capacity: 50, loaded: 20 });
+await document.updateFeeder('F2', { pitch: 8, loaded: 40 });
 
 const report = await document.report();
 console.log(report.placement.entries.length, report.reflow.timeAboveLiquidus);

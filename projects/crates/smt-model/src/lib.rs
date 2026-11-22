@@ -54,7 +54,7 @@ pub use crate::{
         allocate as allocate_feeders, sequence as sequence_placement, sequence_with as sequence_placement_with,
     },
     reflow::{AMBIENT, ReflowReport, ZoneReport, evaluate as evaluate_reflow},
-    session::{ComponentUpdate, DEFAULT_BOARD, DocumentSummary, ExportFormat, ExportReport, OpenSmt, Report},
+    session::{ComponentUpdate, DEFAULT_BOARD, DocumentSummary, ExportFormat, ExportReport, FeederUpdate, OpenSmt, Report},
     validate::{Issue, Severity, ValidationReport},
 };
 

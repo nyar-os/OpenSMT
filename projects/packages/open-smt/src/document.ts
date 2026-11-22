@@ -22,6 +22,7 @@ import type {
     FeederLoadingReport,
     FeederReport,
     FeederRequest,
+    FeederUpdateRequest,
     LanesReport,
     Panel,
     PanelFitReport,
@@ -122,6 +123,13 @@ export class SmtDocument {
     async addFeeder(request: FeederRequest): Promise<DocumentSummary> {
         this.assertOpen();
         this.state = service.addFeeder(this.state.path, request);
+        return this.state;
+    }
+
+    /** Applies a partial edit to a feeder. */
+    async updateFeeder(id: string, request: FeederUpdateRequest): Promise<DocumentSummary> {
+        this.assertOpen();
+        this.state = service.updateFeeder(this.state.path, id, request);
         return this.state;
     }
 

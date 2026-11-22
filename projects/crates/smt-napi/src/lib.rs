@@ -15,8 +15,8 @@ use std::path::Path;
 use serde::Serialize;
 use serde_json::Value;
 use smt_model::{
-    Board, Component, ComponentUpdate, DualLaneStrategy, ExportFormat, Feeder, OpenSmt, Panel, ReflowProfile, Side, SmtError,
-    Zone,
+    Board, Component, ComponentUpdate, DualLaneStrategy, ExportFormat, Feeder, FeederUpdate, OpenSmt, Panel, ReflowProfile,
+    Side, SmtError, Zone,
 };
 use wae::{CallContext, Error, JsValue, Result, function, register_module};
 
@@ -283,6 +283,27 @@ fn feeder_add(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &summary)
 }
 
+/// Applies a partial edit to a feeder and saves the document.
+///
+/// The request carries `id` plus any of `package`, `pitch`, `capacity` and
+/// `loaded`.
+#[function]
+fn feeder_update(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let request = object(&ctx, 1)?;
+    let id = text_field(&request, "id")?;
+    let update = FeederUpdate {
+        package: optional_text_field(&request, "package")?,
+        pitch: number_field(&request, "pitch")?,
+        capacity: optional_u32(&request, "capacity")?,
+        loaded: optional_u32(&request, "loaded")?,
+    };
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let summary = session.update_feeder(&id, update).map_err(fail)?;
+    respond(&ctx, &summary)
+}
+
 /// Removes a feeder and saves the document.
 #[function]
 fn feeder_remove(ctx: CallContext) -> Result<JsValue> {
@@ -483,6 +504,7 @@ register_module![
     component_update,
     component_remove,
     feeder_add,
+    feeder_update,
     feeder_remove,
     profile_set,
     validate,
