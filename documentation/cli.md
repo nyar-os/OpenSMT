@@ -22,6 +22,27 @@ Writes a document with `open-smt` format version 1, units `mm`, revision 0, a
 four-zone reflow profile (600 mm/min, liquidus 217 °C). An existing file is
 rejected with `file/exists`.
 
+## import
+
+```shell
+open-smt import <file.kicad_pcb> --out <file.osmt>
+```
+
+Reads a KiCad PCB and writes a new millimetre document. `--out` must not exist
+yet; an existing target reports `file/exists`. The JSON import report contains
+`format` (`kicad_pcb`), `losses` (one `code`/`count` entry per skipped construct
+category), `componentCount` and `board`.
+
+Only footprints on `F.Cu`/`B.Cu` and straight `Edge.Cuts` lines that close one
+axis-aligned rectangle are imported. The reference designator comes from
+`(property "Reference" ...)` or `(fp_text reference ...)`; footprints without
+one, or with a repeated one, are skipped and counted in `losses`. Component
+coordinates are translated so the outline corner is the origin, rotation is
+normalised to `[0, 360)` and height stays `null`. A missing or non-rectangular
+outline reports `import/outline-unsupported`, and a file that is not a
+`kicad_pcb` S-expression reports `import/parse`. The loss codes are listed in
+[capabilities.md](capabilities.md).
+
 ## board
 
 ```shell
@@ -157,8 +178,9 @@ open-smt export <file> --format program|feeders|json|md --out <path>
 | `json` | the full report |
 | `md` | Markdown board, feeder, reflow and program tables |
 
-`kicad`, `altium` and `odb` are declared but unimplemented and exit with code
-`2`.
+These are export formats. `kicad`, `altium` and `odb` are still declared but
+unimplemented and exit with code `2`. The separate `import` command reads a
+`.kicad_pcb` source into a new document.
 
 ## report
 
@@ -181,6 +203,7 @@ Prints the machine-readable capability matrix.
 
 ```shell
 open-smt create panel.osmt
+open-smt import board.kicad_pcb --out imported.osmt
 open-smt board panel.osmt --width 120 --depth 90 --thickness 1.6
 open-smt panel panel.osmt --rows 2 --columns 2 --gap-x 5 --gap-y 5
 open-smt component add panel.osmt --refdes R1 --package 0603 --x 10 --y 10

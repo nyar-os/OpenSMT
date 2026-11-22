@@ -16,6 +16,7 @@ import type {
     ExportReport,
     FeederReport,
     FeederRequest,
+    ImportReport,
     PanelRequest,
     PlacementReport,
     ReflowProfileRequest,
@@ -65,11 +66,13 @@ export function capabilities() {
     const matrix = decode<{
         analysis: Record<string, 'supported' | 'unsupported'>;
         io: Record<string, 'supported' | 'unsupported'>;
+        imports: Record<string, 'supported' | 'unsupported'>;
     }>(() => binding('capabilities').capabilities());
     return {
         engine: { package: 'open-smt-napi', version: version() },
         analysis: matrix.analysis,
         io: matrix.io,
+        imports: matrix.imports,
     };
 }
 
@@ -81,6 +84,11 @@ export function create(path: string): DocumentSummary {
 /** Opens a document and returns its summary. */
 export function open(path: string): DocumentSummary {
     return decode<DocumentSummary>(() => binding('open').open(path));
+}
+
+/** Imports a KiCad PCB into a new document at `target`. */
+export function importKicad(source: string, target: string): ImportReport {
+    return decode<ImportReport>(() => binding('import').import(source, target));
 }
 
 /** Writes a document to `target`, or in place when `target` is undefined. */

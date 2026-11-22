@@ -16,6 +16,7 @@ use crate::{
     CAPABILITIES_JSON, SmtError,
     balance::{self, BalanceReport},
     export::{feeder_csv, markdown, program_csv, write_atomic},
+    import::ImportReport,
     model::{Board, Component, Feeder, Panel, ReflowProfile, SmtDocument, UNITS},
     place::{self, FeederReport, PlacementReport},
     reflow::{self, ReflowReport},
@@ -169,6 +170,42 @@ impl OpenSmt {
         self.path = Some(path.to_path_buf());
         self.document = Some(document);
         self.summary()
+    }
+
+    /// Imports a KiCad PCB into a new document at `target`.
+    ///
+    /// Only the rectangular `Edge.Cuts` outline and one component per footprint
+    /// are imported; every other construct is counted in the returned loss
+    /// ledger. The target must not exist yet.
+    pub fn import(&mut self, source: &Path, target: &Path) -> Result<ImportReport, SmtError> {
+        if target.exists() {
+            return Err(SmtError::new("file/exists", format!("`{}` already exists", target.display())));
+        }
+        let source_text = fs::read_to_string(source)
+            .map_err(|error| SmtError::new("io/read", format!("cannot read `{}`: {error}", source.display())))?;
+        let imported = crate::import::parse(&source_text)?;
+        let losses = imported.loss_entries();
+        let crate::import::Imported { board, components, .. } = imported;
+
+        let mut document = SmtDocument::new(board);
+        document.components = components;
+        let report = validate::validate(&document);
+        // Imported documents carry no feeders yet; those coverage errors are
+        // reported by `validate` once the setup exists and must not block the
+        // import, exactly like an edit that adds components first.
+        if let Some(issue) = report.issues.iter().find(|issue| {
+            issue.severity == crate::Severity::Error && issue.code != "feeder/missing" && issue.code != "feeder/capacity"
+        }) {
+            return Err(SmtError::new(issue.code.clone(), issue.message.clone()));
+        }
+
+        let text =
+            serde_json::to_string_pretty(&document).map_err(|error| SmtError::new("document/serialize", error.to_string()))?;
+        write_atomic(target, &text)?;
+        let component_count = document.components.len();
+        self.path = Some(target.to_path_buf());
+        self.document = Some(document);
+        Ok(ImportReport { format: crate::import::FORMAT.to_string(), losses, component_count, board })
     }
 
     /// Writes the open document in place, or to `target` when supplied.

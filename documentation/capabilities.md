@@ -28,7 +28,8 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | vendor machine programs (Fuji, Yamaha, Juki, ASM) | ❌ not implemented |
 | line balancing | ✅ supported |
 | dual-lane scheduling | ❌ not implemented |
-| KiCad / Altium / ODB import | ❌ not implemented |
+| KiCad PCB (`.kicad_pcb`) import | ✅ supported |
+| Altium / ODB import | ❌ not implemented |
 
 ## Algorithms
 
@@ -76,11 +77,58 @@ The machine-readable version is printed by `open-smt capabilities` and by
    each ramp, including partial crossings in either direction. Peak temperature
    is the highest set-point.
 
+## KiCad PCB import
+
+`open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
+dialect KiCad writes. Only one slice of it can become an OpenSMT document:
+
+- **Outline.** The `Edge.Cuts` layer must consist of straight lines that close
+  exactly one axis-aligned rectangle. Multiple collinear lines per edge are
+  accepted. A missing outline, a gap, a diagonal, or any other `Edge.Cuts`
+  construct is refused with `import/outline-unsupported`; the reader never
+  substitutes a bounding box.
+- **Components.** Each `(footprint "Package" (layer "F.Cu"|"B.Cu") (at x y rot))`
+  becomes one component: `package` is the footprint name, `x`/`y` are millimetres
+  translated so the outline corner is `(0, 0)`, `rotation` is normalised to
+  `[0, 360)`, and `side` is `top` for `F.Cu` and `bottom` for `B.Cu`. The
+  reference designator comes from `(property "Reference" ...)` or, for older
+  files, from `(fp_text reference ...)`.
+- **Height.** This subset carries no component height, so `height` stays
+  `null`. Board thickness also comes from no field in the subset; the imported
+  board uses the 1.6 mm default.
+
+Everything else is skipped rather than approximated, and the import report
+counts each skipped construct by category. The ledger is sorted by code and
+deterministic.
+
+| Loss code | Skipped construct |
+|-----------|-------------------|
+| `kicad/footprint-graphics` | `fp_line`, `fp_arc`, `fp_curve`, `fp_poly`, `fp_rect`, `fp_circle` |
+| `kicad/footprint-text` | `fp_text` other than the reference |
+| `kicad/footprint-property` | `property` other than `Reference` |
+| `kicad/footprint-model` | `model` |
+| `kicad/pad-not-imported` | `pad` |
+| `kicad/zone-not-imported` | `zone` |
+| `kicad/construct-not-imported` | any other skipped line, segment, via, graphic or construct |
+| `kicad/footprint-invalid` | footprint without a usable name or position |
+| `kicad/footprint-layer-missing` | footprint without a `layer` |
+| `kicad/footprint-layer-unsupported` | footprint on a layer other than `F.Cu`/`B.Cu` |
+| `kicad/footprint-without-reference` | footprint without a reference designator, skipped |
+| `kicad/footprint-duplicate-reference` | repeated reference designator, skipped |
+
+A footprint that is skipped by a reference or layer loss no longer contributes
+its internal constructs to the ledger. Components are validated with the same
+rules as hand-entered components; the imported document may still report
+`feeder/missing` and `feeder/capacity` until a feeder setup exists. An existing
+target file is never overwritten (`file/exists`).
+
 ## Validation
 
 | Code | Meaning |
 |------|---------|
 | `document/format`, `document/version`, `document/units` | not an OpenSMT millimetre document |
+| `import/parse` | the file is not a KiCad PCB S-expression |
+| `import/outline-unsupported` | `Edge.Cuts` is missing or is not one axis-aligned rectangle |
 | `board/invalid` | a board size is not finite and positive |
 | `panel/invalid` | zero rows/columns or a negative gap |
 | `balance/invalid-machines` | a balance requested fewer than 1 or more than 64 machines |
@@ -106,6 +154,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/reflow.rs` | default profile numbers, exact single-zone integral, below-liquidus profile, zone order |
 | `tests/validation.rs` | every code above and warning-only documents |
 | `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as |
+| `tests/import.rs` | KiCad footprint mapping, rotation, both sides, reference sources, loss ledger, outline errors, duplicate/missing references, empty board, determinism, existing target |
 | `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon and a native-gated balance smoke |
 
 ## Limitations
@@ -123,3 +172,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   emit vendor machine programs, model conveyor lanes or account for line
   changeover time.
 - Vendor dialects and paste apertures are out of scope and reported as such.
+- KiCad import covers the component list and a rectangular outline only. Nets,
+  tracks, vias, pads, zones, graphics and 3D models are counted in the loss
+  ledger and are not part of the document. Altium and ODB import remain
+  unimplemented.

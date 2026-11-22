@@ -3,6 +3,7 @@
         "intro": "open-smt - OpenSMT placement, feeder and reflow planner (millimetres, degrees Celsius)",
         "usage": [
             "open-smt create <file.osmt>",
+            "open-smt import <file.kicad_pcb> --out <file.osmt>",
             "open-smt board <file> --width <w> --depth <d> --thickness <t>",
             "open-smt panel <file> --rows <r> --columns <c> [--gap-x <g>] [--gap-y <g>]",
             "open-smt component add <file> --refdes <R1> --package <pkg> --x <x> --y <y> [--side top|bottom] [--rotation <deg>] [--height <h>]",

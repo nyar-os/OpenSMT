@@ -235,6 +235,13 @@ async function dispatch(args: readonly string[]): Promise<number> {
                 print(await document.save());
                 return 0;
             });
+        case 'import':
+            return withSession(async (session) => {
+                const parsed = parse(args.slice(1), ['--out'], []);
+                const source = positional(parsed, 0, 'import <file.kicad_pcb> --out <file.osmt>');
+                print(await session.import(source, required(parsed, '--out')));
+                return 0;
+            });
         case 'board':
             return editDocument(args.slice(1), 'board <file>', ['--width', '--depth', '--thickness'], async (document, parsed) => {
                 print(

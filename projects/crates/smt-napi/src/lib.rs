@@ -114,6 +114,16 @@ fn open(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &summary)
 }
 
+/// Imports a KiCad PCB into a new document and returns the import report.
+#[function]
+fn import(ctx: CallContext) -> Result<JsValue> {
+    let source = text(&ctx, 0)?;
+    let target = text(&ctx, 1)?;
+    let mut session = OpenSmt::new();
+    let report = session.import(Path::new(&source), Path::new(&target)).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Writes the open document to `target`, or in place, and returns its summary.
 #[function]
 fn save(ctx: CallContext) -> Result<JsValue> {
@@ -337,6 +347,7 @@ register_module![
     capabilities,
     create,
     open,
+    import,
     save,
     board_set,
     panel_set,

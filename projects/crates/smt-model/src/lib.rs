@@ -22,6 +22,7 @@
 mod balance;
 mod error;
 mod export;
+mod import;
 mod model;
 mod place;
 mod reflow;
@@ -32,6 +33,7 @@ pub use crate::{
     balance::{BalanceReport, MAX_MACHINES, MIN_MACHINES, MachineFeeder, MachineReport, balance, balance_with},
     error::{SmtError, not_implemented},
     export::{feeder_csv, markdown, program_csv, write_atomic},
+    import::{ImportLoss, ImportReport},
     model::{Board, Component, FORMAT, Feeder, Panel, ReflowProfile, Side, SmtDocument, UNITS, VERSION, Zone},
     place::{
         FeederReport, FeederUsage, HEAD_SPEED, PLACE_SECONDS, PackageUsage, PlacementEntry, PlacementReport,
@@ -65,5 +67,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "kicad": "unsupported",
     "altium": "unsupported",
     "odb": "unsupported"
+  },
+  "imports": {
+    "kicad_pcb": "supported"
   }
 }"#;

@@ -20,6 +20,8 @@ export const errorCodes = [
     'document/format',
     'document/version',
     'document/units',
+    'import/parse',
+    'import/outline-unsupported',
     'board/invalid',
     'panel/invalid',
     'balance/invalid-machines',

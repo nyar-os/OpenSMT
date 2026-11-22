@@ -8,7 +8,7 @@
 import { SmtDocument } from './document.js';
 import { OpenSMTError } from './errors.js';
 import * as service from './service.js';
-import type { OpenSMTCapabilities, OpenSMTOptions } from './types.js';
+import type { ImportReport, OpenSMTCapabilities, OpenSMTOptions } from './types.js';
 
 /** Assembly session. One instance owns the documents it opens. */
 export class OpenSMT {
@@ -48,6 +48,14 @@ export class OpenSMT {
         const document = new SmtDocument(service.open(path));
         this.documents.add(document);
         return document;
+    }
+
+    /** Imports a KiCad PCB into a new document at `target` and returns the report. */
+    async import(source: string, target: string): Promise<ImportReport> {
+        this.assertActive();
+        assertPath(source);
+        assertPath(target);
+        return service.importKicad(source, target);
     }
 
     /** Closes every document the session still owns. Idempotent. */

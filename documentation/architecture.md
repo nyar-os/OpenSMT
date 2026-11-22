@@ -86,7 +86,7 @@ but unimplemented routes and maps to exit code `2`.
 
 ## Node-API surface
 
-`version`, `capabilities`, `create`, `open`, `save`, `board_set`, `panel_set`,
+`version`, `capabilities`, `create`, `open`, `import`, `save`, `board_set`, `panel_set`,
 `component_add`, `component_remove`, `feeder_add`, `feeder_remove`,
 `profile_set`, `validate`, `placement`, `feeders`, `balance`, `reflow`, `export`,
 `report`.

@@ -55,6 +55,7 @@ documentation/cli.md and documentation/capabilities.md before claiming a result.
 pnpm add @wae/open-smt
 
 pnpm exec open-smt create panel.osmt
+pnpm exec open-smt import board.kicad_pcb --out board.osmt
 pnpm exec open-smt board panel.osmt --width 100 --depth 80 --thickness 1.6
 pnpm exec open-smt component add panel.osmt --refdes R1 --package 0603 --x 10 --y 10
 pnpm exec open-smt component add panel.osmt --refdes R2 --package 0603 --x 40 --y 20
@@ -102,6 +103,10 @@ implemented.
 - **Panel arithmetic** — board count, panel width and depth including gaps.
 - **Reflow integration** — time above liquidus is integrated over linear zone
   ramps, not approximated by zone count.
+- **KiCad PCB import** — `import board.kicad_pcb --out board.osmt` turns
+  footprints on `F.Cu`/`B.Cu` and a rectangular `Edge.Cuts` outline into a
+  millimetre document, and counts every skipped pad, graphic, zone or model in a
+  stable loss ledger.
 - **Machine-readable setup** — placement CSV, feeder CSV, JSON and Markdown.
 - **Honest validation** — every finding carries a stable code; the capability
   matrix is the only support claim.

@@ -17,6 +17,7 @@ result.
 
 ```text
 open-smt create <file.osmt>
+open-smt import <file.kicad_pcb> --out <file.osmt>
 open-smt board <file> --width <w> --depth <d> --thickness <t>
 open-smt panel <file> --rows <r> --columns <c> [--gap-x <g>] [--gap-y <g>]
 open-smt component add <file> --refdes <R1> --package <pkg> --x <x> --y <y>
@@ -48,6 +49,13 @@ open-smt placement panel.osmt
 open-smt reflow panel.osmt
 open-smt export panel.osmt --format program --out program.csv
 ```
+
+`import` reads a KiCad `.kicad_pcb` file and writes a new `.osmt` document. It
+imports footprints on `F.Cu`/`B.Cu` and a rectangular `Edge.Cuts` outline only,
+translates coordinates so the outline corner is the origin, and returns a report
+with `componentCount`, `board` and a `losses` ledger of skipped construct
+categories. An existing `--out` file reports `file/exists`; a missing or
+non-rectangular outline reports `import/outline-unsupported`.
 
 `placement` prints the program and can write it as JSON; `feeders` prints the
 allocation and can write a CSV setup sheet; `balance` prints a human-readable

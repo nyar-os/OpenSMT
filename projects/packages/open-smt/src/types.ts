@@ -229,6 +229,26 @@ export interface ExportReport {
     readonly bytes: number;
 }
 
+/** One aggregated entry of an import loss ledger. */
+export interface ImportLoss {
+    /** Stable code describing the skipped construct. */
+    readonly code: string;
+    /** Number of source constructs counted under `code`. */
+    readonly count: number;
+}
+
+/** Result of `import()`. */
+export interface ImportReport {
+    /** Source format identifier; `kicad_pcb`. */
+    readonly format: string;
+    /** Aggregated losses in code order. */
+    readonly losses: readonly ImportLoss[];
+    /** Number of components written to the document. */
+    readonly componentCount: number;
+    /** Board derived from the source outline. */
+    readonly board: Board;
+}
+
 /** Session options. Constructing a session opens no file. */
 export interface OpenSMTOptions {
     /** BCP-47 tag used to pick the CLI locale. Defaults to `en-US`. */
@@ -285,4 +305,5 @@ export interface OpenSMTCapabilities {
     readonly engine: { readonly package: string; readonly version: string };
     readonly analysis: Readonly<Record<string, SupportLevel>>;
     readonly io: Readonly<Record<string, SupportLevel>>;
+    readonly imports: Readonly<Record<string, SupportLevel>>;
 }

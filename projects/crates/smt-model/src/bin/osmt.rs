@@ -9,6 +9,7 @@ osmt - OpenSMT placement, feeder and reflow planner (millimetres, degrees Celsiu
 
 Usage:
   osmt create <file.osmt>
+  osmt import <file.kicad_pcb> --out <file.osmt>
   osmt board <file> --width <w> --depth <d> --thickness <t>
   osmt panel <file> --rows <r> --columns <c> [--gap-x <g>] [--gap-y <g>]
   osmt component add <file> --refdes <R1> --package <pkg> --x <x> --y <y>
@@ -62,6 +63,12 @@ fn run(args: &[String]) -> Result<i32, SmtError> {
         "create" => {
             let file = positional(args, 1, "create <file>")?;
             print_json(&OpenSmt::new().create(Path::new(file))?)
+        }
+        "import" => {
+            let file = positional(args, 1, "import <file.kicad_pcb> --out <file.osmt>")?;
+            let values = Options::parse(&args[2..], &["--out"], &[])?;
+            let target = values.require("--out")?;
+            print_json(&OpenSmt::new().import(Path::new(file), Path::new(target))?)
         }
         "board" => {
             let file = positional(args, 1, "board <file>")?;
