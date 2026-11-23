@@ -216,6 +216,27 @@ absolute slot-to-slot moves between consecutive picks, restarting from slot
 position zero at the start of every side. The assignment is a heuristic, not
 an optimal slot permutation, and the document is not modified.
 
+### feeder consumption
+
+```shell
+open-smt feeder consumption <file> --boards <n>
+```
+
+Prints a read-only feeder consumption plan for `n` boards as JSON. The command
+runs the same feeder allocation as `feeders`, so a lane's per-board picks equal
+its `assigned` count, and multiplies them by `--boards`. `--boards` is required
+and must be a positive integer; `0` reports `consumption/invalid` and exits with
+code `1`. The report contains `format` (`open-smt-consumption`), `version`,
+`units`, `boards`, `componentsPerBoard`, `totalPicks`, one `packages` entry per
+package in name order (`package`, `componentsPerBoard`, `totalPicks`, `feeders`,
+`reels`, `short`) and one `feeders` entry per lane in id order (`id`, `package`,
+`picksPerBoard`, `picks`, `capacity`, `loaded`, `reels`, `remainder`, `short`).
+A lane's `reels` is `ceil(picks / capacity)` and `remainder` is the part count
+on the last reel; `short` is `picks > loaded`, so a run that needs more than one
+reel is always short. `ok` is true when no lane is short. Missing or undersized
+feeders fail like `feeders` (`feeder/missing`, `feeder/capacity`). The document
+is not modified.
+
 ## bom check
 
 ```shell
@@ -343,6 +364,29 @@ open-smt reflow <file>
 Prints peak temperature, total time, time above liquidus and one entry per zone
 with entry/exit temperature and seconds above liquidus.
 
+### reflow window
+
+```shell
+open-smt reflow window <file> [--peak-min <c>] [--peak-max <c>] [--tal-min <s>] [--tal-max <s>] [--max-ramp <c/s>] [--max-cooling <c/s>]
+```
+
+Prints a read-only reflow process-window report as JSON. It reruns `reflow` and
+derives the signed rate of every zone, `(exit − entry) / seconds`; ramp rates are
+degrees Celsius per second. The report contains `format`
+(`open-smt-reflow-window`), `version`, `units`, `temperatureUnit`,
+`conveyorSpeed`, `liquidus`, `peakTemperature`, `timeAboveLiquidus`,
+`totalSeconds`, `maxHeatingRate`, `maxCoolingRate`, one `zones` entry per zone
+(`name`, `seconds`, `entryTemperature`, `exitTemperature`, `rampRate`), the
+`checks` and `ok`. Every supplied option adds one check in this order: peak
+minimum, peak maximum, time-above-liquidus minimum, time-above-liquidus maximum,
+max heating rate and max cooling rate. A check has `metric`, `kind` (`min` or
+`max`), `value`, `limit`, `margin` and `pass`; `margin` is `value − limit` for a
+minimum and `limit − value` for a maximum, and `pass` is `margin >= 0`. `ok` is
+true when every check passes and when no limit is supplied. A limit must be
+finite and non-negative, and a minimum may not exceed its maximum, otherwise the
+command reports `reflow/invalid` and exits with code `1`. The document is not
+modified.
+
 ## takt
 
 ```shell
@@ -439,12 +483,14 @@ open-smt feeder add panel.osmt --id F2 --package QFN-32 --pitch 12 --capacity 50
 open-smt feeder update panel.osmt --id F1 --loaded 300
 open-smt feeder report panel.osmt
 open-smt feeder optimize panel.osmt --slot-pitch 16
+open-smt feeder consumption panel.osmt --boards 250
 open-smt bom check panel.osmt --bom bom.csv
 open-smt validate panel.osmt
 open-smt placement panel.osmt
 open-smt schedule dual panel.osmt
 open-smt schedule lanes panel.osmt --count 3 --strategy lpt --improve
 open-smt reflow panel.osmt
+open-smt reflow window panel.osmt --peak-max 250 --tal-max 60 --max-ramp 5
 open-smt takt panel.osmt --machines 2
 open-smt changeover panel.osmt job-b.osmt
 open-smt export panel.osmt --format program --out program.csv

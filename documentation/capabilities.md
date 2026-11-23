@@ -26,6 +26,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | panel fit report (boards fitting a maximum panel size) | ✅ supported |
 | reflow zone report and peak temperature | ✅ supported |
 | time above liquidus over linear ramps | ✅ supported |
+| reflow process-window margins (peak, time above liquidus, ramp rates) | ✅ supported |
 | placement program CSV | ✅ supported |
 | feeder setup CSV | ✅ supported |
 | JSON / Markdown reports | ✅ supported |
@@ -36,6 +37,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | cycle time and throughput estimate (takt) | ✅ supported (analytical machine model; not a measured rate) |
 | feeder station assignment along the tape bank | ✅ supported (heuristic by mean placement X; not optimal) |
 | feeder changeover sequence between two documents | ✅ supported (id/package/pitch comparison; fixed time per change) |
+| feeder consumption plan for a build quantity | ✅ supported (reels from lane capacity; not a splice or scrap model) |
 | KiCad PCB (`.kicad_pcb`) import | ✅ supported |
 | CSV placement (`.csv`) import | ✅ supported |
 | Altium / ODB import | ❌ not implemented |
@@ -227,6 +229,42 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt changeover job-a.osmt job-b.osmt
     ```
 
+17. **Reflow process window.** `reflowWindow` (CLI
+    `reflow window <file> [--peak-min <c>] [--peak-max <c>] [--tal-min <s>]
+    [--tal-max <s>] [--max-ramp <c/s>] [--max-cooling <c/s>]`) reruns the
+    `reflow` evaluation and derives the signed rate of every zone,
+    `(exit − entry) / seconds`. `maxHeatingRate` is the largest positive rate and
+    `maxCoolingRate` the largest magnitude of a negative rate; both are zero when
+    no zone moves that way. Each supplied limit adds one check in the fixed order
+    peak minimum, peak maximum, time-above-liquidus minimum, time-above-liquidus
+    maximum, max heating rate and max cooling rate. A check reports `value`,
+    `limit`, `margin` and `pass`; `margin` is `value − limit` for a minimum and
+    `limit − value` for a maximum, and `pass` is `margin >= 0`. `ok` is true when
+    every check passes, and when no limit is supplied. A limit must be finite and
+    non-negative, and a minimum may not exceed its maximum, otherwise
+    `reflow/invalid`. The document is never changed.
+
+    ```shell
+    open-smt reflow window panel.osmt --peak-max 250 --tal-max 60 --max-ramp 5
+    ```
+
+18. **Feeder consumption plan.** `consumption` (CLI
+    `feeder consumption <file> --boards <n>`) runs the same allocation as
+    `feeders`, so a lane's per-board picks equal its `assigned` count. With
+    `run = boards`, a lane's `picks = assigned × run`,
+    `reels = ceil(picks / capacity)` (zero when `picks` is zero),
+    `remainder = picks − (reels − 1) × capacity` (zero when no reel is needed)
+    and `short` is `picks > loaded`, so the currently loaded reel cannot cover a
+    run that needs more than one reel. Packages are aggregated in name order with
+    their per-board component count, total picks, lane count, summed reels and
+    any short lane. `boards` must be at least 1, otherwise `consumption/invalid`.
+    `ok` is true when no lane is short. Allocation errors (`feeder/missing`,
+    `feeder/capacity`) propagate, and the plan never changes the document.
+
+    ```shell
+    open-smt feeder consumption panel.osmt --boards 250
+    ```
+
 ## KiCad PCB import
 
 `open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
@@ -338,6 +376,8 @@ are skipped. Rows keep the order of the source.
 | `profile/invalid` | empty zones, non-positive length/temperature/speed/liquidus |
 | `station/invalid` | a feeder station assignment requested a non-positive or non-finite slot pitch |
 | `changeover/invalid` | a changeover requested a non-positive or non-finite time per reel change |
+| `reflow/invalid` | a process-window limit is non-finite or negative, or a minimum exceeds its maximum |
+| `consumption/invalid` | a consumption plan requested fewer than one board |
 
 Warnings do not make `ok` false: `component/none`, `feeder/none`,
 `feeder/unused`, `component/rotation` (not a multiple of 90) and
@@ -360,7 +400,9 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/import.rs` | KiCad footprint mapping, rotation, both sides, reference sources, loss ledger, outline errors, duplicate/missing references, empty board, determinism, existing target; CSV row order, reordered/quoted/UPPERCASE columns, empty lines, side and rotation defaults, duplicate refdes, missing column, invalid number, invalid side, line numbers, negative coordinate, determinism, one revision, existing target |
 | `tests/station.rs` | mean-placement-X order shortening the tape-bank travel, a matching stored order saving nothing, tie-breaks by feeder id, unused lanes last with `meanX: null`, empty document, feeder coverage propagation, invalid slot pitches, determinism, unchanged document |
 | `tests/changeover.rs` | removal/swap/addition ordering with steps, swap counting twice, pitch-only swap, identical setups, empty current, ignored feeder coverage, structurally invalid documents, invalid change seconds, determinism, unchanged documents |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, BOM-check, takt, component-update, feeder-optimize and changeover smokes |
+| `tests/reflow_window.rs` | default profile metrics and zone ramp rates, margin arithmetic, pass/fail verdict, heating-only profile, invalid limits, determinism, unchanged document |
+| `tests/consumption.rs` | reels and last-reel remainder arithmetic, a short run, multi-lane package totals, empty document, zero boards, feeder coverage propagation, determinism, unchanged document |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, BOM-check, takt, component-update, feeder-optimize, reflow-window, feeder-consumption and changeover smokes |
 
 ## Limitations
 
@@ -394,6 +436,13 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   both documents and writes neither.
 - Reflow uses set-points, not measured thermocouple data, and models no
   convection or board thermal mass.
+- The reflow process window compares zone set-point metrics with caller limits.
+  Ramp rates are derived from the set-points, not from a measured profile, and
+  the report does not model a soak dwell band or a cooling slope after the last
+  zone.
+- The feeder consumption plan derives reels from lane capacity and the per-board
+  allocation. It does not model splices, mid-run reel changes, scrap or moisture
+  exposure.
 - Only the top and bottom sides are supported.
 - Multi-lane scheduling assigns whole placement tasks to 2–16 lanes with a
   greedy or longest-processing-time-first rule and an optional pairwise-swap
