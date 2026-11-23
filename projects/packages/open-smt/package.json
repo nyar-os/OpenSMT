@@ -41,6 +41,9 @@
         "url": "git+https://github.com/nyar-os/OpenSMT.git",
         "directory": "projects/packages/open-smt"
     },
+    "dependencies": {
+        "@wae/commander": "0.0.6"
+    },
     "devDependencies": {
         "@types/node": "^22.20.4",
         "typescript": "^5.9.2"

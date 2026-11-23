@@ -2,131 +2,95 @@
 /**
  * Command-line assembly only.
  *
- * Every command maps options onto one session operation of `OpenSMT`; editing,
- * allocation, sequencing and reflow stay in the native core. The CLI owns
- * argument parsing, help text, printing and exit codes, and nothing else.
+ * `@wae/commander` owns argument parsing, help text and locale loading; every
+ * command maps options onto one session operation of `OpenSMT`, so editing,
+ * allocation, sequencing and reflow stay in the native core. The CLI keeps
+ * printing and the exit-code contract (`capability/*` → 2, everything
+ * else → 1).
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { createCli, type CommandContext, type ParsedOptions } from '@wae/commander';
 
 import type { SmtDocument } from './document.js';
 import { NotImplementedError, OpenSMTError, type OpenSMTErrorCode } from './errors.js';
 import { OpenSMT } from './open-smt.js';
 import type { BalanceReport, DualLaneStrategy, ExportFormat, Side, Zone } from './types.js';
 
-interface CliLocale {
-    readonly cli: {
-        readonly intro: string;
-        readonly usage: readonly string[];
-        readonly exit: string;
-        readonly message: Readonly<Record<string, string>>;
-        readonly error: Readonly<Record<string, string>>;
-    };
-}
-
 const here = path.dirname(fileURLToPath(import.meta.url));
-const locale = JSON.parse(
-    fs.readFileSync(path.join(here, '..', 'locales', 'en-US', 'cli.json'), 'utf8'),
-) as CliLocale;
 
-function fill(template: string, values: Readonly<Record<string, string>> = {}): string {
-    return template.replace(/\{(\w+)\}/g, (_match, key: string) => values[key] ?? `{${key}}`);
+const cli = createCli('open-smt');
+cli.locales(path.join(here, '..', 'locales'));
+cli.intro('cli.intro');
+
+/** True once a command action has run, so framework parse failures can be told apart. */
+let actionRan = false;
+
+function failure(ctx: CommandContext, code: OpenSMTErrorCode, key: string, values?: Readonly<Record<string, string>>): OpenSMTError {
+    return new OpenSMTError(code, ctx.t(`cli.error.${key}`, values as Record<string, string> | undefined));
 }
 
-function failure(code: OpenSMTErrorCode, key: string, values?: Readonly<Record<string, string>>): OpenSMTError {
-    return new OpenSMTError(code, fill(locale.cli.error[key] ?? key, values));
-}
-
-function printUsage(): void {
-    process.stdout.write(`${locale.cli.intro}\n\n${locale.cli.usage.join('\n')}\n\n${locale.cli.exit}\n`);
-}
-
-interface Parsed {
-    readonly positionals: readonly string[];
-    readonly options: ReadonlyMap<string, string>;
-    readonly flags: ReadonlySet<string>;
-}
-
-function parse(args: readonly string[], valueOptions: readonly string[], flagOptions: readonly string[]): Parsed {
-    const positionals: string[] = [];
-    const flags = new Set<string>();
-    const options = new Map<string, string>();
-    let index = 0;
-    while (index < args.length) {
-        const argument = args[index] as string;
-        if (argument.startsWith('--')) {
-            if (flagOptions.includes(argument)) {
-                flags.add(argument);
-                index += 1;
-            } else if (valueOptions.includes(argument)) {
-                const value = args[index + 1];
-                if (value === undefined || value.startsWith('--')) {
-                    throw failure('cli/missing-value', 'missingValue', { option: argument });
-                }
-                options.set(argument, value);
-                index += 2;
-            } else {
-                throw failure('cli/unknown-option', 'unknownOption', { option: argument });
-            }
-        } else {
-            positionals.push(argument);
-            index += 1;
-        }
-    }
-    return { positionals, options, flags };
-}
-
-function positional(parsed: Parsed, index: number, usage: string): string {
-    const value = parsed.positionals[index];
+function fileArg(options: ParsedOptions, ctx: CommandContext, usage: string): string {
+    const value = options._[0];
     if (value === undefined) {
-        throw failure('cli/missing-argument', 'missingArgument', { usage });
+        throw failure(ctx, 'cli/missing-argument', 'missingArgument', { usage });
     }
     return value;
 }
 
-function required(parsed: Parsed, name: string): string {
-    const value = parsed.options.get(name);
+function optionText(options: ParsedOptions, name: string): string | undefined {
+    const value = options[name];
+    return typeof value === 'string' ? value : undefined;
+}
+
+function requiredOption(options: ParsedOptions, ctx: CommandContext, name: string): string {
+    const value = optionText(options, name);
     if (value === undefined) {
-        throw failure('cli/missing-option', 'missingOption', { option: name });
+        throw failure(ctx, 'cli/missing-option', 'missingOption', { option: `--${name}` });
     }
     return value;
 }
 
-function number(parsed: Parsed, name: string): number | undefined {
-    const raw = parsed.options.get(name);
+function flag(options: ParsedOptions, name: string): boolean {
+    return options[name] === true;
+}
+
+function numberOption(options: ParsedOptions, ctx: CommandContext, name: string): number | undefined {
+    const raw = optionText(options, name);
     if (raw === undefined) {
         return undefined;
     }
     const value = Number(raw);
     if (!Number.isFinite(value)) {
-        throw failure('cli/invalid-number', 'invalidNumber', { option: name, value: raw });
+        throw failure(ctx, 'cli/invalid-number', 'invalidNumber', { option: `--${name}`, value: raw });
     }
     return value;
 }
 
-function requiredNumber(parsed: Parsed, name: string): number {
-    const value = number(parsed, name);
+function requiredNumber(options: ParsedOptions, ctx: CommandContext, name: string): number {
+    const value = numberOption(options, ctx, name);
     if (value === undefined) {
-        throw failure('cli/missing-option', 'missingOption', { option: name });
+        throw failure(ctx, 'cli/missing-option', 'missingOption', { option: `--${name}` });
     }
     return value;
 }
 
-function integer(parsed: Parsed, name: string, fallback?: number): number {
-    const value = number(parsed, name) ?? fallback;
+function integerOption(options: ParsedOptions, ctx: CommandContext, name: string, fallback?: number): number {
+    const value = numberOption(options, ctx, name) ?? fallback;
     if (value === undefined) {
-        throw failure('cli/missing-option', 'missingOption', { option: name });
+        throw failure(ctx, 'cli/missing-option', 'missingOption', { option: `--${name}` });
     }
     if (!Number.isInteger(value) || value < 0) {
-        throw failure('cli/invalid-number', 'invalidNumber', { option: name, value: String(value) });
+        throw failure(ctx, 'cli/invalid-number', 'invalidNumber', { option: `--${name}`, value: String(value) });
     }
     return value;
 }
 
-function exportFormat(value: string): ExportFormat {
+function exportFormat(value: string, ctx: CommandContext): ExportFormat {
     if (value === 'program' || value === 'csv') {
         return 'program';
     }
@@ -139,14 +103,14 @@ function exportFormat(value: string): ExportFormat {
     if (value === 'kicad' || value === 'altium' || value === 'odb') {
         throw new NotImplementedError(`${value} export`);
     }
-    throw failure('cli/unknown-format', 'unknownFormat', { format: value });
+    throw failure(ctx, 'cli/unknown-format', 'unknownFormat', { format: value });
 }
 
-function dualStrategy(value: string): DualLaneStrategy {
+function dualStrategy(value: string, ctx: CommandContext): DualLaneStrategy {
     if (value === 'greedy' || value === 'lpt') {
         return value;
     }
-    throw failure('schedule/invalid-strategy', 'invalidStrategy', { strategy: value });
+    throw failure(ctx, 'schedule/invalid-strategy', 'invalidStrategy', { strategy: value });
 }
 
 function side(value: string): Side {
@@ -215,104 +179,328 @@ async function withSession<T>(work: (session: OpenSMT) => Promise<T>): Promise<T
     }
 }
 
-async function dispatch(args: readonly string[]): Promise<number> {
-    const command = args[0];
-    if (command === undefined) {
-        printUsage();
+async function editDocument(
+    options: ParsedOptions,
+    ctx: CommandContext,
+    usage: string,
+    work: (document: SmtDocument) => Promise<void>,
+): Promise<void> {
+    const file = fileArg(options, ctx, usage);
+    await withSession(async (session) => {
+        const document = await session.open(file);
+        await work(document);
+    });
+}
+
+/** Runs one action and keeps the exit-code contract: `capability/*` → 2, everything else → 1. */
+async function guard(ctx: CommandContext, work: () => Promise<void>): Promise<number> {
+    actionRan = true;
+    try {
+        await work();
         return 0;
+    } catch (error) {
+        if (error instanceof OpenSMTError) {
+            ctx.stderr(`${error.code}: ${error.message}`);
+            return error.code.startsWith('capability/') ? 2 : 1;
+        }
+        ctx.stderr(error instanceof Error ? error.message : String(error));
+        return 1;
     }
-    switch (command) {
-        case '-h':
-        case '--help':
-        case 'help':
-            printUsage();
-            return 0;
-        case 'version':
-            console.log('0.0.0');
-            return 0;
-        case 'capabilities':
-            return withSession(async (session) => {
-                print(await session.capabilities());
-                return 0;
-            });
-        case 'create':
-            return withSession(async (session) => {
-                const file = positional(parse(args.slice(1), [], []), 0, 'create <file>');
+}
+
+cli
+    .command('create', 'cli.cmd.create')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            const file = fileArg(options, ctx, 'create <file>');
+            await withSession(async (session) => {
                 const document = await session.create(file);
                 print(await document.save());
-                return 0;
             });
-        case 'import':
-            return importCommand(args.slice(1));
-        case 'board':
-            return editDocument(args.slice(1), 'board <file>', ['--width', '--depth', '--thickness'], async (document, parsed) => {
+        }),
+    );
+
+const importCommand = cli
+    .command('import', 'cli.cmd.import')
+    .option('--out <file>', 'cli.opt.out')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            const source = fileArg(options, ctx, 'import <file.kicad_pcb> --out <file.osmt>');
+            await withSession(async (session) => {
+                print(await session.import(source, requiredOption(options, ctx, 'out')));
+            });
+        }),
+    );
+importCommand
+    .command('csv', 'cli.cmd.import-csv')
+    .option('--out <file>', 'cli.opt.out')
+    .option('--side <side>', 'cli.opt.side', { default: 'top' })
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            const source = fileArg(options, ctx, 'import csv <file.csv> --out <file.osmt> [--side top|bottom]');
+            await withSession(async (session) => {
+                print(await session.importCsv(source, requiredOption(options, ctx, 'out'), side(optionText(options, 'side') ?? 'top')));
+            });
+        }),
+    );
+
+cli
+    .command('board', 'cli.cmd.board')
+    .option('--width <mm>', 'cli.opt.width')
+    .option('--depth <mm>', 'cli.opt.depth')
+    .option('--thickness <mm>', 'cli.opt.thickness')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'board <file>', async (document) => {
                 print(
                     await document.setBoard({
-                        width: requiredNumber(parsed, '--width'),
-                        depth: requiredNumber(parsed, '--depth'),
-                        thickness: requiredNumber(parsed, '--thickness'),
+                        width: requiredNumber(options, ctx, 'width'),
+                        depth: requiredNumber(options, ctx, 'depth'),
+                        thickness: requiredNumber(options, ctx, 'thickness'),
                     }),
                 );
             });
-        case 'panel':
-            if (args[1] === 'fit') {
-                return readDocument(
-                    args.slice(2),
-                    'panel fit <file> --max-width <mm> --max-depth <mm> [--gap-x <mm>] [--gap-y <mm>]',
-                    ['--max-width', '--max-depth', '--gap-x', '--gap-y'],
-                    async (document, parsed) => {
-                        print(
-                            await document.panelFit({
-                                maxWidth: requiredNumber(parsed, '--max-width'),
-                                maxDepth: requiredNumber(parsed, '--max-depth'),
-                                gapX: number(parsed, '--gap-x'),
-                                gapY: number(parsed, '--gap-y'),
-                            }),
-                        );
-                    },
-                );
-            }
-            return editDocument(args.slice(1), 'panel <file>', ['--rows', '--columns', '--gap-x', '--gap-y'], async (document, parsed) => {
+        }),
+    );
+
+const panelCommand = cli
+    .command('panel', 'cli.cmd.panel')
+    .option('--rows <n>', 'cli.opt.rows')
+    .option('--columns <n>', 'cli.opt.columns')
+    .option('--gap-x <mm>', 'cli.opt.gap-x')
+    .option('--gap-y <mm>', 'cli.opt.gap-y')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'panel <file>', async (document) => {
                 print(
                     await document.setPanel({
-                        rows: integer(parsed, '--rows'),
-                        columns: integer(parsed, '--columns'),
-                        gapX: number(parsed, '--gap-x') ?? 0,
-                        gapY: number(parsed, '--gap-y') ?? 0,
+                        rows: integerOption(options, ctx, 'rows'),
+                        columns: integerOption(options, ctx, 'columns'),
+                        gapX: numberOption(options, ctx, 'gap-x') ?? 0,
+                        gapY: numberOption(options, ctx, 'gap-y') ?? 0,
                     }),
                 );
             });
-        case 'component':
-            return componentCommand(args.slice(1));
-        case 'feeder':
-            return feederCommand(args.slice(1));
-        case 'bom':
-            return bomCommand(args.slice(1));
-        case 'profile':
-            return profileCommand(args.slice(1));
-        case 'validate':
-            return readDocument(args.slice(1), 'validate <file>', [], async (document) => {
+        }),
+    );
+panelCommand
+    .command('fit', 'cli.cmd.panel-fit')
+    .option('--max-width <mm>', 'cli.opt.max-width')
+    .option('--max-depth <mm>', 'cli.opt.max-depth')
+    .option('--gap-x <mm>', 'cli.opt.gap-x')
+    .option('--gap-y <mm>', 'cli.opt.gap-y')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'panel fit <file> --max-width <mm> --max-depth <mm> [--gap-x <mm>] [--gap-y <mm>]', async (document) => {
+                print(
+                    await document.panelFit({
+                        maxWidth: requiredNumber(options, ctx, 'max-width'),
+                        maxDepth: requiredNumber(options, ctx, 'max-depth'),
+                        gapX: numberOption(options, ctx, 'gap-x'),
+                        gapY: numberOption(options, ctx, 'gap-y'),
+                    }),
+                );
+            });
+        }),
+    );
+
+const componentCommand = cli.command('component', 'cli.cmd.component');
+componentCommand
+    .command('add', 'cli.cmd.component-add')
+    .option('--refdes <refdes>', 'cli.opt.refdes')
+    .option('--package <pkg>', 'cli.opt.package')
+    .option('--x <mm>', 'cli.opt.x')
+    .option('--y <mm>', 'cli.opt.y')
+    .option('--side <side>', 'cli.opt.side', { default: 'top' })
+    .option('--rotation <deg>', 'cli.opt.rotation', { default: '0' })
+    .option('--height <mm>', 'cli.opt.height')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'component add <file>', async (document) => {
+                print(
+                    await document.addComponent({
+                        refdes: requiredOption(options, ctx, 'refdes'),
+                        package: requiredOption(options, ctx, 'package'),
+                        side: side(optionText(options, 'side') ?? 'top'),
+                        x: requiredNumber(options, ctx, 'x'),
+                        y: requiredNumber(options, ctx, 'y'),
+                        rotation: numberOption(options, ctx, 'rotation') ?? 0,
+                        height: numberOption(options, ctx, 'height'),
+                    }),
+                );
+            });
+        }),
+    );
+componentCommand
+    .command('update', 'cli.cmd.component-update')
+    .option('--refdes <refdes>', 'cli.opt.refdes')
+    .option('--package <pkg>', 'cli.opt.package')
+    .option('--side <side>', 'cli.opt.side')
+    .option('--x <mm>', 'cli.opt.x')
+    .option('--y <mm>', 'cli.opt.y')
+    .option('--rotation <deg>', 'cli.opt.rotation')
+    .option('--height <mm>', 'cli.opt.height')
+    .option('--clear-height', 'cli.opt.clear-height')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'component update <file> --refdes <R1>', async (document) => {
+                const configuredSide = optionText(options, 'side');
+                print(
+                    await document.updateComponent(requiredOption(options, ctx, 'refdes'), {
+                        package: optionText(options, 'package'),
+                        side: configuredSide === undefined ? undefined : side(configuredSide),
+                        x: numberOption(options, ctx, 'x'),
+                        y: numberOption(options, ctx, 'y'),
+                        rotation: numberOption(options, ctx, 'rotation'),
+                        height: numberOption(options, ctx, 'height'),
+                        clearHeight: flag(options, 'clear-height'),
+                    }),
+                );
+            });
+        }),
+    );
+componentCommand
+    .command('remove', 'cli.cmd.component-remove')
+    .option('--refdes <refdes>', 'cli.opt.refdes')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'component remove <file>', async (document) => {
+                print(await document.removeComponent(requiredOption(options, ctx, 'refdes')));
+            });
+        }),
+    );
+
+const feederCommand = cli.command('feeder', 'cli.cmd.feeder');
+feederCommand
+    .command('add', 'cli.cmd.feeder-add')
+    .option('--id <id>', 'cli.opt.id')
+    .option('--package <pkg>', 'cli.opt.package')
+    .option('--pitch <mm>', 'cli.opt.pitch')
+    .option('--capacity <n>', 'cli.opt.capacity')
+    .option('--loaded <n>', 'cli.opt.loaded')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'feeder add <file>', async (document) => {
+                print(
+                    await document.addFeeder({
+                        id: requiredOption(options, ctx, 'id'),
+                        package: requiredOption(options, ctx, 'package'),
+                        pitch: requiredNumber(options, ctx, 'pitch'),
+                        capacity: integerOption(options, ctx, 'capacity'),
+                        loaded: numberOption(options, ctx, 'loaded'),
+                    }),
+                );
+            });
+        }),
+    );
+feederCommand
+    .command('update', 'cli.cmd.feeder-update')
+    .option('--id <id>', 'cli.opt.id')
+    .option('--package <pkg>', 'cli.opt.package')
+    .option('--pitch <mm>', 'cli.opt.pitch')
+    .option('--capacity <n>', 'cli.opt.capacity')
+    .option('--loaded <n>', 'cli.opt.loaded')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'feeder update <file> --id <id>', async (document) => {
+                print(
+                    await document.updateFeeder(requiredOption(options, ctx, 'id'), {
+                        package: optionText(options, 'package'),
+                        pitch: numberOption(options, ctx, 'pitch'),
+                        capacity: optionText(options, 'capacity') === undefined ? undefined : integerOption(options, ctx, 'capacity'),
+                        loaded: optionText(options, 'loaded') === undefined ? undefined : integerOption(options, ctx, 'loaded'),
+                    }),
+                );
+            });
+        }),
+    );
+feederCommand
+    .command('remove', 'cli.cmd.feeder-remove')
+    .option('--id <id>', 'cli.opt.id')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'feeder remove <file>', async (document) => {
+                print(await document.removeFeeder(requiredOption(options, ctx, 'id')));
+            });
+        }),
+    );
+feederCommand
+    .command('report', 'cli.cmd.feeder-report')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'feeder report <file>', async (document) => {
+                print(await document.feederReport());
+            });
+        }),
+    );
+
+const bomCommand = cli.command('bom', 'cli.cmd.bom');
+bomCommand
+    .command('check', 'cli.cmd.bom-check')
+    .option('--bom <bom.csv>', 'cli.opt.bom')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'bom check <file> --bom <bom.csv>', async (document) => {
+                print(await document.bomCheck(requiredOption(options, ctx, 'bom')));
+            });
+        }),
+    );
+
+const profileCommand = cli.command('profile', 'cli.cmd.profile');
+profileCommand
+    .command('set', 'cli.cmd.profile-set')
+    .option('--speed <mm/min>', 'cli.opt.speed')
+    .option('--liquidus <c>', 'cli.opt.liquidus')
+    .option('--zones <zones>', 'cli.opt.zones')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'profile set <file>', async (document) => {
+                print(
+                    await document.setProfile({
+                        conveyorSpeed: requiredNumber(options, ctx, 'speed'),
+                        liquidus: requiredNumber(options, ctx, 'liquidus'),
+                        zones: parseZones(requiredOption(options, ctx, 'zones')),
+                    }),
+                );
+            });
+        }),
+    );
+
+cli
+    .command('validate', 'cli.cmd.validate')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'validate <file>', async (document) => {
                 print(await document.validate());
             });
-        case 'placement':
-            return readDocument(
-                args.slice(1),
-                'placement <file>',
-                ['--out'],
-                async (document, parsed) => {
-                    const report = await document.placement(parsed.flags.has('--optimize'));
-                    const target = parsed.options.get('--out');
-                    if (target !== undefined) {
-                        fs.writeFileSync(target, JSON.stringify(report, null, 2));
-                    }
-                    print(report);
-                },
-                ['--optimize'],
-            );
-        case 'feeders':
-            return readDocument(args.slice(1), 'feeders <file>', ['--out'], async (document, parsed) => {
+        }),
+    );
+
+cli
+    .command('placement', 'cli.cmd.placement')
+    .option('--out <program.json>', 'cli.opt.out')
+    .option('--optimize', 'cli.opt.optimize')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'placement <file>', async (document) => {
+                const report = await document.placement(flag(options, 'optimize'));
+                const target = optionText(options, 'out');
+                if (target !== undefined) {
+                    fs.writeFileSync(target, JSON.stringify(report, null, 2));
+                }
+                print(report);
+            });
+        }),
+    );
+
+cli
+    .command('feeders', 'cli.cmd.feeders')
+    .option('--out <setup.csv>', 'cli.opt.out')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'feeders <file>', async (document) => {
                 const report = await document.feederSetup();
-                const target = parsed.options.get('--out');
+                const target = optionText(options, 'out');
                 if (target !== undefined) {
                     const rows = ['id,package,loaded,capacity,assigned,remaining,refdes'];
                     for (const feeder of report.feeders) {
@@ -324,271 +512,146 @@ async function dispatch(args: readonly string[]): Promise<number> {
                 }
                 print(report);
             });
-        case 'balance':
-            return readDocument(
-                args.slice(1),
-                'balance <file>',
-                ['--machines'],
-                async (document, parsed) => {
-                    printBalance(await document.balance(integer(parsed, '--machines'), parsed.flags.has('--optimize')));
-                },
-                ['--optimize'],
-            );
-        case 'schedule':
-            return scheduleCommand(args.slice(1));
-        case 'reflow':
-            return readDocument(args.slice(1), 'reflow <file>', [], async (document) => {
+        }),
+    );
+
+cli
+    .command('balance', 'cli.cmd.balance')
+    .option('--machines <n>', 'cli.opt.machines')
+    .option('--optimize', 'cli.opt.optimize')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'balance <file> --machines <n>', async (document) => {
+                printBalance(await document.balance(integerOption(options, ctx, 'machines'), flag(options, 'optimize')));
+            });
+        }),
+    );
+
+const scheduleCommand = cli.command('schedule', 'cli.cmd.schedule');
+scheduleCommand
+    .command('dual', 'cli.cmd.schedule-dual')
+    .option('--strategy <strategy>', 'cli.opt.strategy', { default: 'greedy' })
+    .option('--improve', 'cli.opt.improve')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'schedule dual <file>', async (document) => {
+                const strategy = dualStrategy(optionText(options, 'strategy') ?? 'greedy', ctx);
+                print(await document.dualLane(strategy, flag(options, 'improve')));
+            });
+        }),
+    );
+scheduleCommand
+    .command('lanes', 'cli.cmd.schedule-lanes')
+    .option('--count <n>', 'cli.opt.count')
+    .option('--strategy <strategy>', 'cli.opt.strategy', { default: 'greedy' })
+    .option('--improve', 'cli.opt.improve')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'schedule lanes <file> --count <n>', async (document) => {
+                const count = integerOption(options, ctx, 'count');
+                if (count < 2 || count > 16) {
+                    throw failure(ctx, 'schedule/invalid-lanes', 'invalidLanes', { count: String(count) });
+                }
+                const strategy = dualStrategy(optionText(options, 'strategy') ?? 'greedy', ctx);
+                print(await document.lanes(count, strategy, flag(options, 'improve')));
+            });
+        }),
+    );
+
+cli
+    .command('reflow', 'cli.cmd.reflow')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'reflow <file>', async (document) => {
                 print(await document.reflow());
             });
-        case 'takt':
-            return readDocument(
-                args.slice(1),
+        }),
+    );
+
+cli
+    .command('takt', 'cli.cmd.takt')
+    .option('--place-seconds <s>', 'cli.opt.place-seconds')
+    .option('--head-speed <mm/s>', 'cli.opt.head-speed')
+    .option('--feeder-change-seconds <s>', 'cli.opt.feeder-change-seconds')
+    .option('--feeder-changes <n>', 'cli.opt.feeder-changes', { default: '0' })
+    .option('--nozzle-change-seconds <s>', 'cli.opt.nozzle-change-seconds')
+    .option('--nozzle-changes <n>', 'cli.opt.nozzle-changes', { default: '0' })
+    .option('--machines <n>', 'cli.opt.machines', { default: '1' })
+    .option('--optimize', 'cli.opt.optimize')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(
+                options,
+                ctx,
                 'takt <file> [--place-seconds <s>] [--head-speed <mm/s>] [--feeder-change-seconds <s>] [--feeder-changes <n>] [--nozzle-change-seconds <s>] [--nozzle-changes <n>] [--machines <n>] [--optimize]',
-                ['--place-seconds', '--head-speed', '--feeder-change-seconds', '--feeder-changes', '--nozzle-change-seconds', '--nozzle-changes', '--machines'],
-                async (document, parsed) => {
+                async (document) => {
                     print(
                         await document.takt({
-                            placeSeconds: number(parsed, '--place-seconds'),
-                            headSpeed: number(parsed, '--head-speed'),
-                            feederChangeSeconds: number(parsed, '--feeder-change-seconds'),
-                            feederChanges: integer(parsed, '--feeder-changes', 0),
-                            nozzleChangeSeconds: number(parsed, '--nozzle-change-seconds'),
-                            nozzleChanges: integer(parsed, '--nozzle-changes', 0),
-                            machineCount: integer(parsed, '--machines', 1),
-                            optimize: parsed.flags.has('--optimize'),
+                            placeSeconds: numberOption(options, ctx, 'place-seconds'),
+                            headSpeed: numberOption(options, ctx, 'head-speed'),
+                            feederChangeSeconds: numberOption(options, ctx, 'feeder-change-seconds'),
+                            feederChanges: integerOption(options, ctx, 'feeder-changes', 0),
+                            nozzleChangeSeconds: numberOption(options, ctx, 'nozzle-change-seconds'),
+                            nozzleChanges: integerOption(options, ctx, 'nozzle-changes', 0),
+                            machineCount: integerOption(options, ctx, 'machines', 1),
+                            optimize: flag(options, 'optimize'),
                         }),
                     );
                 },
-                ['--optimize'],
             );
-        case 'export':
-            return readDocument(args.slice(1), 'export <file> --format <format> --out <path>', ['--format', '--out'], async (document, parsed) => {
-                const format = exportFormat(parsed.options.get('--format') ?? 'program');
-                print(await document.exportDocument(format, required(parsed, '--out')));
+        }),
+    );
+
+cli
+    .command('export', 'cli.cmd.export')
+    .option('--format <format>', 'cli.opt.format', { default: 'program' })
+    .option('--out <path>', 'cli.opt.out')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'export <file> --format <format> --out <path>', async (document) => {
+                const format = exportFormat(optionText(options, 'format') ?? 'program', ctx);
+                print(await document.exportDocument(format, requiredOption(options, ctx, 'out')));
             });
-        case 'report':
-            return readDocument(args.slice(1), 'report <file>', [], async (document) => {
+        }),
+    );
+
+cli
+    .command('report', 'cli.cmd.report')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'report <file>', async (document) => {
                 print(await document.report());
             });
-        default:
-            throw new OpenSMTError('cli/unknown-command', `unknown command \`${command}\``);
+        }),
+    );
+
+cli
+    .command('capabilities', 'cli.cmd.capabilities')
+    .actionCtx((_options, _args, ctx) =>
+        guard(ctx, async () => {
+            await withSession(async (session) => {
+                print(await session.capabilities());
+            });
+        }),
+    );
+
+cli
+    .command('version', 'cli.cmd.version')
+    .actionCtx((_options, _args, ctx) =>
+        guard(ctx, async () => {
+            console.log('0.0.0');
+        }),
+    );
+
+const entry = process.argv[1];
+if (entry !== undefined && import.meta.url === pathToFileURL(entry).href) {
+    try {
+        const code = await cli.parse(process.argv);
+        // Framework parse/validation failures return 2 before any action ran;
+        // the CLI contract reserves 2 for `capability/*` only.
+        process.exitCode = code === 2 && !actionRan ? 1 : code;
+    } catch (error) {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.exitCode = 1;
     }
 }
-
-async function importCommand(args: readonly string[]): Promise<number> {
-    if (args[0] === 'csv') {
-        return withSession(async (session) => {
-            const parsed = parse(args.slice(1), ['--out', '--side'], []);
-            const source = positional(parsed, 0, 'import csv <file.csv> --out <file.osmt> [--side top|bottom]');
-            const target = required(parsed, '--out');
-            print(await session.importCsv(source, target, side(parsed.options.get('--side') ?? 'top')));
-            return 0;
-        });
-    }
-    return withSession(async (session) => {
-        const parsed = parse(args, ['--out'], []);
-        const source = positional(parsed, 0, 'import <file.kicad_pcb> --out <file.osmt>');
-        print(await session.import(source, required(parsed, '--out')));
-        return 0;
-    });
-}
-
-async function componentCommand(args: readonly string[]): Promise<number> {
-    const action = args[0] ?? '';
-    if (action === 'add') {
-        return editDocument(
-            args.slice(1),
-            'component add <file>',
-            ['--refdes', '--package', '--x', '--y', '--side', '--rotation', '--height'],
-            async (document, parsed) => {
-                const height = number(parsed, '--height');
-                print(
-                    await document.addComponent({
-                        refdes: required(parsed, '--refdes'),
-                        package: required(parsed, '--package'),
-                        side: side(parsed.options.get('--side') ?? 'top'),
-                        x: requiredNumber(parsed, '--x'),
-                        y: requiredNumber(parsed, '--y'),
-                        rotation: number(parsed, '--rotation') ?? 0,
-                        height,
-                    }),
-                );
-            },
-        );
-    }
-    if (action === 'update') {
-        return editDocument(
-            args.slice(1),
-            'component update <file> --refdes <R1> [--package <pkg>] [--side top|bottom] [--x <x>] [--y <y>] [--rotation <deg>] [--height <h>] [--clear-height]',
-            ['--refdes', '--package', '--side', '--x', '--y', '--rotation', '--height'],
-            async (document, parsed) => {
-                const configuredSide = parsed.options.get('--side');
-                print(
-                    await document.updateComponent(required(parsed, '--refdes'), {
-                        package: parsed.options.get('--package'),
-                        side: configuredSide === undefined ? undefined : side(configuredSide),
-                        x: number(parsed, '--x'),
-                        y: number(parsed, '--y'),
-                        rotation: number(parsed, '--rotation'),
-                        height: number(parsed, '--height'),
-                        clearHeight: parsed.flags.has('--clear-height'),
-                    }),
-                );
-            },
-            ['--clear-height'],
-        );
-    }
-    if (action === 'remove') {
-        return editDocument(args.slice(1), 'component remove <file>', ['--refdes'], async (document, parsed) => {
-            print(await document.removeComponent(required(parsed, '--refdes')));
-        });
-    }
-    throw failure('cli/missing-argument', 'missingArgument', { usage: 'component add|update|remove <file> ...' });
-}
-
-async function feederCommand(args: readonly string[]): Promise<number> {
-    const action = args[0] ?? '';
-    if (action === 'add') {
-        return editDocument(
-            args.slice(1),
-            'feeder add <file>',
-            ['--id', '--package', '--pitch', '--capacity', '--loaded'],
-            async (document, parsed) => {
-                print(
-                    await document.addFeeder({
-                        id: required(parsed, '--id'),
-                        package: required(parsed, '--package'),
-                        pitch: requiredNumber(parsed, '--pitch'),
-                        capacity: integer(parsed, '--capacity'),
-                        loaded: number(parsed, '--loaded'),
-                    }),
-                );
-            },
-        );
-    }
-    if (action === 'update') {
-        return editDocument(
-            args.slice(1),
-            'feeder update <file> --id <id> [--package <pkg>] [--pitch <mm>] [--capacity <n>] [--loaded <n>]',
-            ['--id', '--package', '--pitch', '--capacity', '--loaded'],
-            async (document, parsed) => {
-                print(
-                    await document.updateFeeder(required(parsed, '--id'), {
-                        package: parsed.options.get('--package'),
-                        pitch: number(parsed, '--pitch'),
-                        capacity: parsed.options.has('--capacity') ? integer(parsed, '--capacity') : undefined,
-                        loaded: parsed.options.has('--loaded') ? integer(parsed, '--loaded') : undefined,
-                    }),
-                );
-            },
-        );
-    }
-    if (action === 'remove') {
-        return editDocument(args.slice(1), 'feeder remove <file>', ['--id'], async (document, parsed) => {
-            print(await document.removeFeeder(required(parsed, '--id')));
-        });
-    }
-    if (action === 'report') {
-        return readDocument(args.slice(1), 'feeder report <file>', [], async (document) => {
-            print(await document.feederReport());
-        });
-    }
-    throw failure('cli/missing-argument', 'missingArgument', { usage: 'feeder add|update|remove|report <file> ...' });
-}
-
-async function bomCommand(args: readonly string[]): Promise<number> {
-    if (args[0] !== 'check') {
-        throw failure('cli/missing-argument', 'missingArgument', { usage: 'bom check <file> --bom <bom.csv>' });
-    }
-    return readDocument(args.slice(1), 'bom check <file> --bom <bom.csv>', ['--bom'], async (document, parsed) => {
-        print(await document.bomCheck(required(parsed, '--bom')));
-    });
-}
-
-async function scheduleCommand(args: readonly string[]): Promise<number> {
-    if (args[0] === 'dual') {
-        return readDocument(
-            args.slice(1),
-            'schedule dual <file> [--strategy greedy|lpt] [--improve]',
-            ['--strategy'],
-            async (document, parsed) => {
-                const strategy = dualStrategy(parsed.options.get('--strategy') ?? 'greedy');
-                print(await document.dualLane(strategy, parsed.flags.has('--improve')));
-            },
-            ['--improve'],
-        );
-    }
-    if (args[0] === 'lanes') {
-        return readDocument(
-            args.slice(1),
-            'schedule lanes <file> --count <n> [--strategy greedy|lpt] [--improve]',
-            ['--count', '--strategy'],
-            async (document, parsed) => {
-                const count = integer(parsed, '--count');
-                if (count < 2 || count > 16) {
-                    throw failure('schedule/invalid-lanes', 'invalidLanes', { count: String(count) });
-                }
-                const strategy = dualStrategy(parsed.options.get('--strategy') ?? 'greedy');
-                print(await document.lanes(count, strategy, parsed.flags.has('--improve')));
-            },
-            ['--improve'],
-        );
-    }
-    throw failure('cli/missing-argument', 'missingArgument', { usage: 'schedule dual|lanes <file> ...' });
-}
-
-async function profileCommand(args: readonly string[]): Promise<number> {
-    if (args[0] !== 'set') {
-        throw failure('cli/missing-argument', 'missingArgument', { usage: 'profile set <file> ...' });
-    }
-    return editDocument(args.slice(1), 'profile set <file>', ['--speed', '--liquidus', '--zones'], async (document, parsed) => {
-        print(
-            await document.setProfile({
-                conveyorSpeed: requiredNumber(parsed, '--speed'),
-                liquidus: requiredNumber(parsed, '--liquidus'),
-                zones: parseZones(required(parsed, '--zones')),
-            }),
-        );
-    });
-}
-
-async function editDocument(
-    args: readonly string[],
-    usage: string,
-    valueOptions: readonly string[],
-    work: (document: SmtDocument, parsed: Parsed) => Promise<void>,
-    flagOptions: readonly string[] = [],
-): Promise<number> {
-    const parsed = parse(args, valueOptions, flagOptions);
-    const file = positional(parsed, 0, usage);
-    return withSession(async (session) => {
-        const document = await session.open(file);
-        await work(document, parsed);
-        return 0;
-    });
-}
-
-async function readDocument(
-    args: readonly string[],
-    usage: string,
-    valueOptions: readonly string[],
-    work: (document: SmtDocument, parsed: Parsed) => Promise<void>,
-    flagOptions: readonly string[] = [],
-): Promise<number> {
-    return editDocument(args, usage, valueOptions, work, flagOptions);
-}
-
-const args = process.argv.slice(2);
-dispatch(args)
-    .then((code) => {
-        process.exitCode = code;
-    })
-    .catch((error: unknown) => {
-        if (error instanceof OpenSMTError) {
-            process.stderr.write(`${error.code}: ${error.message}\n`);
-            process.exitCode = error.code.startsWith('capability/') ? 2 : 1;
-        } else {
-            process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-            process.exitCode = 1;
-        }
-    });
