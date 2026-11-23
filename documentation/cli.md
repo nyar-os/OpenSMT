@@ -194,6 +194,28 @@ document order and `sides` deduplicated and sorted. An empty document reports
 zero placements, zero packages and no slots. Slot numbers are suggestions only:
 they do not describe a physical machine slot or a tape layout.
 
+### feeder optimize
+
+```shell
+open-smt feeder optimize <file> [--slot-pitch <mm>]
+```
+
+Prints a read-only feeder station assignment as JSON. The command runs the
+same feeder allocation and placement sequence as `placement` and orders the
+feeder lanes along the tape bank by the mean placement X of the picks they
+supply, ties broken by feeder id; lanes the program never uses are appended in
+id order. `--slot-pitch` (default `16`) is the distance between neighbouring
+slots in millimetres and must be finite and positive, otherwise the command
+reports `station/invalid` and exits with code `1`. The report contains `format`
+(`open-smt-station`), `version`, `units`, `slotPitch`, `slotCount`,
+`baselineTravelMm` (tape-bank travel of the stored feeder order), `travelMm`
+(travel of the optimized order) and `travelSaved`, plus one `stations` entry
+per lane in slot order with `slot`, `positionMm`, `feederId`, `package`,
+`picks` and `meanX` (`null` for an unused lane). Travel is the sum of the
+absolute slot-to-slot moves between consecutive picks, restarting from slot
+position zero at the start of every side. The assignment is a heuristic, not
+an optimal slot permutation, and the document is not modified.
+
 ## bom check
 
 ```shell
@@ -343,6 +365,28 @@ count, a negative or non-finite machine parameter reports `takt/invalid`, and
 report. An empty document estimates zero time and reports zero throughput. The
 document is not modified.
 
+## changeover
+
+```shell
+open-smt changeover <current.osmt> <next.osmt> [--feeder-change-seconds <s>]
+```
+
+Prints the read-only feeder changeover sequence between two documents as JSON.
+Lanes are matched by feeder id: lanes only the current document declares are
+`remove` steps, lanes only the next declares are `add` steps, lanes in both
+with a different package or pitch are `swap` steps, and lanes matching by
+package and exact pitch are listed in `unchanged`. The sequence runs removals
+first, then swaps, then additions, each group in ascending id order. A swap
+counts as two physical reel changes; `estimatedSeconds` is `changes` times
+`--feeder-change-seconds` (default `30`), which must be finite and positive,
+otherwise the command reports `changeover/invalid` and exits with code `1`.
+The report contains `format` (`open-smt-changeover`), `version`,
+`currentFeeders`, `nextFeeders`, `actions` (`step`, `kind`, `id` and the
+per-kind fields), `unchanged`, `changes`, `feederChangeSeconds` and
+`estimatedSeconds`. Both documents must be valid OpenSMT documents; feeder
+coverage errors are ignored because the plan compares setups, not builds.
+Neither document is modified.
+
 ## export
 
 ```shell
@@ -394,6 +438,7 @@ open-smt feeder add panel.osmt --id F1 --package 0603 --pitch 4 --capacity 500
 open-smt feeder add panel.osmt --id F2 --package QFN-32 --pitch 12 --capacity 50
 open-smt feeder update panel.osmt --id F1 --loaded 300
 open-smt feeder report panel.osmt
+open-smt feeder optimize panel.osmt --slot-pitch 16
 open-smt bom check panel.osmt --bom bom.csv
 open-smt validate panel.osmt
 open-smt placement panel.osmt
@@ -401,5 +446,6 @@ open-smt schedule dual panel.osmt
 open-smt schedule lanes panel.osmt --count 3 --strategy lpt --improve
 open-smt reflow panel.osmt
 open-smt takt panel.osmt --machines 2
+open-smt changeover panel.osmt job-b.osmt
 open-smt export panel.osmt --format program --out program.csv
 ```

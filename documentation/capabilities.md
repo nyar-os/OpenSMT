@@ -34,6 +34,8 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | line balancing | ✅ supported |
 | multi-lane scheduling (2–16 lanes, including the dual-lane report) | ✅ supported (greedy or LPT, optional swaps; not optimal) |
 | cycle time and throughput estimate (takt) | ✅ supported (analytical machine model; not a measured rate) |
+| feeder station assignment along the tape bank | ✅ supported (heuristic by mean placement X; not optimal) |
+| feeder changeover sequence between two documents | ✅ supported (id/package/pitch comparison; fixed time per change) |
 | KiCad PCB (`.kicad_pcb`) import | ✅ supported |
 | CSV placement (`.csv`) import | ✅ supported |
 | Altium / ODB import | ❌ not implemented |
@@ -187,6 +189,44 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt takt panel.osmt --machines 2
     ```
 
+15. **Feeder station assignment.** `feederOptimize` (CLI
+    `feeder optimize <file> [--slot-pitch <mm>]`) runs the same feeder
+    allocation and nearest-neighbour sequence as the placement program and
+    orders the feeder lanes along the tape bank: every lane is placed at the
+    slot closest to the mean placement X of the picks it supplies, ties broken
+    by feeder id, and lanes the program never uses are appended in id order.
+    Slots are numbered from 1 at `(slot − 1) × slotPitch`; `slotPitch` defaults
+    to `16` mm and must be finite and positive, otherwise `station/invalid`.
+    The travel model is the tape-bank axis only: the sum of the absolute
+    slot-to-slot moves between consecutive picks, restarting from slot position
+    zero at the start of every side. The report measures the stored feeder
+    order (`baselineTravelMm`) and the optimized order (`travelMm`) and
+    reports `travelSaved` (floored at zero). The assignment is a heuristic, not
+    an optimal slot permutation, and it never writes the document.
+
+    ```shell
+    open-smt feeder optimize panel.osmt --slot-pitch 16
+    ```
+
+16. **Changeover sequence.** `changeover` (CLI
+    `open-smt changeover <current.osmt> <next.osmt> [--feeder-change-seconds <s>]`)
+    compares the feeder setups of two documents by feeder id. Lanes only the
+    current document declares are removed, lanes only the next declares are
+    added, lanes in both with a different package or a different pitch are
+    swapped, and lanes matching by package and exact pitch stay unchanged. The
+    sequence runs removals first, then swaps, then additions, each group in
+    ascending id order, so stale reels leave before new ones enter. A swap
+    counts as two physical reel changes; `estimatedSeconds` is
+    `changes × feederChangeSeconds` with a default of `30` s per change, which
+    must be finite and positive, otherwise `changeover/invalid`. Both
+    documents must pass the structural validation (feeder coverage errors are
+    ignored because the plan compares setups, not builds). Neither document is
+    modified.
+
+    ```shell
+    open-smt changeover job-a.osmt job-b.osmt
+    ```
+
 ## KiCad PCB import
 
 `open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
@@ -296,6 +336,8 @@ are skipped. Rows keep the order of the source.
 | `feeder/missing` | a used package has no feeder |
 | `feeder/capacity` | loaded parts do not cover the component count |
 | `profile/invalid` | empty zones, non-positive length/temperature/speed/liquidus |
+| `station/invalid` | a feeder station assignment requested a non-positive or non-finite slot pitch |
+| `changeover/invalid` | a changeover requested a non-positive or non-finite time per reel change |
 
 Warnings do not make `ok` false: `component/none`, `feeder/none`,
 `feeder/unused`, `component/rotation` (not a multiple of 90) and
@@ -316,7 +358,9 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/takt.rs` | default machine model matching the placement program, changeover overhead segments, custom machine parameters, even multi-machine split and throughput, empty document zero time, 2-opt saving fields, feeder error propagation, invalid machine parameters, serde defaults, determinism, unchanged document |
 | `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as; partial component update (move, rotation normalisation, side and package changes, height set and cleared, untouched fields, invalid requests, one revision, determinism, round trip) |
 | `tests/import.rs` | KiCad footprint mapping, rotation, both sides, reference sources, loss ledger, outline errors, duplicate/missing references, empty board, determinism, existing target; CSV row order, reordered/quoted/UPPERCASE columns, empty lines, side and rotation defaults, duplicate refdes, missing column, invalid number, invalid side, line numbers, negative coordinate, determinism, one revision, existing target |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, BOM-check, takt and component-update smokes |
+| `tests/station.rs` | mean-placement-X order shortening the tape-bank travel, a matching stored order saving nothing, tie-breaks by feeder id, unused lanes last with `meanX: null`, empty document, feeder coverage propagation, invalid slot pitches, determinism, unchanged document |
+| `tests/changeover.rs` | removal/swap/addition ordering with steps, swap counting twice, pitch-only swap, identical setups, empty current, ignored feeder coverage, structurally invalid documents, invalid change seconds, determinism, unchanged documents |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, BOM-check, takt, component-update, feeder-optimize and changeover smokes |
 
 ## Limitations
 
@@ -339,6 +383,15 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   or nozzle physics. The feeder and nozzle change counts are caller estimates,
   not plan data, and multi-machine throughput is an even split, not a line
   simulation.
+- The feeder station assignment is a heuristic: it orders lanes by the mean
+  placement X of the nearest-neighbour program, models tape-bank travel along X
+  only and ignores slot capacity, tape direction, nozzle constraints and reel
+  lengths. It never writes a feeder setup; applying the assignment is a manual
+  step.
+- The changeover plan matches lanes by feeder id and compares them by package
+  name and exact pitch; it does not detect a lane that moved to another id, and
+  the downtime is a fixed time per reel change, not a measured rate. It reads
+  both documents and writes neither.
 - Reflow uses set-points, not measured thermocouple data, and models no
   convection or board thermal mass.
 - Only the top and bottom sides are supported.
