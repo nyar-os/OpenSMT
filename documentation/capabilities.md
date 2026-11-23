@@ -38,6 +38,8 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | feeder station assignment along the tape bank | ✅ supported (heuristic by mean placement X; not optimal) |
 | feeder changeover sequence between two documents | ✅ supported (id/package/pitch comparison; fixed time per change) |
 | feeder consumption plan for a build quantity | ✅ supported (reels from lane capacity; not a splice or scrap model) |
+| panel coordinate map (single board to every panel instance) | ✅ supported |
+| first-article inspection sheet (JSON and CSV) | ✅ supported |
 | KiCad PCB (`.kicad_pcb`) import | ✅ supported |
 | CSV placement (`.csv`) import | ✅ supported |
 | Altium / ODB import | ❌ not implemented |
@@ -265,6 +267,44 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt feeder consumption panel.osmt --boards 250
     ```
 
+19. **Panel coordinate map.** `panelMap` (CLI
+    `panel map <file> [--out <panel.json>]`) maps every component of the single
+    board into every board instance of the stored panel array without changing
+    the document. A board that is not finite and positive reports
+    `board/invalid`; zero rows or columns, or a negative or non-finite gap,
+    reports `panel/invalid`. Instances run row-major and are numbered from 1:
+    `board = (row − 1) × columns + column`,
+    `offsetX = (column − 1) × (width + gapX)` and
+    `offsetY = (row − 1) × (depth + gapY)`. `panelWidth` and `panelDepth` follow
+    the stored-panel arithmetic. Each component keeps its document order and
+    reports `offsetX + x` and `offsetY + y` for every board; a component with
+    non-finite coordinates carries no placements. `outsideBoard` counts
+    components whose stored coordinates lie outside the single board and `ok`
+    is true when that count is zero.
+
+    ```shell
+    open-smt panel map panel.osmt --out panel-map.json
+    ```
+
+20. **First-article sheet.** `firstArticle` (CLI
+    `quality first-article <file>`, CSV via `export --format fai`) runs the same
+    allocation and sequence as the placement program, so `feeder/missing` and
+    `feeder/capacity` propagate, and turns them into an inspection record: one
+    `steps` row per program step in program order with `step` counted from 1,
+    its coordinates, rotation, lane id and lane pitch; one `materials` block per
+    package in package order with the per-board component count, the distinct
+    sides (`top` before `bottom`) and the supplying lanes in id order (`pitch`,
+    `loaded`, `capacity`, `assigned`); the document `revision`; the board and
+    panel geometry; and the fixed `checklist` `placement`, `orientation`,
+    `package`, `feeder`. The CSV sheet has the same rows in program order and
+    leaves the four check columns empty for the inspector. The sheet records no
+    inspection result and never changes the document.
+
+    ```shell
+    open-smt quality first-article panel.osmt
+    open-smt export panel.osmt --format fai --out first-article.csv
+    ```
+
 ## KiCad PCB import
 
 `open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
@@ -402,7 +442,9 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/changeover.rs` | removal/swap/addition ordering with steps, swap counting twice, pitch-only swap, identical setups, empty current, ignored feeder coverage, structurally invalid documents, invalid change seconds, determinism, unchanged documents |
 | `tests/reflow_window.rs` | default profile metrics and zone ramp rates, margin arithmetic, pass/fail verdict, heating-only profile, invalid limits, determinism, unchanged document |
 | `tests/consumption.rs` | reels and last-reel remainder arithmetic, a short run, multi-lane package totals, empty document, zero boards, feeder coverage propagation, determinism, unchanged document |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, BOM-check, takt, component-update, feeder-optimize, reflow-window, feeder-consumption and changeover smokes |
+| `tests/panel_map.rs` | row-major instance offsets and panel arithmetic, document-order component mapping into every board, single-board identity, outside and non-finite component handling, empty document, invalid board and panel codes, determinism, unchanged document |
+| `tests/first_article.rs` | program-order rows with lane pitch, package material grouping and side totals, recorded revision, fixed checklist, empty document, feeder coverage propagation, CSV header and empty check columns, determinism, unchanged document |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, component-update, feeder-optimize, reflow-window, feeder-consumption and changeover smokes |
 
 ## Limitations
 
@@ -443,6 +485,13 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 - The feeder consumption plan derives reels from lane capacity and the per-board
   allocation. It does not model splices, mid-run reel changes, scrap or moisture
   exposure.
+- The panel coordinate map assumes the stored axis-aligned panel array and
+  row-major instance order. It does not rotate boards, add edge rails, reserve
+  fiducial or tooling areas, or derive a panel outline, and it never changes the
+  stored panel array.
+- The first-article sheet repeats the placement program with the allocated lane
+  pitch and a fixed four-item checklist. It records no inspection result, models
+  no component polarity or marking direction, and does not read a BOM.
 - Only the top and bottom sides are supported.
 - Multi-lane scheduling assigns whole placement tasks to 2–16 lanes with a
   greedy or longest-processing-time-first rule and an optional pairwise-swap

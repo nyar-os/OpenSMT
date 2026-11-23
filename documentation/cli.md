@@ -105,6 +105,31 @@ and the result `rows`, `columns`, `boardCount`, `panelWidth`, `panelDepth`,
 `floor((max + gap) / (size + gap))`, floored at zero. When no board fits,
 `fits` is false and `wastedWidth`, `wastedDepth` and `utilization` are zero.
 
+### panel map
+
+```shell
+open-smt panel map <file> [--out <panel-map.json>]
+```
+
+Prints the read-only single-board to panel coordinate map as JSON and
+optionally writes the same JSON to `--out`. The command never changes the
+stored panel array or the document. A board that is not finite and positive
+reports `board/invalid`; zero rows or columns, or a negative or non-finite gap,
+reports `panel/invalid`; both exit with code `1`.
+
+Instances run row-major from board 1 at the panel origin. For
+`board = (row − 1) × columns + column`, `offsetX = (column − 1) × (width + gapX)`
+and `offsetY = (row − 1) × (depth + gapY)`. The report contains `format`
+(`open-smt-panel-map`), `version`, `units`, the board `width`, `depth` and
+`thickness`, the stored `rows`, `columns`, `gapX` and `gapY`, `boardCount`,
+`panelWidth`, `panelDepth`, one `instances` entry per board (`board`, `row`,
+`column`, `offsetX`, `offsetY`), one `components` entry per component in
+document order (`refdes`, `package`, `side`, the single-board `x`, `y` and
+`rotation`, and its `instances` in board order with panel `x = offsetX + x` and
+`y = offsetY + y`), `outsideBoard` and `ok`. A component with non-finite
+coordinates has no placements and counts as outside; `ok` is true when
+`outsideBoard` is zero.
+
 ## component add
 
 ```shell
@@ -254,6 +279,30 @@ declare) and `quantityMismatches` (per package: `bomQuantity`,
 are ordered by package name, then by reference designator. A malformed BOM
 reports a `bom/...` code naming the physical line. Neither the document nor
 the BOM file is modified.
+
+## quality first-article
+
+```shell
+open-smt quality first-article <file>
+```
+
+Prints a read-only first-article inspection sheet as JSON. The command runs the
+same feeder allocation and placement sequence as `placement`, so a missing lane
+reports `feeder/missing` and an undersized setup reports `feeder/capacity`; the
+document is not modified. The report contains `format`
+(`open-smt-first-article`), `version`, `units`, the document `revision`, `board`,
+`panel`, `boardCount`, `panelWidth`, `panelDepth`, `components`,
+`topComponents`, `bottomComponents`, `packages`, `feeders`, the fixed
+`checklist` (`placement`, `orientation`, `package`, `feeder`), one `materials`
+entry per package in package order (`package`, `components`, `sides` with `top`
+first, and `lanes` in id order with `id`, `pitch`, `loaded`, `capacity`,
+`assigned`) and one `steps` entry per program step in program order (`step`
+counted from 1, `refdes`, `package`, `side`, `x`, `y`, `rotation`, `feeder`,
+`pitch`). The sheet records expected values only; it holds no inspection result.
+
+`export --format fai --out <file.csv>` writes the same rows as a check sheet and
+leaves the four `placement_ok`, `orientation_ok`, `package_ok` and `feeder_ok`
+columns empty for the inspector.
 
 ## profile set
 
@@ -434,13 +483,14 @@ Neither document is modified.
 ## export
 
 ```shell
-open-smt export <file> --format program|feeders|json|md --out <path>
+open-smt export <file> --format program|feeders|fai|json|md --out <path>
 ```
 
 | Format | Content |
 |--------|---------|
 | `program` | placement program CSV, one row per step |
 | `feeders` | feeder setup CSV, one row per lane |
+| `fai` | first-article inspection sheet CSV, one row per step with empty check columns |
 | `json` | the full report |
 | `md` | Markdown board, feeder, reflow and program tables |
 
@@ -474,6 +524,7 @@ open-smt import csv placements.csv --out placements.osmt --side top
 open-smt board panel.osmt --width 120 --depth 90 --thickness 1.6
 open-smt panel panel.osmt --rows 2 --columns 2 --gap-x 5 --gap-y 5
 open-smt panel fit panel.osmt --max-width 320 --max-depth 180 --gap-x 5 --gap-y 5
+open-smt panel map panel.osmt --out panel-map.json
 open-smt component add panel.osmt --refdes R1 --package 0603 --x 10 --y 10
 open-smt component add panel.osmt --refdes U1 --package QFN-32 --x 50 --y 40 --side bottom
 open-smt component update panel.osmt --refdes R1 --x 20 --y 15 --rotation 90
@@ -485,6 +536,7 @@ open-smt feeder report panel.osmt
 open-smt feeder optimize panel.osmt --slot-pitch 16
 open-smt feeder consumption panel.osmt --boards 250
 open-smt bom check panel.osmt --bom bom.csv
+open-smt quality first-article panel.osmt
 open-smt validate panel.osmt
 open-smt placement panel.osmt
 open-smt schedule dual panel.osmt
@@ -494,4 +546,5 @@ open-smt reflow window panel.osmt --peak-max 250 --tal-max 60 --max-ramp 5
 open-smt takt panel.osmt --machines 2
 open-smt changeover panel.osmt job-b.osmt
 open-smt export panel.osmt --format program --out program.csv
+open-smt export panel.osmt --format fai --out first-article.csv
 ```
