@@ -6,7 +6,7 @@
 Cargo.toml                     Rust workspace (smt-model, open-smt-napi)
 package.json                   pnpm workspace scripts
 wae.config.ts                  native targets and staging
-projects/crates/smt-model      engine, CLI binary `osmt`
+projects/crates/smt-model      engine
 projects/crates/smt-napi       Node-API addon
 projects/packages/open-smt     TypeScript SDK and `open-smt` CLI
 projects/packages/open-smt-*   per-platform addon placeholders

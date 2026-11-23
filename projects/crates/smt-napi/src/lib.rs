@@ -2,8 +2,8 @@
 //!
 //! Every export performs one orthogonal operation and returns a JSON string, so
 //! the TypeScript layer owns argument parsing, help text and exit codes. All
-//! analysis forwards to `smt-model`'s [`smt_model::OpenSmt`] session, which the
-//! `osmt` binary also calls.
+//! analysis forwards to `smt-model`'s [`smt_model::OpenSmt`] session, the single
+//! implementation behind the SDK and the `open-smt` CLI.
 //!
 //! Bad arguments report `session/argument-invalid`; every other failure keeps
 //! the stable code of [`smt_model::SmtError`].

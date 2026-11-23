@@ -1,8 +1,8 @@
 # Command line
 
-`open-smt` is the packaged CLI. The Rust binary `osmt` accepts the same commands
-for development. Both print the same JSON, except `balance`, which prints the
-same human-readable summary.
+`open-smt` is the packaged CLI. It is assembled with `@wae/commander` on top of
+the `OpenSMT` SDK and prints JSON for every command, except `balance`, which
+prints a human-readable summary.
 
 ```text
 open-smt <command> [options]

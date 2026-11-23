@@ -64,7 +64,8 @@ into the platform packages. The addon is not committed.
 ## Change checklist
 
 - Search the repository before assuming a command exists; verify flags against
-  `projects/packages/open-smt/src/cli.ts` and `projects/crates/smt-model/src/bin/osmt.rs`.
+  `projects/packages/open-smt/src/cli.ts`. The CLI exists only in TypeScript,
+  assembled with `@wae/commander` on top of the SDK; there is no Rust binary.
 - Add or update a test for every behavioural change.
 - Keep the Rust session, Node-API surface, SDK types and CLI in sync when a
   field or analysis is added or removed.

@@ -28,7 +28,7 @@ projects/sites/homepage        static product site (VMZ)
 7. `export` writes the program CSV, feeder CSV, JSON or Markdown through the same
    atomic writer.
 
-Because the `osmt` binary, the Node-API addon and the SDK all call the same
+Because the Node-API addon, the SDK and the CLI all call the same
 session, they cannot disagree about a program or an error code.
 
 ## Invariants
