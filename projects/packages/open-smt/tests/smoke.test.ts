@@ -54,6 +54,8 @@ test('the error surface includes coverage and capability codes', () => {
     assert.ok(errorCodes.includes('takt/invalid'));
     assert.ok(errorCodes.includes('station/invalid'));
     assert.ok(errorCodes.includes('changeover/invalid'));
+    assert.ok(errorCodes.includes('reflow/invalid'));
+    assert.ok(errorCodes.includes('consumption/invalid'));
 });
 
 test('balance splits components and rejects zero machines', { skip: skipWithoutNative }, async () => {
@@ -334,6 +336,99 @@ test('feeder optimize assigns slots by mean placement x and leaves the document 
         await assert.rejects(document.feederOptimize(0), (error: unknown) => {
             assert.ok(isOpenSMTError(error));
             assert.equal(error.code, 'station/invalid');
+            return true;
+        });
+        assert.equal(document.revision, before);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('reflow window compares the profile with limits and leaves the document unchanged', {
+    skip: skipWithoutNative,
+}, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-reflow-window-'));
+    const file = path.join(directory, 'panel.osmt');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        const before = document.revision;
+
+        const report = await document.reflowWindow({
+            peakMin: 235,
+            peakMax: 250,
+            timeAboveLiquidusMin: 15,
+            timeAboveLiquidusMax: 60,
+            maxHeatingRate: 5,
+            maxCoolingRate: 6,
+        });
+        assert.equal(report.format, 'open-smt-reflow-window');
+        assert.equal(report.version, 1);
+        assert.equal(report.temperatureUnit, 'celsius');
+        assert.equal(report.peakTemperature, 245);
+        assert.equal(report.totalSeconds, 140);
+        assert.equal(report.zones.length, 4);
+        assert.ok(Math.abs(report.zones[0]!.rampRate - 125 / 30) < 1e-9);
+        assert.ok(Math.abs(report.zones[3]!.rampRate + 215 / 40) < 1e-9);
+        assert.ok(Math.abs(report.maxHeatingRate - 125 / 30) < 1e-9);
+        assert.ok(Math.abs(report.maxCoolingRate - 5.375) < 1e-9);
+        assert.equal(report.checks.length, 6);
+        assert.ok(Math.abs(report.checks[0]!.margin - 10) < 1e-9);
+        assert.ok(report.ok);
+
+        const failing = await document.reflowWindow({ maxHeatingRate: 4 });
+        assert.equal(failing.checks.length, 1);
+        assert.ok(failing.checks[0]!.margin < 0);
+        assert.equal(failing.ok, false);
+
+        await assert.rejects(document.reflowWindow({ peakMin: 300, peakMax: 200 }), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'reflow/invalid');
+            return true;
+        });
+        assert.equal(document.revision, before);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('feeder consumption plans reels for a build quantity', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-consumption-'));
+    const file = path.join(directory, 'panel.osmt');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'R2', package: '0603', x: 50, y: 10 });
+        await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 10 });
+        const before = document.revision;
+
+        const report = await document.consumption(5);
+        assert.equal(report.format, 'open-smt-consumption');
+        assert.equal(report.version, 1);
+        assert.equal(report.boards, 5);
+        assert.equal(report.componentsPerBoard, 2);
+        assert.equal(report.totalPicks, 10);
+        assert.equal(report.feeders[0]?.picksPerBoard, 2);
+        assert.equal(report.feeders[0]?.picks, 10);
+        assert.equal(report.feeders[0]?.reels, 1);
+        assert.equal(report.feeders[0]?.remainder, 10);
+        assert.equal(report.feeders[0]?.short, false);
+        assert.equal(report.packages[0]?.reels, 1);
+        assert.ok(report.ok);
+
+        const beyond = await document.consumption(6);
+        assert.equal(beyond.feeders[0]?.picks, 12);
+        assert.equal(beyond.feeders[0]?.reels, 2);
+        assert.equal(beyond.feeders[0]?.remainder, 2);
+        assert.equal(beyond.feeders[0]?.short, true);
+        assert.equal(beyond.ok, false);
+
+        await assert.rejects(document.consumption(0), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'consumption/invalid');
             return true;
         });
         assert.equal(document.revision, before);

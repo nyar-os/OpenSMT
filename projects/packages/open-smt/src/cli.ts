@@ -90,6 +90,15 @@ function integerOption(options: ParsedOptions, ctx: CommandContext, name: string
     return value;
 }
 
+/** Parses `--boards` and rejects zero with a localized error before the addon runs. */
+function boardCount(options: ParsedOptions, ctx: CommandContext): number {
+    const boards = integerOption(options, ctx, 'boards');
+    if (boards < 1) {
+        throw failure(ctx, 'consumption/invalid', 'invalidBoards', { count: String(boards) });
+    }
+    return boards;
+}
+
 function exportFormat(value: string, ctx: CommandContext): ExportFormat {
     if (value === 'program' || value === 'csv') {
         return 'program';
@@ -443,6 +452,16 @@ feederCommand
             });
         }),
     );
+feederCommand
+    .command('consumption', 'cli.cmd.feeder-consumption')
+    .option('--boards <n>', 'cli.opt.boards')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'feeder consumption <file> --boards <n>', async (document) => {
+                print(await document.consumption(boardCount(options, ctx)));
+            });
+        }),
+    );
 
 const bomCommand = cli.command('bom', 'cli.cmd.bom');
 bomCommand
@@ -568,13 +587,42 @@ scheduleCommand
         }),
     );
 
-cli
+const reflowCommand = cli
     .command('reflow', 'cli.cmd.reflow')
     .actionCtx((options, _args, ctx) =>
         guard(ctx, async () => {
             await editDocument(options, ctx, 'reflow <file>', async (document) => {
                 print(await document.reflow());
             });
+        }),
+    );
+reflowCommand
+    .command('window', 'cli.cmd.reflow-window')
+    .option('--peak-min <c>', 'cli.opt.peak-min')
+    .option('--peak-max <c>', 'cli.opt.peak-max')
+    .option('--tal-min <s>', 'cli.opt.tal-min')
+    .option('--tal-max <s>', 'cli.opt.tal-max')
+    .option('--max-ramp <c/s>', 'cli.opt.max-ramp')
+    .option('--max-cooling <c/s>', 'cli.opt.max-cooling')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(
+                options,
+                ctx,
+                'reflow window <file> [--peak-min <c>] [--peak-max <c>] [--tal-min <s>] [--tal-max <s>] [--max-ramp <c/s>] [--max-cooling <c/s>]',
+                async (document) => {
+                    print(
+                        await document.reflowWindow({
+                            peakMin: numberOption(options, ctx, 'peak-min'),
+                            peakMax: numberOption(options, ctx, 'peak-max'),
+                            timeAboveLiquidusMin: numberOption(options, ctx, 'tal-min'),
+                            timeAboveLiquidusMax: numberOption(options, ctx, 'tal-max'),
+                            maxHeatingRate: numberOption(options, ctx, 'max-ramp'),
+                            maxCoolingRate: numberOption(options, ctx, 'max-cooling'),
+                        }),
+                    );
+                },
+            );
         }),
     );
 

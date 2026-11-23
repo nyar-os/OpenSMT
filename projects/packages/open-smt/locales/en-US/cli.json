@@ -18,6 +18,7 @@
             "feeder-remove": "Remove a declared feeder in place",
             "feeder-report": "Report feeder loading and coverage",
             "feeder-optimize": "Assign feeder slots along the tape bank",
+            "feeder-consumption": "Plan feeder consumption for a build quantity",
             "bom": "Check the document against a BOM",
             "bom-check": "Report missing, extra and quantity findings against a BOM CSV",
             "profile": "Edit the reflow profile",
@@ -30,6 +31,7 @@
             "schedule-dual": "Assign tasks to two lanes by cumulative task time",
             "schedule-lanes": "Assign tasks to 2 to 16 lanes by cumulative task time",
             "reflow": "Evaluate the reflow profile",
+            "reflow-window": "Compare the reflow profile with process-window limits",
             "takt": "Estimate cycle time and throughput",
             "changeover": "Plan the feeder changeover sequence between two documents",
             "export": "Export the program, feeder setup, JSON or Markdown",
@@ -76,7 +78,14 @@
             "slot-pitch": "Distance between neighbouring feeder slots in millimetres",
             "feeder-changes": "Number of feeder changes",
             "nozzle-change-seconds": "Seconds per nozzle change",
-            "nozzle-changes": "Number of nozzle changes"
+            "nozzle-changes": "Number of nozzle changes",
+            "boards": "Number of boards the plan covers",
+            "peak-min": "Lowest acceptable peak temperature in degrees Celsius",
+            "peak-max": "Highest acceptable peak temperature in degrees Celsius",
+            "tal-min": "Shortest acceptable time above liquidus in seconds",
+            "tal-max": "Longest acceptable time above liquidus in seconds",
+            "max-ramp": "Highest acceptable heating rate in degrees Celsius per second",
+            "max-cooling": "Highest acceptable cooling rate in degrees Celsius per second"
         },
         "error": {
             "missingArgument": "missing argument; usage: open-smt {usage}",
@@ -84,7 +93,8 @@
             "invalidNumber": "option `{option}` is not a number: `{value}`",
             "unknownFormat": "unknown export format `{format}`; only program, feeders, json or md is supported",
             "invalidStrategy": "unknown dual-lane strategy `{strategy}`; only greedy or lpt is supported",
-            "invalidLanes": "lane count `{count}` must be an integer from 2 to 16"
+            "invalidLanes": "lane count `{count}` must be an integer from 2 to 16",
+            "invalidBoards": "board count `{count}` must be a positive integer"
         }
     }
 }
