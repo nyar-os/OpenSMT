@@ -28,6 +28,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | time above liquidus over linear ramps | ✅ supported |
 | reflow process-window margins (peak, time above liquidus, ramp rates) | ✅ supported |
 | placement program CSV | ✅ supported |
+| neutral machine program CSV with readback verification | ✅ supported |
 | feeder setup CSV | ✅ supported |
 | JSON / Markdown reports | ✅ supported |
 | paste aperture / stencil generation | ❌ not implemented |
@@ -40,6 +41,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | feeder consumption plan for a build quantity | ✅ supported (reels from lane capacity; not a splice or scrap model) |
 | panel coordinate map (single board to every panel instance) | ✅ supported |
 | first-article inspection sheet (JSON and CSV) | ✅ supported |
+| takt bottleneck heat map (step, package and side shares) | ✅ supported |
 | KiCad PCB (`.kicad_pcb`) import | ✅ supported |
 | CSV placement (`.csv`) import | ✅ supported |
 | Altium / ODB import | ❌ not implemented |
@@ -305,6 +307,53 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt export panel.osmt --format fai --out first-article.csv
     ```
 
+21. **Machine program interchange.** `machineProgram` (CLI
+    `machine export <file> --out <file.csv> [--nozzles "pkg=nozzle;..."]`) reruns
+    the allocation and sequence of the placement program and renders one CSV row
+    per step in program order. The header is fixed:
+    `sequence,side,refdes,package,x_mm,y_mm,rotation_deg,feeder,station,pitch_mm,nozzle,speed_mm_s`.
+    `station` is the one-based position of the lane in the document feeder setup
+    (not the heuristic `feeder optimize` slot), `pitch` is that lane's tape
+    pitch, `nozzle` comes from the caller map keyed by package and is empty when
+    the package has no entry, and `speed` is the model head speed of `200` mm/s.
+    Coordinates, rotation, pitch and speed are rounded to three decimals once,
+    so rendering and parsing are exact inverses. The export writes the file,
+    parses it back and compares every field; a difference reports
+    `program/invalid` and the file is left on disk. `machine verify` (CLI
+    `machine verify <file> --program <file.csv> [--nozzles ...]`) rebuilds the
+    document program and lists every differing field with its step (`sequence`
+    `0` names a step-count difference). An empty package or nozzle in the map, a
+    missing or unknown column, a wrong field count, an unknown side, an empty
+    reference/package/feeder, a non-finite number, a zero sequence or station, a
+    non-positive speed and a malformed file report `program/invalid`. The format
+    is a neutral interchange, not a vendor dialect; feeder coverage errors
+    propagate from the allocation. Neither the document nor the source is
+    modified by verification.
+
+    ```shell
+    open-smt machine export panel.osmt --out machine.csv --nozzles "0603=N1;QFN-32=N2"
+    open-smt machine verify panel.osmt --program machine.csv --nozzles "0603=N1;QFN-32=N2"
+    ```
+
+22. **Takt bottleneck heat map.** `heatmap` (CLI `takt heatmap <file>`) runs the
+    allocation and nearest-neighbour sequence of the default `takt` estimate and
+    attributes each step's time to the step, its package and its side. A step's
+    time is `0.6 s + inbound travel / 200 mm·s⁻¹`, measured from the previous
+    step of the same side with a fresh origin at every side, exactly like the
+    placement program. Step times therefore sum to the `takt` `boardSeconds` of
+    the default machine model with no feeder or nozzle change overhead. `share`
+    is a step's time divided by `totalSeconds` (zero for an empty document);
+    `packages` are ordered by descending time, ties by package name, and each
+    carries `placeSeconds`, `travelSeconds`, `seconds`, `share` and a running
+    `cumulativeShare` for a Pareto-style heat map. `sides` lists only sides with
+    at least one step, `top` before `bottom`, and `bottleneck` names the package
+    with the largest time (`null` when empty). Feeder coverage errors propagate
+    and the document is never modified.
+
+    ```shell
+    open-smt takt heatmap panel.osmt
+    ```
+
 ## KiCad PCB import
 
 `open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
@@ -418,6 +467,7 @@ are skipped. Rows keep the order of the source.
 | `changeover/invalid` | a changeover requested a non-positive or non-finite time per reel change |
 | `reflow/invalid` | a process-window limit is non-finite or negative, or a minimum exceeds its maximum |
 | `consumption/invalid` | a consumption plan requested fewer than one board |
+| `program/invalid` | a machine program file is malformed, a nozzle map is invalid, or an export did not read back identically |
 
 Warnings do not make `ok` false: `component/none`, `feeder/none`,
 `feeder/unused`, `component/rotation` (not a multiple of 90) and
@@ -444,7 +494,9 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/consumption.rs` | reels and last-reel remainder arithmetic, a short run, multi-lane package totals, empty document, zero boards, feeder coverage propagation, determinism, unchanged document |
 | `tests/panel_map.rs` | row-major instance offsets and panel arithmetic, document-order component mapping into every board, single-board identity, outside and non-finite component handling, empty document, invalid board and panel codes, determinism, unchanged document |
 | `tests/first_article.rs` | program-order rows with lane pitch, package material grouping and side totals, recorded revision, fixed checklist, empty document, feeder coverage propagation, CSV header and empty check columns, determinism, unchanged document |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, component-update, feeder-optimize, reflow-window, feeder-consumption and changeover smokes |
+| `tests/machine_program.rs` | fixed header and program order, station/pitch/nozzle/speed fields, three-decimal canonical values, render-parse round trip, tampered field and reordered row mismatches, step-count mismatch, malformed files, empty document, invalid nozzle map, feeder coverage propagation, deterministic unchanged document, export-readback and verify-file paths |
+| `tests/heatmap.rs` | step placement and inbound travel time, package ordering with cumulative shares, per-side origin restart, equality with the default takt board time, empty document, feeder coverage propagation, determinism, unchanged document |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, feeder-optimize, reflow-window, feeder-consumption and changeover smokes |
 
 ## Limitations
 
@@ -492,6 +544,15 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 - The first-article sheet repeats the placement program with the allocated lane
   pitch and a fixed four-item checklist. It records no inspection result, models
   no component polarity or marking direction, and does not read a BOM.
+- The takt heat map splits the analytical step time of the default machine model
+  by step, package and side. It inherits every assumption of the cycle time
+  estimate: constant head speed, fixed placement overhead, no acceleration,
+  tape advance, vision or nozzle physics.
+- The machine program is a neutral CSV interchange of the placement program. It
+  is not a Fuji, Yamaha, Juki or ASM dialect, carries no vendor-specific fields
+  and takes nozzle ids only from a caller-supplied package map; `station` is the
+  document feeder order, not a physical machine slot. Reading a program back
+  only compares it with the document, it does not drive a machine.
 - Only the top and bottom sides are supported.
 - Multi-lane scheduling assigns whole placement tasks to 2–16 lanes with a
   greedy or longest-processing-time-first rule and an optional pairwise-swap
@@ -501,7 +562,8 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 - Line balancing distributes whole components across 1–64 machines but does not
   emit vendor machine programs, model conveyor lanes or account for line
   changeover time.
-- Vendor dialects and paste apertures are out of scope and reported as such.
+- Vendor dialects and paste apertures are out of scope and reported as such;
+  the neutral machine program is an interchange format, not a vendor dialect.
 - KiCad import covers the component list and a rectangular outline only. Nets,
   tracks, vias, pads, zones, graphics and 3D models are counted in the loss
   ledger and are not part of the document. Altium and ODB import remain

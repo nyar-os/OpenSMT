@@ -458,6 +458,66 @@ count, a negative or non-finite machine parameter reports `takt/invalid`, and
 report. An empty document estimates zero time and reports zero throughput. The
 document is not modified.
 
+### takt heatmap
+
+```shell
+open-smt takt heatmap <file>
+```
+
+Prints a read-only takt bottleneck heat map as JSON. The command runs the same
+feeder allocation and nearest-neighbour sequence as the default `takt` estimate
+and attributes each step's time to the step, its package and its side. A step's
+time is `0.6 s + inbound travel / 200 mm·s⁻¹`, measured from the previous step
+of the same side with a fresh origin at every side; step times therefore sum to
+the `takt` `boardSeconds` of the default machine model. The report contains
+`format` (`open-smt-heatmap`), `version`, `units`, `components`,
+`placeSeconds`, `travelSeconds`, `totalSeconds`, `bottleneck` (the package with
+the largest time, `null` when empty), one `packages` entry ordered by descending
+time with ties by name (`package`, `steps`, `placeSeconds`, `travelSeconds`,
+`seconds`, `share`, `cumulativeShare`), one `sides` entry per side that carries
+a step (`top` before `bottom`, with `side`, `steps`, `seconds`, `share`) and one
+`steps` entry per program step in program order (`sequence`, `refdes`,
+`package`, `side`, `feeder`, `x`, `y`, `travelMm`, `placeSeconds`,
+`travelSeconds`, `seconds`, `share`). Shares are fractions of `totalSeconds` and
+are zero for an empty document. Feeder coverage errors propagate unchanged and
+the document is not modified.
+
+## machine export
+
+```shell
+open-smt machine export <file> --out <file.csv> [--nozzles "pkg=nozzle;..."]
+```
+
+Writes a neutral machine-readable placement program as CSV and then reads the
+file back. It is not a vendor dialect; Fuji, Yamaha, Juki and ASM remain
+unimplemented. One row per placement step in program order carries
+`sequence`, `side`, `refdes`, `package`, `x_mm`, `y_mm`, `rotation_deg`,
+`feeder`, `station`, `pitch_mm`, `nozzle` and `speed_mm_s`. `station` is the
+one-based position of the lane in the document feeder setup, `pitch_mm` is its
+tape pitch, `speed_mm_s` is the `200` mm/s model head speed and `nozzle` comes
+from `--nozzles`, a `;`-separated list of `package=nozzle` pairs; a package
+without an entry exports an empty nozzle. Coordinates, rotation, pitch and
+speed are rounded to three decimals. Missing or undersized feeders report
+`feeder/missing` or `feeder/capacity`, a malformed nozzle map reports
+`program/invalid`, and both exit with code `1`. The JSON report contains
+`format` (`open-smt-machine-program`), `version`, `units`, `path`, `steps`,
+`bytes` and `verified`. The document is not modified.
+
+## machine verify
+
+```shell
+open-smt machine verify <file> --program <file.csv> [--nozzles "pkg=nozzle;..."]
+```
+
+Rebuilds the document program and checks the file at `--program` field by field,
+including the program order. `--nozzles` must be the same map used for the
+export, because the expected nozzles come from it. The report contains `format`
+(`open-smt-machine-program`), `version`, `units`, `path`, `steps`, `mismatches`
+and `ok`; every mismatch names its `sequence` (`0` for a step-count
+difference), `field`, `expected` and `actual`. A malformed program reports
+`program/invalid`, an unreadable file reports `io/read`, and both exit with code
+`1`. The document and the program file are not modified.
+
 ## changeover
 
 ```shell
@@ -544,6 +604,9 @@ open-smt schedule lanes panel.osmt --count 3 --strategy lpt --improve
 open-smt reflow panel.osmt
 open-smt reflow window panel.osmt --peak-max 250 --tal-max 60 --max-ramp 5
 open-smt takt panel.osmt --machines 2
+open-smt takt heatmap panel.osmt
+open-smt machine export panel.osmt --out machine.csv --nozzles "0603=N1;QFN-32=N2"
+open-smt machine verify panel.osmt --program machine.csv --nozzles "0603=N1;QFN-32=N2"
 open-smt changeover panel.osmt job-b.osmt
 open-smt export panel.osmt --format program --out program.csv
 open-smt export panel.osmt --format fai --out first-article.csv
