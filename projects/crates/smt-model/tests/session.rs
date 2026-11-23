@@ -56,6 +56,25 @@ fn create_edit_reopen_and_export() {
 }
 
 #[test]
+fn first_article_export_writes_a_check_sheet() {
+    let directory = workspace("fai-export");
+    let path = directory.join("panel.osmt");
+
+    let mut session = OpenSmt::new();
+    session.create(&path).expect("create");
+    session.add_component(Component::new("R1", "0603", 10.0, 10.0)).expect("component");
+    session.add_feeder(Feeder::new("F1", "0603", 4.0, 100)).expect("feeder");
+
+    let target = directory.join("first-article.csv");
+    let exported = session.export(ExportFormat::FirstArticle, &target).expect("export");
+    assert_eq!(exported.format, "fai");
+    assert_eq!(exported.bytes, fs::metadata(&target).expect("metadata").len() as usize);
+    let sheet = fs::read_to_string(&target).expect("sheet");
+    assert!(sheet.starts_with("step,refdes,package,side,x,y,rotation,feeder,pitch,placement_ok"));
+    assert!(sheet.contains("\n1,R1,0603,top,10,10,0,F1,4,,,,"));
+}
+
+#[test]
 fn the_only_feeder_of_a_used_package_cannot_be_removed() {
     let directory = workspace("in-use");
     let path = directory.join("board.osmt");

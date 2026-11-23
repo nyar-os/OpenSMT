@@ -7,6 +7,7 @@ use std::{fs, path::Path};
 
 use crate::{
     SmtError,
+    first_article::FirstArticleReport,
     model::SmtDocument,
     place::{FeederReport, PlacementReport},
     reflow::ReflowReport,
@@ -65,6 +66,30 @@ pub fn feeder_csv(feeders: &FeederReport) -> String {
             feeder.assigned,
             feeder.remaining,
             escape(&feeder.refdes.join("|"))
+        ));
+    }
+    text
+}
+
+/// Renders the first-article inspection sheet as CSV, one row per step.
+///
+/// The four trailing columns are the generic checks of the sheet and stay empty
+/// for the inspector to fill in.
+pub fn first_article_csv(sheet: &FirstArticleReport) -> String {
+    let mut text =
+        String::from("step,refdes,package,side,x,y,rotation,feeder,pitch,placement_ok,orientation_ok,package_ok,feeder_ok\n");
+    for step in &sheet.steps {
+        text.push_str(&format!(
+            "{},{},{},{},{},{},{},{},{},,,,\n",
+            step.step,
+            escape(&step.refdes),
+            escape(&step.package),
+            step.side.as_str(),
+            number(step.x),
+            number(step.y),
+            number(step.rotation),
+            escape(&step.feeder),
+            number(step.pitch)
         ));
     }
     text

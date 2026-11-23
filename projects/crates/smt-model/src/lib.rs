@@ -36,9 +36,11 @@ mod dual;
 mod error;
 mod export;
 mod feeder;
+mod first_article;
 mod import;
 mod model;
 mod panel_fit;
+mod panel_map;
 mod place;
 mod reflow;
 mod reflow_window;
@@ -58,11 +60,15 @@ pub use crate::{
         plan_dual_lane_with_strategy, plan_lanes,
     },
     error::{SmtError, not_implemented},
-    export::{feeder_csv, markdown, program_csv, write_atomic},
+    export::{feeder_csv, first_article_csv, markdown, program_csv, write_atomic},
     feeder::{FeederLoadingReport, FeederSlot, report as feeder_loading_report},
+    first_article::{
+        FirstArticleLane, FirstArticleMaterial, FirstArticleReport, FirstArticleStep, sheet as first_article_sheet,
+    },
     import::{ImportLoss, ImportReport},
     model::{Board, Component, FORMAT, Feeder, Panel, ReflowProfile, Side, SmtDocument, UNITS, VERSION, Zone},
     panel_fit::{PanelFitReport, fit as panel_fit},
+    panel_map::{MappedComponent, PanelInstance, PanelMapReport, PanelPlacement, map as panel_map},
     place::{
         FeederReport, FeederUsage, HEAD_SPEED, PLACE_SECONDS, PackageUsage, PlacementEntry, PlacementReport,
         allocate as allocate_feeders, sequence as sequence_placement, sequence_with as sequence_placement_with,
@@ -96,12 +102,15 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "feederStationAssignment": "supported",
     "changeoverSequence": "supported",
     "reflowWindow": "supported",
-    "feederConsumption": "supported"
+    "feederConsumption": "supported",
+    "panelMap": "supported",
+    "firstArticle": "supported"
   },
   "io": {
     "osmt": "supported",
     "programCsv": "supported",
     "feedersCsv": "supported",
+    "firstArticleCsv": "supported",
     "json": "supported",
     "md": "supported",
     "kicad": "unsupported",
@@ -123,6 +132,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "changeoverSequence": "lanes are matched by id and compared by package and exact pitch; the downtime is a fixed time per reel change, not a measured rate",
     "reflowWindow": "metrics and ramp rates come from zone set-points, not measured thermocouple data; the comparison is against caller-supplied limits",
     "feederConsumption": "reels are derived from lane capacity and the per-board feeder allocation; splices, reel changes, scrap and moisture exposure are not modelled",
+    "panelMap": "row-major instances of the stored panel array; no board rotation, edge rail, fiducial, tooling area or panel outline is modelled",
+    "firstArticle": "repeats the placement program with the allocated lane pitch and a fixed four-item checklist; it records no inspection result and models no component polarity",
     "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }
 }"#;

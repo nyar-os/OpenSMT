@@ -19,11 +19,13 @@ use crate::{
     changeover::{self, ChangeoverReport},
     consumption::{self, ConsumptionReport},
     dual::{self, DualLaneReport, DualLaneStrategy, LanesReport},
-    export::{feeder_csv, markdown, program_csv, write_atomic},
+    export::{feeder_csv, first_article_csv, markdown, program_csv, write_atomic},
     feeder::{self, FeederLoadingReport},
+    first_article::{self, FirstArticleReport},
     import::ImportReport,
     model::{Board, Component, Feeder, Panel, ReflowProfile, Side, SmtDocument, UNITS},
     panel_fit::{self, PanelFitReport},
+    panel_map::{self, PanelMapReport},
     place::{self, FeederReport, PlacementReport},
     reflow::{self, ReflowReport},
     reflow_window::{self, ReflowWindowLimits, ReflowWindowReport},
@@ -64,6 +66,8 @@ pub enum ExportFormat {
     Program,
     /// The feeder setup sheet as CSV.
     Feeders,
+    /// The first-article inspection sheet as CSV.
+    FirstArticle,
     /// The full report as JSON.
     Json,
     /// The full report as Markdown.
@@ -76,6 +80,7 @@ impl ExportFormat {
         match self {
             Self::Program => "program",
             Self::Feeders => "feeders",
+            Self::FirstArticle => "fai",
             Self::Json => "json",
             Self::Md => "md",
         }
@@ -89,12 +94,13 @@ impl FromStr for ExportFormat {
         match value {
             "program" | "csv" => Ok(Self::Program),
             "feeders" | "setup" => Ok(Self::Feeders),
+            "fai" | "first-article" => Ok(Self::FirstArticle),
             "json" => Ok(Self::Json),
             "md" | "markdown" => Ok(Self::Md),
             "kicad" | "altium" | "odb" => Err(crate::not_implemented(&format!("`{value}` export"))),
             other => Err(SmtError::new(
                 "cli/unknown-format",
-                format!("unknown export format `{other}`; only program, feeders, json or md is supported"),
+                format!("unknown export format `{other}`; only program, feeders, fai, json or md is supported"),
             )),
         }
     }
@@ -504,6 +510,24 @@ impl OpenSmt {
         panel_fit::fit(self.document()?, max_width, max_depth, gap_x, gap_y)
     }
 
+    /// Returns the read-only single-board to panel coordinate map.
+    ///
+    /// Every component lists its placement on every board instance of the stored
+    /// panel array, and the report counts components outside the single board.
+    /// The document is never modified.
+    pub fn panel_map(&self) -> Result<PanelMapReport, SmtError> {
+        panel_map::map(self.document()?)
+    }
+
+    /// Returns the read-only first-article inspection sheet.
+    ///
+    /// The sheet runs the same allocation and sequence as [`OpenSmt::placement`],
+    /// so feeder coverage errors propagate unchanged. The document is never
+    /// modified.
+    pub fn first_article(&self) -> Result<FirstArticleReport, SmtError> {
+        first_article::sheet(self.document()?)
+    }
+
     /// Returns the read-only BOM cross-check against the BOM CSV at `bom`.
     ///
     /// The report compares the placement list with the BOM and names missing
@@ -625,6 +649,7 @@ impl OpenSmt {
                 program_csv(&place::sequence(document, &feeders)?)
             }
             ExportFormat::Feeders => feeder_csv(&place::allocate(document)?),
+            ExportFormat::FirstArticle => first_article_csv(&first_article::sheet(document)?),
             ExportFormat::Json => {
                 let report = self.build_report()?;
                 serde_json::to_string_pretty(&report).map_err(|error| SmtError::new("document/serialize", error.to_string()))?
