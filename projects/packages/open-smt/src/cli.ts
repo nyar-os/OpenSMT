@@ -429,6 +429,15 @@ componentCommand
             });
         }),
     );
+componentCommand
+    .command('list', 'cli.cmd.component-list')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'component list <file>', async (document) => {
+                print(await document.componentList());
+            });
+        }),
+    );
 
 const feederCommand = cli.command('feeder', 'cli.cmd.feeder');
 feederCommand
