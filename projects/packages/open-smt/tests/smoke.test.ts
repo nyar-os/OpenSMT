@@ -345,6 +345,92 @@ test('feeder optimize assigns slots by mean placement x and leaves the document 
     }
 });
 
+test('panel map maps every component into every board instance', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-panel-map-'));
+    const file = path.join(directory, 'panel.osmt');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.setPanel({ rows: 2, columns: 2, gapX: 5, gapY: 4 });
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'C1', package: '0805', side: 'bottom', x: 20, y: 30 });
+        const before = document.revision;
+
+        const report = await document.panelMap();
+        assert.equal(report.format, 'open-smt-panel-map');
+        assert.equal(report.version, 1);
+        assert.equal(report.boardCount, 4);
+        assert.deepEqual(
+            report.instances.map((instance) => [instance.board, instance.row, instance.column, instance.offsetX, instance.offsetY]),
+            [
+                [1, 1, 1, 0, 0],
+                [2, 1, 2, 105, 0],
+                [3, 2, 1, 0, 84],
+                [4, 2, 2, 105, 84],
+            ],
+        );
+        assert.deepEqual(
+            report.components[0]?.instances.map((placement) => [placement.board, placement.x, placement.y]),
+            [
+                [1, 10, 10],
+                [2, 115, 10],
+                [3, 10, 94],
+                [4, 115, 94],
+            ],
+        );
+        assert.equal(report.ok, true);
+        assert.equal(report.outsideBoard, 0);
+        assert.equal(document.revision, before);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('first article builds a check sheet and exports it as csv', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-first-article-'));
+    const file = path.join(directory, 'panel.osmt');
+    const sheetFile = path.join(directory, 'first-article.csv');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 90, y: 10 });
+        await document.addComponent({ refdes: 'R2', package: '0603', x: 10, y: 10, rotation: 90 });
+        await document.addComponent({ refdes: 'C1', package: '0805', side: 'bottom', x: 20, y: 20 });
+        await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 100 });
+        await document.addFeeder({ id: 'F2', package: '0805', pitch: 8, capacity: 50 });
+        const before = document.revision;
+
+        const report = await document.firstArticle();
+        assert.equal(report.format, 'open-smt-first-article');
+        assert.equal(report.version, 1);
+        assert.deepEqual(
+            report.steps.map((step) => [step.step, step.refdes, step.feeder, step.pitch]),
+            [
+                [1, 'R2', 'F1', 4],
+                [2, 'R1', 'F1', 4],
+                [3, 'C1', 'F2', 8],
+            ],
+        );
+        assert.equal(report.topComponents, 2);
+        assert.equal(report.bottomComponents, 1);
+        assert.deepEqual([...report.checklist], ['placement', 'orientation', 'package', 'feeder']);
+        assert.equal(report.materials[0]?.package, '0603');
+        assert.equal(report.materials[0]?.lanes[0]?.assigned, 2);
+
+        const exported = await document.exportDocument('fai', sheetFile);
+        assert.equal(exported.format, 'fai');
+        const csv = await fs.readFile(sheetFile, 'utf8');
+        assert.ok(csv.startsWith('step,refdes,package,side,x,y,rotation,feeder,pitch,placement_ok'));
+        assert.ok(csv.includes('\n1,R2,0603,top,10,10,90,F1,4,,,,'));
+        assert.ok(csv.includes('\n3,C1,0805,bottom,20,20,0,F2,8,,,,'));
+        assert.equal(document.revision, before);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
 test('reflow window compares the profile with limits and leaves the document unchanged', {
     skip: skipWithoutNative,
 }, async () => {

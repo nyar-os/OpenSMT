@@ -106,6 +106,9 @@ function exportFormat(value: string, ctx: CommandContext): ExportFormat {
     if (value === 'feeders' || value === 'setup') {
         return 'feeders';
     }
+    if (value === 'fai' || value === 'first-article') {
+        return 'fai';
+    }
     if (value === 'json' || value === 'md') {
         return value;
     }
@@ -312,6 +315,21 @@ panelCommand
             });
         }),
     );
+panelCommand
+    .command('map', 'cli.cmd.panel-map')
+    .option('--out <panel.json>', 'cli.opt.out')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'panel map <file> [--out <panel.json>]', async (document) => {
+                const report = await document.panelMap();
+                const target = optionText(options, 'out');
+                if (target !== undefined) {
+                    fs.writeFileSync(target, JSON.stringify(report, null, 2));
+                }
+                print(report);
+            });
+        }),
+    );
 
 const componentCommand = cli.command('component', 'cli.cmd.component');
 componentCommand
@@ -471,6 +489,17 @@ bomCommand
         guard(ctx, async () => {
             await editDocument(options, ctx, 'bom check <file> --bom <bom.csv>', async (document) => {
                 print(await document.bomCheck(requiredOption(options, ctx, 'bom')));
+            });
+        }),
+    );
+
+const qualityCommand = cli.command('quality', 'cli.cmd.quality');
+qualityCommand
+    .command('first-article', 'cli.cmd.quality-first-article')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'quality first-article <file>', async (document) => {
+                print(await document.firstArticle());
             });
         }),
     );
