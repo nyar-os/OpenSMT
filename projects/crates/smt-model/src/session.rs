@@ -17,6 +17,7 @@ use crate::{
     balance::{self, BalanceReport},
     bom::{self, BomCheckReport},
     changeover::{self, ChangeoverReport},
+    consumption::{self, ConsumptionReport},
     dual::{self, DualLaneReport, DualLaneStrategy, LanesReport},
     export::{feeder_csv, markdown, program_csv, write_atomic},
     feeder::{self, FeederLoadingReport},
@@ -25,6 +26,7 @@ use crate::{
     panel_fit::{self, PanelFitReport},
     place::{self, FeederReport, PlacementReport},
     reflow::{self, ReflowReport},
+    reflow_window::{self, ReflowWindowLimits, ReflowWindowReport},
     station::{self, StationReport},
     takt::{self, TaktOptions, TaktReport},
     validate::{self, ValidationReport},
@@ -560,6 +562,22 @@ impl OpenSmt {
     /// Returns the reflow evaluation of the open document.
     pub fn reflow(&self) -> Result<ReflowReport, SmtError> {
         reflow::evaluate(self.document()?)
+    }
+
+    /// Returns the read-only reflow process-window report of the open document.
+    ///
+    /// Every supplied limit produces one check with its margin; an invalid limit
+    /// reports `reflow/invalid`. The document is never modified.
+    pub fn reflow_window(&self, limits: &ReflowWindowLimits) -> Result<ReflowWindowReport, SmtError> {
+        reflow_window::evaluate(self.document()?, limits)
+    }
+
+    /// Returns the read-only feeder consumption plan for `boards` boards.
+    ///
+    /// A zero board count reports `consumption/invalid`; a missing or undersized
+    /// feeder fails like the `feeders` report. The document is never modified.
+    pub fn consumption(&self, boards: u32) -> Result<ConsumptionReport, SmtError> {
+        consumption::plan(self.document()?, boards)
     }
 
     /// Returns the read-only cycle time and throughput estimate of the open
