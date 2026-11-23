@@ -16,7 +16,7 @@ use serde::Serialize;
 use serde_json::Value;
 use smt_model::{
     Board, Component, ComponentUpdate, DEFAULT_FEEDER_CHANGE_SECONDS, DEFAULT_SLOT_PITCH, DualLaneStrategy, ExportFormat,
-    Feeder, FeederUpdate, OpenSmt, Panel, ReflowProfile, Side, SmtError, TaktOptions, Zone,
+    Feeder, FeederUpdate, OpenSmt, Panel, ReflowProfile, ReflowWindowLimits, Side, SmtError, TaktOptions, Zone,
 };
 use wae::{CallContext, Error, JsValue, Result, function, register_module};
 
@@ -479,6 +479,40 @@ fn reflow(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the read-only reflow process-window report.
+///
+/// An optional second argument is a JSON object of limits (`peakMin`,
+/// `peakMax`, `timeAboveLiquidusMin`, `timeAboveLiquidusMax`,
+/// `maxHeatingRate`, `maxCoolingRate`); omitted limits produce no check.
+#[function]
+fn reflow_window(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let limits = match ctx.args().get(1) {
+        Some(_) => serde_json::from_value::<ReflowWindowLimits>(object(&ctx, 1)?)
+            .map_err(|error| argument_error(&format!("invalid reflow window limits: {error}")))?,
+        None => ReflowWindowLimits::default(),
+    };
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.reflow_window(&limits).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
+/// Returns the read-only feeder consumption plan for a build quantity.
+///
+/// The first argument is the document path and the second a JSON object whose
+/// `boards` field is the number of boards the plan covers.
+#[function]
+fn consumption(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let request = object(&ctx, 1)?;
+    let boards = optional_u32(&request, "boards")?.ok_or_else(|| argument_error("`boards` is required"))?;
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.consumption(boards).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Returns the read-only cycle time and throughput estimate.
 ///
 /// An optional second argument is a JSON object of machine-model options;
@@ -585,6 +619,8 @@ register_module![
     dual_lane,
     schedule_lanes,
     reflow,
+    reflow_window,
+    consumption,
     takt,
     feeder_optimize,
     changeover,

@@ -484,6 +484,127 @@ export interface ReflowReport {
     readonly zones: readonly ZoneReport[];
 }
 
+/**
+ * Limits of a reflow process-window check.
+ *
+ * Every limit is optional, so a request names only the metrics it cares about;
+ * an omitted limit produces no check for that metric.
+ */
+export interface ReflowWindowLimits {
+    /** Lowest acceptable peak temperature, in degrees Celsius. */
+    readonly peakMin?: number;
+    /** Highest acceptable peak temperature, in degrees Celsius. */
+    readonly peakMax?: number;
+    /** Shortest acceptable time above liquidus, in seconds. */
+    readonly timeAboveLiquidusMin?: number;
+    /** Longest acceptable time above liquidus, in seconds. */
+    readonly timeAboveLiquidusMax?: number;
+    /** Highest acceptable heating rate, in degrees Celsius per second. */
+    readonly maxHeatingRate?: number;
+    /** Highest acceptable cooling rate, in degrees Celsius per second. */
+    readonly maxCoolingRate?: number;
+}
+
+/** One zone with its signed ramp rate. */
+export interface ReflowWindowZone {
+    readonly name: string;
+    readonly seconds: number;
+    readonly entryTemperature: number;
+    readonly exitTemperature: number;
+    /** Signed rate `(exit − entry) / seconds`; negative means cooling. */
+    readonly rampRate: number;
+}
+
+/** One metric compared with one limit. */
+export interface ReflowWindowCheck {
+    /** Metric compared. */
+    readonly metric: 'peakTemperature' | 'timeAboveLiquidus' | 'maxHeatingRate' | 'maxCoolingRate';
+    /** Direction of the limit. */
+    readonly kind: 'min' | 'max';
+    /** Profile value of the metric. */
+    readonly value: number;
+    /** Limit the value was compared with. */
+    readonly limit: number;
+    /** `value − limit` for a minimum, `limit − value` for a maximum. */
+    readonly margin: number;
+    /** Whether the margin is not negative. */
+    readonly pass: boolean;
+}
+
+/** Read-only reflow process-window report. */
+export interface ReflowWindowReport {
+    readonly format: 'open-smt-reflow-window';
+    readonly version: number;
+    readonly units: string;
+    readonly temperatureUnit: string;
+    readonly conveyorSpeed: number;
+    readonly liquidus: number;
+    readonly peakTemperature: number;
+    readonly timeAboveLiquidus: number;
+    readonly totalSeconds: number;
+    /** Highest positive zone ramp rate, or zero when no zone heats. */
+    readonly maxHeatingRate: number;
+    /** Highest cooling rate magnitude, or zero when no zone cools. */
+    readonly maxCoolingRate: number;
+    readonly zones: readonly ReflowWindowZone[];
+    /** One entry per supplied limit, in a fixed metric order. */
+    readonly checks: readonly ReflowWindowCheck[];
+    /** Whether every supplied limit is met; true when no limit was supplied. */
+    readonly ok: boolean;
+}
+
+/** Consumption of one feeder lane over a run. */
+export interface FeederConsumption {
+    readonly id: string;
+    readonly package: string;
+    /** Components the lane supplies on one board. */
+    readonly picksPerBoard: number;
+    /** Parts the lane consumes over the whole run. */
+    readonly picks: number;
+    /** Maximum parts on one reel of this lane. */
+    readonly capacity: number;
+    /** Parts currently loaded on the lane. */
+    readonly loaded: number;
+    /** Full reels needed for the run; zero when the lane supplies nothing. */
+    readonly reels: number;
+    /** Parts on the last reel, between 1 and `capacity`; zero when no reel is needed. */
+    readonly remainder: number;
+    /** Whether the currently loaded quantity covers the run. */
+    readonly short: boolean;
+}
+
+/** Consumption of one package over a run. */
+export interface PackageConsumption {
+    readonly package: string;
+    /** Components of this package on one board. */
+    readonly componentsPerBoard: number;
+    /** Parts of this package consumed over the run. */
+    readonly totalPicks: number;
+    /** Lanes that supply this package. */
+    readonly feeders: number;
+    /** Reels needed across every lane of this package. */
+    readonly reels: number;
+    /** Whether any lane of this package is short for the run. */
+    readonly short: boolean;
+}
+
+/** Read-only feeder consumption plan for a build quantity. */
+export interface ConsumptionReport {
+    readonly format: 'open-smt-consumption';
+    readonly version: number;
+    readonly units: string;
+    /** Boards the plan covers. */
+    readonly boards: number;
+    /** Components on one board. */
+    readonly componentsPerBoard: number;
+    /** Parts the run consumes across every lane. */
+    readonly totalPicks: number;
+    readonly packages: readonly PackageConsumption[];
+    readonly feeders: readonly FeederConsumption[];
+    /** Whether the loaded quantities cover the run. */
+    readonly ok: boolean;
+}
+
 /** Full report returned by `report()`. */
 export interface Report {
     readonly format: string;

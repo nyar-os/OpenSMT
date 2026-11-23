@@ -39,6 +39,8 @@ export interface NativeBinding {
     dual_lane(path: string, strategy?: string, improve?: boolean): string;
     schedule_lanes(path: string, lanes: number, strategy?: string, improve?: boolean): string;
     reflow(path: string): string;
+    reflow_window(path: string, requestJson?: string): string;
+    consumption(path: string, requestJson: string): string;
     takt(path: string, requestJson?: string): string;
     feeder_optimize(path: string, requestJson?: string): string;
     changeover(current: string, next: string, requestJson?: string): string;

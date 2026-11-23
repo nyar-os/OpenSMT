@@ -49,6 +49,8 @@ export const errorCodes = [
     'takt/invalid',
     'station/invalid',
     'changeover/invalid',
+    'reflow/invalid',
+    'consumption/invalid',
     'component/invalid',
     'component/duplicate-refdes',
     'component/unknown-refdes',

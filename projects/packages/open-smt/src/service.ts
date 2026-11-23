@@ -14,6 +14,7 @@ import type {
     ChangeoverReport,
     ComponentRequest,
     ComponentUpdateRequest,
+    ConsumptionReport,
     DocumentSummary,
     DualLaneReport,
     DualLaneStrategy,
@@ -31,6 +32,8 @@ import type {
     PlacementReport,
     ReflowProfileRequest,
     ReflowReport,
+    ReflowWindowLimits,
+    ReflowWindowReport,
     Report,
     Side,
     StationReport,
@@ -232,6 +235,20 @@ export function lanes(
 /** Returns the reflow evaluation. */
 export function reflow(path: string): ReflowReport {
     return decode<ReflowReport>(() => binding('reflow').reflow(path));
+}
+
+/** Returns the read-only reflow process-window report against the supplied limits. */
+export function reflowWindow(path: string, limits: ReflowWindowLimits = {}): ReflowWindowReport {
+    return decode<ReflowWindowReport>(() =>
+        binding('reflow window').reflow_window(path, JSON.stringify(limits)),
+    );
+}
+
+/** Returns the read-only feeder consumption plan for `boards` boards. */
+export function consumption(path: string, boards: number): ConsumptionReport {
+    return decode<ConsumptionReport>(() =>
+        binding('feeder consumption').consumption(path, JSON.stringify({ boards })),
+    );
 }
 
 /**

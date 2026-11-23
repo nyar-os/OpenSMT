@@ -16,6 +16,7 @@ import type {
     ChangeoverReport,
     ComponentRequest,
     ComponentUpdateRequest,
+    ConsumptionReport,
     DocumentSummary,
     DualLaneReport,
     DualLaneStrategy,
@@ -33,6 +34,8 @@ import type {
     PlacementReport,
     ReflowProfileRequest,
     ReflowReport,
+    ReflowWindowLimits,
+    ReflowWindowReport,
     Report,
     StationReport,
     TaktOptions,
@@ -210,6 +213,18 @@ export class SmtDocument {
     async reflow(): Promise<ReflowReport> {
         this.assertOpen();
         return service.reflow(this.state.path);
+    }
+
+    /** Returns the read-only reflow process-window report against the supplied limits. */
+    async reflowWindow(limits: ReflowWindowLimits = {}): Promise<ReflowWindowReport> {
+        this.assertOpen();
+        return service.reflowWindow(this.state.path, limits);
+    }
+
+    /** Returns the read-only feeder consumption plan for `boards` boards. */
+    async consumption(boards: number): Promise<ConsumptionReport> {
+        this.assertOpen();
+        return service.consumption(this.state.path, boards);
     }
 
     /**
