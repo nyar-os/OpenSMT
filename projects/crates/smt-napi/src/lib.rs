@@ -15,8 +15,8 @@ use std::path::Path;
 use serde::Serialize;
 use serde_json::Value;
 use smt_model::{
-    Board, Component, ComponentUpdate, DualLaneStrategy, ExportFormat, Feeder, FeederUpdate, OpenSmt, Panel, ReflowProfile,
-    Side, SmtError, TaktOptions, Zone,
+    Board, Component, ComponentUpdate, DEFAULT_FEEDER_CHANGE_SECONDS, DEFAULT_SLOT_PITCH, DualLaneStrategy, ExportFormat,
+    Feeder, FeederUpdate, OpenSmt, Panel, ReflowProfile, Side, SmtError, TaktOptions, Zone,
 };
 use wae::{CallContext, Error, JsValue, Result, function, register_module};
 
@@ -500,6 +500,42 @@ fn takt(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the read-only feeder station assignment.
+///
+/// An optional second argument is a JSON object; its `slotPitch` field
+/// overrides the default distance between neighbouring slots.
+#[function]
+fn feeder_optimize(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let slot_pitch = match ctx.args().get(1) {
+        Some(_) => number_field(&object(&ctx, 1)?, "slotPitch")?.unwrap_or(DEFAULT_SLOT_PITCH),
+        None => DEFAULT_SLOT_PITCH,
+    };
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.stations(slot_pitch).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
+/// Returns the read-only feeder changeover sequence between two documents.
+///
+/// The first path is the current document and the second the next one; an
+/// optional third argument is a JSON object whose `feederChangeSeconds` field
+/// overrides the default time per reel change.
+#[function]
+fn changeover(ctx: CallContext) -> Result<JsValue> {
+    let current = text(&ctx, 0)?;
+    let next = text(&ctx, 1)?;
+    let feeder_change_seconds = match ctx.args().get(2) {
+        Some(_) => number_field(&object(&ctx, 2)?, "feederChangeSeconds")?.unwrap_or(DEFAULT_FEEDER_CHANGE_SECONDS),
+        None => DEFAULT_FEEDER_CHANGE_SECONDS,
+    };
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&current)).map_err(fail)?;
+    let report = session.changeover(Path::new(&next), feeder_change_seconds).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Exports a document as `program`, `feeders`, `json` or `md`.
 #[function]
 fn export(ctx: CallContext) -> Result<JsValue> {
@@ -550,6 +586,8 @@ register_module![
     schedule_lanes,
     reflow,
     takt,
+    feeder_optimize,
+    changeover,
     export,
     report
 ];

@@ -52,6 +52,8 @@ test('the error surface includes coverage and capability codes', () => {
     assert.ok(errorCodes.includes('bom/missing-column'));
     assert.ok(errorCodes.includes('bom/duplicate-refdes'));
     assert.ok(errorCodes.includes('takt/invalid'));
+    assert.ok(errorCodes.includes('station/invalid'));
+    assert.ok(errorCodes.includes('changeover/invalid'));
 });
 
 test('balance splits components and rejects zero machines', { skip: skipWithoutNative }, async () => {
@@ -297,6 +299,90 @@ test('takt estimates cycle time and splits it over machines', { skip: skipWithou
             return true;
         });
         assert.equal(document.revision, before);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('feeder optimize assigns slots by mean placement x and leaves the document unchanged', {
+    skip: skipWithoutNative,
+}, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-station-'));
+    const file = path.join(directory, 'panel.osmt');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 90, y: 10 });
+        await document.addComponent({ refdes: 'C1', package: '0805', x: 10, y: 10 });
+        await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 100 });
+        await document.addFeeder({ id: 'F2', package: '0805', pitch: 4, capacity: 100 });
+        const before = document.revision;
+
+        const report = await document.feederOptimize();
+        assert.equal(report.format, 'open-smt-station');
+        assert.equal(report.version, 1);
+        assert.equal(report.slotCount, 2);
+        assert.equal(report.stations[0]?.feederId, 'F2');
+        assert.equal(report.stations[0]?.slot, 1);
+        assert.equal(report.stations[0]?.positionMm, 0);
+        assert.equal(report.stations[1]?.feederId, 'F1');
+        assert.equal(report.stations[1]?.positionMm, 16);
+        assert.equal(report.travelSaved, 16);
+        assert.ok(Math.abs(report.travelSaved - (report.baselineTravelMm - report.travelMm)) < 1e-9);
+
+        await assert.rejects(document.feederOptimize(0), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'station/invalid');
+            return true;
+        });
+        assert.equal(document.revision, before);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('changeover orders removals, swaps and additions between two documents', {
+    skip: skipWithoutNative,
+}, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-changeover-'));
+    const currentFile = path.join(directory, 'current.osmt');
+    const nextFile = path.join(directory, 'next.osmt');
+    const session = new OpenSMT();
+    try {
+        const current = await session.create(currentFile);
+        await current.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 100 });
+        await current.addFeeder({ id: 'F2', package: '0805', pitch: 4, capacity: 100 });
+        const next = await session.create(nextFile);
+        await next.addFeeder({ id: 'F2', package: '1206', pitch: 4, capacity: 100 });
+        await next.addFeeder({ id: 'F3', package: 'QFN-32', pitch: 12, capacity: 50 });
+        const before = current.revision;
+
+        const report = await current.changeover(nextFile);
+        assert.equal(report.format, 'open-smt-changeover');
+        assert.equal(report.version, 1);
+        assert.deepEqual(
+            report.actions.map((action) => [action.kind, action.id]),
+            [
+                ['swap', 'F2'],
+                ['add', 'F3'],
+            ],
+        );
+        assert.deepEqual([...report.unchanged], ['F1']);
+        assert.equal(report.changes, 3);
+        assert.equal(report.estimatedSeconds, 90);
+        assert.equal(report.actions[0]?.toPackage, '1206');
+
+        const fast = await current.changeover(nextFile, 10);
+        assert.equal(fast.estimatedSeconds, 30);
+
+        await assert.rejects(current.changeover(nextFile, 0), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'changeover/invalid');
+            return true;
+        });
+        assert.equal(current.revision, before);
     } finally {
         await session.dispose();
         await fs.rm(directory, { recursive: true, force: true });

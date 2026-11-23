@@ -379,6 +379,87 @@ export interface TaktReport {
     readonly travelSaved?: number;
 }
 
+/** One feeder lane placed at one tape-bank slot. */
+export interface StationAssignment {
+    /** Slot number, starting at 1 in assignment order. */
+    readonly slot: number;
+    /** Slot position along the tape bank, `(slot - 1) × slotPitch`. */
+    readonly positionMm: number;
+    /** Feeder lane sitting at this slot. */
+    readonly feederId: string;
+    /** Package supplied by the lane. */
+    readonly package: string;
+    /** Picks the lane supplies in the placement program. */
+    readonly picks: number;
+    /** Mean placement X of the picks; `null` for a lane the program never uses. */
+    readonly meanX: number | null;
+}
+
+/** Read-only feeder station assignment report. */
+export interface StationReport {
+    readonly format: 'open-smt-station';
+    readonly version: number;
+    readonly units: string;
+    /** Slot pitch used for the positions, in millimetres. */
+    readonly slotPitch: number;
+    /** Number of assigned slots; one per feeder lane. */
+    readonly slotCount: number;
+    /** Tape-bank travel of the stored feeder order, in millimetres. */
+    readonly baselineTravelMm: number;
+    /** Tape-bank travel of the optimized assignment, in millimetres. */
+    readonly travelMm: number;
+    /** `baselineTravelMm - travelMm`, floored at zero. */
+    readonly travelSaved: number;
+    /** One entry per lane, in slot order. */
+    readonly stations: readonly StationAssignment[];
+}
+
+/** What one changeover step does to a feeder lane. */
+export type ChangeoverKind = 'remove' | 'swap' | 'add';
+
+/** One step of the changeover sequence. */
+export interface ChangeoverAction {
+    /** One-based position in the sequence. */
+    readonly step: number;
+    readonly kind: ChangeoverKind;
+    /** Feeder lane the action touches. */
+    readonly id: string;
+    /** Package of the removed lane; present only for `remove`. */
+    readonly package?: string;
+    /** Package before the swap; present only for `swap`. */
+    readonly fromPackage?: string;
+    /** Package after the swap; present only for `swap`. */
+    readonly toPackage?: string;
+    /** Tape pitch before the swap; present only for `swap`. */
+    readonly fromPitch?: number;
+    /** Tape pitch after the swap; present only for `swap`. */
+    readonly toPitch?: number;
+    /** Lane capacity to load; present only for `add`. */
+    readonly capacity?: number;
+    /** Loaded quantity to load; present only for `add`. */
+    readonly loaded?: number;
+}
+
+/** Read-only feeder changeover sequence report. */
+export interface ChangeoverReport {
+    readonly format: 'open-smt-changeover';
+    readonly version: number;
+    /** Number of lanes in the current document. */
+    readonly currentFeeders: number;
+    /** Number of lanes in the next document. */
+    readonly nextFeeders: number;
+    /** Actions in execution order: removals, swaps, additions. */
+    readonly actions: readonly ChangeoverAction[];
+    /** Lane ids that match by package and exact pitch, in ascending id order. */
+    readonly unchanged: readonly string[];
+    /** Number of physical reel changes; a swap counts twice. */
+    readonly changes: number;
+    /** Time assumed for one reel change, in seconds. */
+    readonly feederChangeSeconds: number;
+    /** `changes × feederChangeSeconds`. */
+    readonly estimatedSeconds: number;
+}
+
 /** One evaluated reflow zone. */
 export interface ZoneReport {
     readonly name: string;

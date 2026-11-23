@@ -11,6 +11,7 @@ import type {
     BalanceReport,
     BoardRequest,
     BomCheckReport,
+    ChangeoverReport,
     ComponentRequest,
     ComponentUpdateRequest,
     DocumentSummary,
@@ -32,6 +33,7 @@ import type {
     ReflowReport,
     Report,
     Side,
+    StationReport,
     TaktOptions,
     TaktReport,
     ValidationReport,
@@ -239,6 +241,27 @@ export function reflow(path: string): ReflowReport {
  */
 export function takt(path: string, options: TaktOptions = {}): TaktReport {
     return decode<TaktReport>(() => binding('takt').takt(path, JSON.stringify(options)));
+}
+
+/**
+ * Returns the read-only feeder station assignment.
+ *
+ * An omitted `slotPitch` keeps the default distance between neighbouring slots.
+ */
+export function feederOptimize(path: string, slotPitch?: number): StationReport {
+    return decode<StationReport>(() => binding('feeder.optimize').feeder_optimize(path, JSON.stringify({ slotPitch })));
+}
+
+/**
+ * Returns the read-only feeder changeover sequence between two documents.
+ *
+ * `path` is the current document and `nextPath` the one to change over to; an
+ * omitted `feederChangeSeconds` keeps the default time per reel change.
+ */
+export function changeover(path: string, nextPath: string, feederChangeSeconds?: number): ChangeoverReport {
+    return decode<ChangeoverReport>(() =>
+        binding('changeover').changeover(path, nextPath, JSON.stringify({ feederChangeSeconds })),
+    );
 }
 
 /** Exports a document as `program`, `feeders`, `json` or `md`. */

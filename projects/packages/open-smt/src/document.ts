@@ -13,6 +13,7 @@ import type {
     Board,
     BoardRequest,
     BomCheckReport,
+    ChangeoverReport,
     ComponentRequest,
     ComponentUpdateRequest,
     DocumentSummary,
@@ -33,6 +34,7 @@ import type {
     ReflowProfileRequest,
     ReflowReport,
     Report,
+    StationReport,
     TaktOptions,
     TaktReport,
     ValidationReport,
@@ -218,6 +220,28 @@ export class SmtDocument {
     async takt(options: TaktOptions = {}): Promise<TaktReport> {
         this.assertOpen();
         return service.takt(this.state.path, options);
+    }
+
+    /**
+     * Returns the read-only feeder station assignment along the tape bank.
+     *
+     * An omitted `slotPitch` keeps the default distance between neighbouring
+     * slots.
+     */
+    async feederOptimize(slotPitch?: number): Promise<StationReport> {
+        this.assertOpen();
+        return service.feederOptimize(this.state.path, slotPitch);
+    }
+
+    /**
+     * Returns the read-only feeder changeover sequence to the document at
+     * `nextPath`.
+     *
+     * An omitted `feederChangeSeconds` keeps the default time per reel change.
+     */
+    async changeover(nextPath: string, feederChangeSeconds?: number): Promise<ChangeoverReport> {
+        this.assertOpen();
+        return service.changeover(this.state.path, nextPath, feederChangeSeconds);
     }
 
     /** Exports the document as `program`, `feeders`, `json` or `md`. */

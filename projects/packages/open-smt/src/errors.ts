@@ -47,6 +47,8 @@ export const errorCodes = [
     'schedule/invalid-strategy',
     'schedule/invalid-lanes',
     'takt/invalid',
+    'station/invalid',
+    'changeover/invalid',
     'component/invalid',
     'component/duplicate-refdes',
     'component/unknown-refdes',
