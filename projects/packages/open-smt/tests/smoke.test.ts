@@ -365,17 +365,18 @@ test('changeover orders removals, swaps and additions between two documents', {
         assert.deepEqual(
             report.actions.map((action) => [action.kind, action.id]),
             [
+                ['remove', 'F1'],
                 ['swap', 'F2'],
                 ['add', 'F3'],
             ],
         );
-        assert.deepEqual([...report.unchanged], ['F1']);
-        assert.equal(report.changes, 3);
-        assert.equal(report.estimatedSeconds, 90);
-        assert.equal(report.actions[0]?.toPackage, '1206');
+        assert.deepEqual([...report.unchanged], []);
+        assert.equal(report.changes, 4);
+        assert.equal(report.estimatedSeconds, 120);
+        assert.equal(report.actions[1]?.toPackage, '1206');
 
         const fast = await current.changeover(nextFile, 10);
-        assert.equal(fast.estimatedSeconds, 30);
+        assert.equal(fast.estimatedSeconds, 40);
 
         await assert.rejects(current.changeover(nextFile, 0), (error: unknown) => {
             assert.ok(isOpenSMTError(error));
