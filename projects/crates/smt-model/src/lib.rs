@@ -33,6 +33,7 @@
 mod balance;
 mod bom;
 mod changeover;
+mod component_list;
 mod consumption;
 mod csv_import;
 mod dual;
@@ -59,6 +60,7 @@ pub use crate::{
     balance::{BalanceReport, MAX_MACHINES, MIN_MACHINES, MachineFeeder, MachineReport, balance, balance_with},
     bom::{BomCheckReport, BomFinding, BomQuantityMismatch, check as bom_check},
     changeover::{ChangeoverAction, ChangeoverKind, ChangeoverReport, DEFAULT_FEEDER_CHANGE_SECONDS, plan as plan_changeover},
+    component_list::{ComponentListReport, ComponentPackage, ListedComponent, report as component_list_report},
     consumption::{ConsumptionReport, FeederConsumption, PackageConsumption, plan as plan_consumption},
     dual::{
         DualLaneReport, DualLaneStrategy, DualLaneTask, LANES, LaneSchedule, LanesReport, MAX_LANES, MIN_LANES,
@@ -102,6 +104,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "placementSequence": "supported",
     "placementOptimization": "supported",
     "feederAllocation": "supported",
+    "componentList": "supported",
     "feederLoadingReport": "supported",
     "bomCheck": "supported",
     "panelization": "supported",
@@ -142,6 +145,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
   "limitations": {
     "dualLane": "greedy or LPT heuristic with an optional single-swap pass, not an optimal schedule",
     "multiLane": "greedy or LPT heuristic on 2 to 16 lanes with an optional pairwise-swap pass, not an optimal schedule",
+    "componentList": "reads the same feeder allocation as the feeders report; the feeder column is null for a component with no loaded lane and no validation runs",
     "feederLoadingReport": "slot numbers are suggestions only; no machine slot, tape direction or pitch constraint is modelled",
     "bomCheck": "packages are matched by exact name; refdes-level findings only run for packages whose BOM rows enumerate refdes",
     "panelFit": "axis-aligned grid of whole boards only; no rotation, edge rail, fiducial or panel outline is modelled",

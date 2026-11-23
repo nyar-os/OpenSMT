@@ -18,6 +18,7 @@ use crate::{
     balance::{self, BalanceReport},
     bom::{self, BomCheckReport},
     changeover::{self, ChangeoverReport},
+    component_list::{self, ComponentListReport},
     consumption::{self, ConsumptionReport},
     dual::{self, DualLaneReport, DualLaneStrategy, LanesReport},
     export::{feeder_csv, first_article_csv, markdown, program_csv, write_atomic},
@@ -490,6 +491,16 @@ impl OpenSmt {
     /// Returns the feeder allocation of the open document.
     pub fn feeders(&self) -> Result<FeederReport, SmtError> {
         place::allocate(self.document()?)
+    }
+
+    /// Returns the read-only component list report of the open document.
+    ///
+    /// The report lists every component in document order with its package,
+    /// side, coordinates, rotation and height, groups packages in first-seen
+    /// order and reports the feeder the current allocation assigns. It does not
+    /// need a feeder setup and never writes.
+    pub fn component_list(&self) -> Result<ComponentListReport, SmtError> {
+        Ok(component_list::report(self.document()?))
     }
 
     /// Returns the read-only feeder loading report of the open document.
