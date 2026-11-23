@@ -28,6 +28,9 @@ import type {
     FeederUpdateRequest,
     FirstArticleReport,
     LanesReport,
+    MachineProgramExportReport,
+    MachineProgramVerifyReport,
+    NozzleMap,
     Panel,
     PanelFitReport,
     PanelFitRequest,
@@ -40,6 +43,7 @@ import type {
     ReflowWindowReport,
     Report,
     StationReport,
+    TaktHeatmapReport,
     TaktOptions,
     TaktReport,
     ValidationReport,
@@ -249,6 +253,28 @@ export class SmtDocument {
     async takt(options: TaktOptions = {}): Promise<TaktReport> {
         this.assertOpen();
         return service.takt(this.state.path, options);
+    }
+
+    /** Returns the read-only takt bottleneck heat map by step, package and side. */
+    async taktHeatmap(): Promise<TaktHeatmapReport> {
+        this.assertOpen();
+        return service.taktHeatmap(this.state.path);
+    }
+
+    /**
+     * Writes the neutral machine program at `target` and reads it back.
+     *
+     * An omitted `nozzles` map exports an empty nozzle for every package.
+     */
+    async machineExport(target: string, nozzles: NozzleMap = {}): Promise<MachineProgramExportReport> {
+        this.assertOpen();
+        return service.machineExport(this.state.path, target, nozzles);
+    }
+
+    /** Checks the machine program file at `programPath` against the document. */
+    async machineVerify(programPath: string, nozzles: NozzleMap = {}): Promise<MachineProgramVerifyReport> {
+        this.assertOpen();
+        return service.machineVerify(this.state.path, programPath, nozzles);
     }
 
     /**

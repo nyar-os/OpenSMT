@@ -51,6 +51,7 @@ export const errorCodes = [
     'changeover/invalid',
     'reflow/invalid',
     'consumption/invalid',
+    'program/invalid',
     'component/invalid',
     'component/duplicate-refdes',
     'component/unknown-refdes',

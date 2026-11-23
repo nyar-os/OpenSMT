@@ -56,6 +56,7 @@ test('the error surface includes coverage and capability codes', () => {
     assert.ok(errorCodes.includes('changeover/invalid'));
     assert.ok(errorCodes.includes('reflow/invalid'));
     assert.ok(errorCodes.includes('consumption/invalid'));
+    assert.ok(errorCodes.includes('program/invalid'));
 });
 
 test('balance splits components and rejects zero machines', { skip: skipWithoutNative }, async () => {
@@ -518,6 +519,91 @@ test('feeder consumption plans reels for a build quantity', { skip: skipWithoutN
             return true;
         });
         assert.equal(document.revision, before);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('takt heatmap attributes step time to packages and sides', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-heatmap-'));
+    const file = path.join(directory, 'panel.osmt');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'C1', package: '0805', x: 10, y: 50 });
+        await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 100 });
+        await document.addFeeder({ id: 'F2', package: '0805', pitch: 8, capacity: 50 });
+        const before = document.revision;
+
+        const report = await document.taktHeatmap();
+        assert.equal(report.format, 'open-smt-heatmap');
+        assert.equal(report.version, 1);
+        assert.equal(report.components, 2);
+        assert.equal(report.steps.length, 2);
+        assert.equal(report.steps[0]?.refdes, 'R1');
+        assert.equal(report.steps[1]?.refdes, 'C1');
+        assert.ok(Math.abs(report.steps[0]!.travelMm - Math.SQRT2 * 10) < 1e-9);
+        assert.ok(Math.abs(report.steps[1]!.travelMm - 40) < 1e-9);
+        assert.equal(report.bottleneck, '0805');
+        assert.deepEqual(
+            report.packages.map((entry) => entry.package),
+            ['0805', '0603'],
+        );
+        const expected = 0.6 + (Math.SQRT2 * 10) / 200 + 0.8;
+        assert.ok(Math.abs(report.totalSeconds - expected) < 1e-12);
+        const takt = await document.takt();
+        assert.ok(Math.abs(report.totalSeconds - takt.boardSeconds) < 1e-9);
+        assert.ok(Math.abs(report.packages[1]!.cumulativeShare - 1) < 1e-9);
+        assert.equal(document.revision, before);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('machine export writes a readable program and verify checks it back', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-machine-'));
+    const file = path.join(directory, 'panel.osmt');
+    const programFile = path.join(directory, 'machine.csv');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'C1', package: '0805', side: 'bottom', x: 20, y: 20 });
+        await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 100 });
+        await document.addFeeder({ id: 'F2', package: '0805', pitch: 8, capacity: 50 });
+        const before = document.revision;
+
+        const exported = await document.machineExport(programFile, { '0603': 'N1', '0805': 'N2' });
+        assert.equal(exported.format, 'open-smt-machine-program');
+        assert.equal(exported.steps, 2);
+        assert.equal(exported.verified, true);
+        assert.equal(exported.bytes, (await fs.readFile(programFile, 'utf8')).length);
+
+        const csv = await fs.readFile(programFile, 'utf8');
+        assert.ok(csv.startsWith('sequence,side,refdes,package,x_mm,y_mm,rotation_deg,feeder,station,pitch_mm,nozzle,speed_mm_s\n'));
+        assert.ok(csv.includes('\n1,top,R1,0603,10,10,0,F1,1,4,N1,200\n'));
+        assert.ok(csv.includes('\n2,bottom,C1,0805,20,20,0,F2,2,8,N2,200\n'));
+
+        const verified = await document.machineVerify(programFile, { '0603': 'N1', '0805': 'N2' });
+        assert.equal(verified.ok, true);
+        assert.deepEqual(verified.mismatches, []);
+        assert.equal(verified.steps, 2);
+
+        await fs.writeFile(programFile, csv.replace('10,10,0,F1', '11,10,0,F1'));
+        const tampered = await document.machineVerify(programFile, { '0603': 'N1', '0805': 'N2' });
+        assert.equal(tampered.ok, false);
+        assert.equal(tampered.mismatches[0]?.field, 'x');
+        assert.equal(document.revision, before);
+
+        await fs.writeFile(programFile, 'wrong,header\n');
+        await assert.rejects(document.machineVerify(programFile), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'program/invalid');
+            return true;
+        });
     } finally {
         await session.dispose();
         await fs.rm(directory, { recursive: true, force: true });

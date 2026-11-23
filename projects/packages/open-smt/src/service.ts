@@ -27,6 +27,9 @@ import type {
     FirstArticleReport,
     ImportReport,
     LanesReport,
+    MachineProgramExportReport,
+    MachineProgramVerifyReport,
+    NozzleMap,
     PanelFitReport,
     PanelFitRequest,
     PanelMapReport,
@@ -39,6 +42,7 @@ import type {
     Report,
     Side,
     StationReport,
+    TaktHeatmapReport,
     TaktOptions,
     TaktReport,
     ValidationReport,
@@ -270,6 +274,34 @@ export function consumption(path: string, boards: number): ConsumptionReport {
  */
 export function takt(path: string, options: TaktOptions = {}): TaktReport {
     return decode<TaktReport>(() => binding('takt').takt(path, JSON.stringify(options)));
+}
+
+/** Returns the read-only takt bottleneck heat map. */
+export function taktHeatmap(path: string): TaktHeatmapReport {
+    return decode<TaktHeatmapReport>(() => binding('takt heatmap').takt_heatmap(path));
+}
+
+/**
+ * Writes the neutral machine program and reads it back for verification.
+ *
+ * `nozzles` maps a package name to the nozzle id the program carries; an
+ * omitted map exports an empty nozzle for every package.
+ */
+export function machineExport(path: string, target: string, nozzles: NozzleMap = {}): MachineProgramExportReport {
+    return decode<MachineProgramExportReport>(() =>
+        binding('machine export').machine_export(path, target, JSON.stringify({ nozzles })),
+    );
+}
+
+/** Checks a machine program file against the document field by field. */
+export function machineVerify(
+    path: string,
+    source: string,
+    nozzles: NozzleMap = {},
+): MachineProgramVerifyReport {
+    return decode<MachineProgramVerifyReport>(() =>
+        binding('machine verify').machine_verify(path, source, JSON.stringify({ nozzles })),
+    );
 }
 
 /**

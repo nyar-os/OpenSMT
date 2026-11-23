@@ -44,6 +44,9 @@ export interface NativeBinding {
     reflow_window(path: string, requestJson?: string): string;
     consumption(path: string, requestJson: string): string;
     takt(path: string, requestJson?: string): string;
+    takt_heatmap(path: string): string;
+    machine_export(path: string, target: string, requestJson?: string): string;
+    machine_verify(path: string, source: string, requestJson?: string): string;
     feeder_optimize(path: string, requestJson?: string): string;
     changeover(current: string, next: string, requestJson?: string): string;
     export(path: string, format: string, target: string): string;

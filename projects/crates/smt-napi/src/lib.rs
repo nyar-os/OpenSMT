@@ -12,6 +12,8 @@
 
 use std::path::Path;
 
+use std::collections::BTreeMap;
+
 use serde::Serialize;
 use serde_json::Value;
 use smt_model::{
@@ -99,6 +101,27 @@ fn optional_u32(request: &Value, name: &str) -> Result<Option<u32>> {
 
 fn fail(error: SmtError) -> Error {
     Error::new(format!("{}: {}", error.code, error.message))
+}
+
+/// Reads an optional `{ "nozzles": { "0603": "N1" } }` request.
+fn nozzle_map(ctx: &CallContext, index: usize) -> Result<BTreeMap<String, String>> {
+    let Some(_) = ctx.args().get(index)
+    else {
+        return Ok(BTreeMap::new());
+    };
+    let request = object(ctx, index)?;
+    let mut nozzles = BTreeMap::new();
+    match request.get("nozzles") {
+        None | Some(Value::Null) => {}
+        Some(Value::Object(entries)) => {
+            for (package, nozzle) in entries {
+                let nozzle = nozzle.as_str().ok_or_else(|| argument_error(&format!("`nozzles.{package}` must be a string")))?;
+                nozzles.insert(package.clone(), nozzle.to_string());
+            }
+        }
+        Some(_) => return Err(argument_error("`nozzles` must be an object mapping packages to nozzle ids")),
+    }
+    Ok(nozzles)
 }
 
 fn respond<T: Serialize>(ctx: &CallContext, value: &T) -> Result<JsValue> {
@@ -554,6 +577,48 @@ fn takt(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the read-only takt bottleneck heat map.
+#[function]
+fn takt_heatmap(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.heatmap().map_err(fail)?;
+    respond(&ctx, &report)
+}
+
+/// Writes the neutral machine program and verifies the readback.
+///
+/// The first path is the document and the second the target CSV; an optional
+/// third argument is a JSON object whose `nozzles` field maps packages to
+/// nozzle ids.
+#[function]
+fn machine_export(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let target = text(&ctx, 1)?;
+    let nozzles = nozzle_map(&ctx, 2)?;
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.export_machine_program(Path::new(&target), &nozzles).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
+/// Checks a machine program file against a document.
+///
+/// The first path is the document and the second the program CSV; an optional
+/// third argument is a JSON object whose `nozzles` field maps packages to
+/// nozzle ids.
+#[function]
+fn machine_verify(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let source = text(&ctx, 1)?;
+    let nozzles = nozzle_map(&ctx, 2)?;
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.verify_machine_program(Path::new(&source), &nozzles).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Returns the read-only feeder station assignment.
 ///
 /// An optional second argument is a JSON object; its `slotPitch` field
@@ -644,6 +709,9 @@ register_module![
     reflow_window,
     consumption,
     takt,
+    takt_heatmap,
+    machine_export,
+    machine_verify,
     feeder_optimize,
     changeover,
     export,

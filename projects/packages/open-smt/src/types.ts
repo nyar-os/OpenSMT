@@ -442,8 +442,135 @@ export interface TaktReport {
     readonly travelSaved?: number;
 }
 
-/** One feeder lane placed at one tape-bank slot. */
-export interface StationAssignment {
+/** One program step with its attributed takt time. */
+export interface HeatStep {
+    /** Placement step number, starting at 1 in program order. */
+    readonly sequence: number;
+    readonly refdes: string;
+    readonly package: string;
+    readonly side: Side;
+    /** Feeder lane that supplies the component. */
+    readonly feeder: string;
+    readonly x: number;
+    readonly y: number;
+    /** Inbound travel from the previous step of the same side, in millimetres. */
+    readonly travelMm: number;
+    /** Fixed placement overhead of the step, in seconds. */
+    readonly placeSeconds: number;
+    /** Travel segment of the step, in seconds. */
+    readonly travelSeconds: number;
+    /** `placeSeconds + travelSeconds`. */
+    readonly seconds: number;
+    /** Fraction of the board total, in `[0, 1]`. */
+    readonly share: number;
+}
+
+/** Time of one package on the heat map, ordered from the largest share down. */
+export interface HeatPackage {
+    readonly package: string;
+    /** Number of program steps of this package. */
+    readonly steps: number;
+    readonly placeSeconds: number;
+    readonly travelSeconds: number;
+    readonly seconds: number;
+    /** Fraction of the board total, in `[0, 1]`. */
+    readonly share: number;
+    /** Running share of this package and every package before it. */
+    readonly cumulativeShare: number;
+}
+
+/** Time of one board side on the heat map. */
+export interface HeatSide {
+    readonly side: Side;
+    readonly steps: number;
+    readonly seconds: number;
+    /** Fraction of the board total, in `[0, 1]`. */
+    readonly share: number;
+}
+
+/** Read-only takt bottleneck heat map of one board. */
+export interface TaktHeatmapReport {
+    readonly format: 'open-smt-heatmap';
+    readonly version: number;
+    readonly units: string;
+    readonly components: number;
+    readonly placeSeconds: number;
+    readonly travelSeconds: number;
+    /** `placeSeconds + travelSeconds`, the board time of the default model. */
+    readonly totalSeconds: number;
+    /** Package with the largest step time; `null` for an empty document. */
+    readonly bottleneck: string | null;
+    /** Packages from the largest share downwards. */
+    readonly packages: readonly HeatPackage[];
+    /** Sides with at least one step, `top` before `bottom`. */
+    readonly sides: readonly HeatSide[];
+    /** Steps in program order. */
+    readonly steps: readonly HeatStep[];
+}
+
+/** Nozzle ids keyed by package for a machine program export. */
+export type NozzleMap = Readonly<Record<string, string>>;
+
+/** One machine-readable placement step. */
+export interface MachineStep {
+    /** Placement step number, starting at 1 in program order. */
+    readonly sequence: number;
+    readonly side: Side;
+    readonly refdes: string;
+    readonly package: string;
+    readonly x: number;
+    readonly y: number;
+    readonly rotation: number;
+    /** Feeder lane that supplies the component. */
+    readonly feeder: string;
+    /** One-based position of the lane in the document feeder setup. */
+    readonly station: number;
+    /** Tape pitch of the lane, in millimetres. */
+    readonly pitch: number;
+    /** Nozzle assigned to the package; `null` when unassigned. */
+    readonly nozzle: string | null;
+    /** Head speed of the machine model, in millimetres per second. */
+    readonly speed: number;
+}
+
+/** Result of writing a machine program and reading it back. */
+export interface MachineProgramExportReport {
+    readonly format: 'open-smt-machine-program';
+    readonly version: number;
+    readonly units: string;
+    readonly path: string;
+    readonly steps: number;
+    readonly bytes: number;
+    /** Whether the written file parsed back to the same program. */
+    readonly verified: boolean;
+}
+
+/** One field where a read-back machine program differs from the document. */
+export interface ProgramMismatch {
+    /** Step the mismatch belongs to; zero for a whole-program difference. */
+    readonly sequence: number;
+    readonly field: string;
+    /** Value the document produces. */
+    readonly expected: string;
+    /** Value the file contains. */
+    readonly actual: string;
+}
+
+/** Result of checking a machine program file against a document. */
+export interface MachineProgramVerifyReport {
+    readonly format: 'open-smt-machine-program';
+    readonly version: number;
+    readonly units: string;
+    readonly path: string;
+    /** Number of steps the document produces. */
+    readonly steps: number;
+    /** Every field that differs, in step then field order. */
+    readonly mismatches: readonly ProgramMismatch[];
+    /** Whether the file matches the document program field by field. */
+    readonly ok: boolean;
+}
+
+/** One feeder lane placed at one tape-bank slot. */export interface StationAssignment {
     /** Slot number, starting at 1 in assignment order. */
     readonly slot: number;
     /** Slot position along the tape bank, `(slot - 1) × slotPitch`. */
