@@ -132,8 +132,32 @@ function side(value: string): Side {
     throw new OpenSMTError('component/unknown-side', `unknown side \`${value}\`; only top or bottom is supported`);
 }
 
-function parseZones(raw: string): Zone[] {
-    return raw
+/** Parses `--nozzles "0603=N1;QFN-32=N2"` into a package to nozzle map. */
+function nozzleMap(raw: string | undefined, ctx: CommandContext): Record<string, string> {
+    const nozzles = Object.create(null) as Record<string, string>;
+    if (raw === undefined) {
+        return nozzles;
+    }
+    for (const entry of raw.split(';')) {
+        const trimmed = entry.trim();
+        if (trimmed.length === 0) {
+            continue;
+        }
+        const separator = trimmed.indexOf('=');
+        if (separator <= 0 || separator === trimmed.length - 1) {
+            throw failure(ctx, 'program/invalid', 'invalidNozzles', { entry: trimmed });
+        }
+        const packageName = trimmed.slice(0, separator).trim();
+        const nozzle = trimmed.slice(separator + 1).trim();
+        if (packageName.length === 0 || nozzle.length === 0) {
+            throw failure(ctx, 'program/invalid', 'invalidNozzles', { entry: trimmed });
+        }
+        nozzles[packageName] = nozzle;
+    }
+    return nozzles;
+}
+
+function parseZones(raw: string): Zone[] {    return raw
         .split(';')
         .filter((entry) => entry.trim().length > 0)
         .map((entry) => {
@@ -655,7 +679,7 @@ reflowCommand
         }),
     );
 
-cli
+const taktCommand = cli
     .command('takt', 'cli.cmd.takt')
     .option('--place-seconds <s>', 'cli.opt.place-seconds')
     .option('--head-speed <mm/s>', 'cli.opt.head-speed')
@@ -686,6 +710,49 @@ cli
                     );
                 },
             );
+        }),
+    );
+taktCommand
+    .command('heatmap', 'cli.cmd.takt-heatmap')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'takt heatmap <file>', async (document) => {
+                print(await document.taktHeatmap());
+            });
+        }),
+    );
+
+const machineCommand = cli.command('machine', 'cli.cmd.machine');
+machineCommand
+    .command('export', 'cli.cmd.machine-export')
+    .option('--out <file>', 'cli.opt.out')
+    .option('--nozzles <map>', 'cli.opt.nozzles')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'machine export <file> --out <file.csv> [--nozzles "pkg=nozzle;..."]', async (document) => {
+                print(
+                    await document.machineExport(
+                        requiredOption(options, ctx, 'out'),
+                        nozzleMap(optionText(options, 'nozzles'), ctx),
+                    ),
+                );
+            });
+        }),
+    );
+machineCommand
+    .command('verify', 'cli.cmd.machine-verify')
+    .option('--program <file>', 'cli.opt.program')
+    .option('--nozzles <map>', 'cli.opt.nozzles')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'machine verify <file> --program <file.csv> [--nozzles "pkg=nozzle;..."]', async (document) => {
+                print(
+                    await document.machineVerify(
+                        requiredOption(options, ctx, 'program'),
+                        nozzleMap(optionText(options, 'nozzles'), ctx),
+                    ),
+                );
+            });
         }),
     );
 

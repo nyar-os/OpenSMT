@@ -36,6 +36,10 @@
             "reflow": "评估回流焊曲线",
             "reflow-window": "将回流焊曲线与工艺窗口限值对比",
             "takt": "估算节拍时间与产能",
+            "takt-heatmap": "按工序、封装与贴装面报告节拍耗时占比",
+            "machine": "导出并校验机台可读的贴装程序",
+            "machine-export": "写出贴装程序并回读校验",
+            "machine-verify": "将贴装程序文件与文档逐字段核对",
             "changeover": "规划两个文档之间的供料器换线序列",
             "export": "导出程序、供料器台设置、JSON 或 Markdown",
             "report": "打印完整文档报告",
@@ -88,7 +92,9 @@
             "tal-min": "可接受的最短液相以上时间（秒）",
             "tal-max": "可接受的最长液相以上时间（秒）",
             "max-ramp": "可接受的最高升温速率（摄氏度/秒）",
-            "max-cooling": "可接受的最高降温速率（摄氏度/秒）"
+            "max-cooling": "可接受的最高降温速率（摄氏度/秒）",
+            "nozzles": "按封装指定吸嘴，格式 \"封装=吸嘴;...\"",
+            "program": "机台程序 CSV 路径"
         },
         "error": {
             "missingArgument": "缺少参数；用法：open-smt {usage}",
@@ -97,7 +103,8 @@
             "unknownFormat": "未知导出格式 `{format}`；仅支持 program、feeders、fai、json 或 md",
             "invalidStrategy": "未知双通道策略 `{strategy}`；仅支持 greedy 或 lpt",
             "invalidLanes": "通道数 `{count}` 必须是 2 到 16 之间的整数",
-            "invalidBoards": "板数 `{count}` 必须是正整数"
+            "invalidBoards": "板数 `{count}` 必须是正整数",
+            "invalidNozzles": "吸嘴映射项 `{entry}` 必须写成 `封装=吸嘴`"
         }
     }
 }
