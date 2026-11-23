@@ -433,6 +433,16 @@ feederCommand
             });
         }),
     );
+feederCommand
+    .command('optimize', 'cli.cmd.feeder-optimize')
+    .option('--slot-pitch <mm>', 'cli.opt.slot-pitch')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'feeder optimize <file> [--slot-pitch <mm>]', async (document) => {
+                print(await document.feederOptimize(numberOption(options, ctx, 'slot-pitch')));
+            });
+        }),
+    );
 
 const bomCommand = cli.command('bom', 'cli.cmd.bom');
 bomCommand
@@ -599,6 +609,23 @@ cli
                     );
                 },
             );
+        }),
+    );
+
+cli
+    .command('changeover', 'cli.cmd.changeover')
+    .option('--feeder-change-seconds <s>', 'cli.opt.feeder-change-seconds')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'changeover <current.osmt> <next.osmt> [--feeder-change-seconds <s>]', async (document) => {
+                const next = options._[1];
+                if (next === undefined) {
+                    throw failure(ctx, 'cli/missing-argument', 'missingArgument', {
+                        usage: 'changeover <current.osmt> <next.osmt> [--feeder-change-seconds <s>]',
+                    });
+                }
+                print(await document.changeover(next, numberOption(options, ctx, 'feeder-change-seconds')));
+            });
         }),
     );
 
