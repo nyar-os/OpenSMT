@@ -39,6 +39,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | feeder station assignment along the tape bank | ✅ supported (heuristic by mean placement X; not optimal) |
 | feeder changeover sequence between two documents | ✅ supported (id/package/pitch comparison; fixed time per change) |
 | feeder consumption plan for a build quantity | ✅ supported (reels from lane capacity; not a splice or scrap model) |
+| feeder replenishment schedule across a production run | ✅ supported (one full reel when the next board is not covered; no splice or partial-reel model) |
 | panel coordinate map (single board to every panel instance) | ✅ supported |
 | first-article inspection sheet (JSON and CSV) | ✅ supported |
 | takt bottleneck heat map (step, package and side shares) | ✅ supported |
@@ -354,6 +355,32 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt takt heatmap panel.osmt
     ```
 
+23. **Feeder replenishment schedule.** `schedule` (CLI
+    `feeder schedule <file> --boards <n> [--out <file>]`) runs the same
+    allocation as `feeder consumption`, so a lane's per-board picks equal its
+    `assigned` count. Boards are simulated from 1 to `boards`. A lane starts at
+    its stored `loaded` quantity and consumes `picksPerBoard` after every board.
+    When a lane with a positive `capacity` cannot cover the next board
+    (`remaining < picksPerBoard`), one full reel is installed after the current
+    board, so a change's `board` is the 1-based board after which it happens
+    (the new reel is available before board `board + 1`) and its `reels` is the
+    cumulative reel count after the change, the initial reel counted. A lane's
+    `reels` is the initial reel plus every replenishment (`0` when the lane
+    supplies nothing). A lane is `short` when its initial `loaded` quantity
+    cannot cover even the first board, or its `capacity` is zero while it has
+    demand. A short lane still consumes what it has (never below zero),
+    replenishes when it can and is simulated to the end, so the report is always
+    produced and deterministic. `picks = picksPerBoard × boards`,
+    `remainingAfterRun` is the stock left after the final board, `changeCount`
+    and `reelCount` sum the lanes and `ok` is true when no lane is short. Lanes
+    are reported in feeder id order. `boards` must be at least 1, otherwise
+    `schedule/invalid`. Feeder coverage errors (`feeder/missing`,
+    `feeder/capacity`) propagate unchanged, and the document is never modified.
+
+    ```shell
+    open-smt feeder schedule panel.osmt --boards 250
+    ```
+
 ## KiCad PCB import
 
 `open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
@@ -467,6 +494,7 @@ are skipped. Rows keep the order of the source.
 | `changeover/invalid` | a changeover requested a non-positive or non-finite time per reel change |
 | `reflow/invalid` | a process-window limit is non-finite or negative, or a minimum exceeds its maximum |
 | `consumption/invalid` | a consumption plan requested fewer than one board |
+| `schedule/invalid` | a feeder replenishment schedule requested fewer than one board |
 | `program/invalid` | a machine program file is malformed, a nozzle map is invalid, or an export did not read back identically |
 
 Warnings do not make `ok` false: `component/none`, `feeder/none`,
@@ -492,6 +520,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/changeover.rs` | removal/swap/addition ordering with steps, swap counting twice, pitch-only swap, identical setups, empty current, ignored feeder coverage, structurally invalid documents, invalid change seconds, determinism, unchanged documents |
 | `tests/reflow_window.rs` | default profile metrics and zone ramp rates, margin arithmetic, pass/fail verdict, heating-only profile, invalid limits, determinism, unchanged document |
 | `tests/consumption.rs` | reels and last-reel remainder arithmetic, a short run, multi-lane package totals, empty document, zero boards, feeder coverage propagation, determinism, unchanged document |
+| `tests/feeder_schedule.rs` | no reel for a covered run, replenishment after the board that exhausts the stock, multiple reels, a short lane and a zero-capacity lane through the report builder, zero capacity rejected by validation, empty document, zero boards, feeder coverage propagation, id order, determinism, unchanged document |
 | `tests/panel_map.rs` | row-major instance offsets and panel arithmetic, document-order component mapping into every board, single-board identity, outside and non-finite component handling, empty document, invalid board and panel codes, determinism, unchanged document |
 | `tests/first_article.rs` | program-order rows with lane pitch, package material grouping and side totals, recorded revision, fixed checklist, empty document, feeder coverage propagation, CSV header and empty check columns, determinism, unchanged document |
 | `tests/machine_program.rs` | fixed header and program order, station/pitch/nozzle/speed fields, three-decimal canonical values, render-parse round trip, tampered field and reordered row mismatches, step-count mismatch, malformed files, empty document, invalid nozzle map, feeder coverage propagation, deterministic unchanged document, export-readback and verify-file paths |
@@ -537,6 +566,11 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 - The feeder consumption plan derives reels from lane capacity and the per-board
   allocation. It does not model splices, mid-run reel changes, scrap or moisture
   exposure.
+- The feeder replenishment schedule installs one full reel whenever the next
+  board is not covered. It does not model splices, partial reels, scrap or
+  moisture exposure, reel load time or machine downtime. Allocation never
+  assigns a lane more parts than it has loaded and validation rejects zero
+  capacity, so a normal document never reports a short lane.
 - The panel coordinate map assumes the stored axis-aligned panel array and
   row-major instance order. It does not rotate boards, add edge rails, reserve
   fiducial or tooling areas, or derive a panel outline, and it never changes the

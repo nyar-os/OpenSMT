@@ -262,6 +262,35 @@ reel is always short. `ok` is true when no lane is short. Missing or undersized
 feeders fail like `feeders` (`feeder/missing`, `feeder/capacity`). The document
 is not modified.
 
+### feeder schedule
+
+```shell
+open-smt feeder schedule <file> --boards <n> [--out <file>]
+```
+
+Prints a read-only feeder replenishment schedule for `n` boards as JSON and
+optionally writes the same JSON to `--out`. The command runs the same allocation
+as `feeder consumption`, so a lane's per-board picks equal its `assigned` count.
+`--boards` is required and must be a positive integer; `0` reports
+`schedule/invalid` and exits with code `1`. The report contains `format`
+(`open-smt-feeder-schedule`), `version`, `units`, `boards`, `changeCount`,
+`reelCount`, `ok` and one `lanes` entry per feeder in id order (`id`, `package`,
+`picksPerBoard`, `capacity`, `initialLoaded`, `picks`, `reels`, `changes`,
+`short`, `remainingAfterRun`).
+
+Every lane starts with its stored `loaded` quantity and consumes
+`picksPerBoard` after each board. A lane with a positive `capacity` replenishes
+with one full reel when its remaining stock cannot cover the next board. Each
+change is `{ board, reels, reason: "replenish" }`, where `board` is the 1-based
+board after which the reel is installed (before board `board + 1`) and `reels`
+is the cumulative reel count after the change. `reels` is the initial reel plus
+every replenishment (zero when the lane supplies nothing), `picks` is
+`picksPerBoard × boards` and `remainingAfterRun` is the stock left after the
+last board. A lane is `short` when its initial stock cannot cover the first
+board or its capacity is zero with demand; a short lane is still simulated and
+sets `ok` to false. Missing or undersized feeders fail like `feeders`
+(`feeder/missing`, `feeder/capacity`). The document is not modified.
+
 ## bom check
 
 ```shell
@@ -595,6 +624,7 @@ open-smt feeder update panel.osmt --id F1 --loaded 300
 open-smt feeder report panel.osmt
 open-smt feeder optimize panel.osmt --slot-pitch 16
 open-smt feeder consumption panel.osmt --boards 250
+open-smt feeder schedule panel.osmt --boards 250 --out feeder-schedule.json
 open-smt bom check panel.osmt --bom bom.csv
 open-smt quality first-article panel.osmt
 open-smt validate panel.osmt
