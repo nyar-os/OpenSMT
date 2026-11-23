@@ -25,6 +25,7 @@ import type {
     FeederLoadingReport,
     FeederReport,
     FeederRequest,
+    FeederScheduleReport,
     FeederUpdateRequest,
     FirstArticleReport,
     LanesReport,
@@ -243,6 +244,12 @@ export class SmtDocument {
     async consumption(boards: number): Promise<ConsumptionReport> {
         this.assertOpen();
         return service.consumption(this.state.path, boards);
+    }
+
+    /** Returns the read-only feeder replenishment schedule for `boards` boards. */
+    async schedule(boards: number): Promise<FeederScheduleReport> {
+        this.assertOpen();
+        return service.schedule(this.state.path, boards);
     }
 
     /**

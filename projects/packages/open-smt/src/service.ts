@@ -23,6 +23,7 @@ import type {
     FeederLoadingReport,
     FeederReport,
     FeederRequest,
+    FeederScheduleReport,
     FeederUpdateRequest,
     FirstArticleReport,
     ImportReport,
@@ -264,6 +265,13 @@ export function reflowWindow(path: string, limits: ReflowWindowLimits = {}): Ref
 export function consumption(path: string, boards: number): ConsumptionReport {
     return decode<ConsumptionReport>(() =>
         binding('feeder consumption').consumption(path, JSON.stringify({ boards })),
+    );
+}
+
+/** Returns the read-only feeder replenishment schedule for `boards` boards. */
+export function schedule(path: string, boards: number): FeederScheduleReport {
+    return decode<FeederScheduleReport>(() =>
+        binding('feeder schedule').feeder_schedule(path, JSON.stringify({ boards })),
     );
 }
 

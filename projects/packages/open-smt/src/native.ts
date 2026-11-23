@@ -43,6 +43,7 @@ export interface NativeBinding {
     reflow(path: string): string;
     reflow_window(path: string, requestJson?: string): string;
     consumption(path: string, requestJson: string): string;
+    feeder_schedule(path: string, requestJson: string): string;
     takt(path: string, requestJson?: string): string;
     takt_heatmap(path: string): string;
     machine_export(path: string, target: string, requestJson?: string): string;

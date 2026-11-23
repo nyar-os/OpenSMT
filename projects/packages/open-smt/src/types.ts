@@ -795,6 +795,55 @@ export interface ConsumptionReport {
     readonly ok: boolean;
 }
 
+/** One reel change of a feeder schedule. */
+export interface FeederScheduleChange {
+    /** One-based board after which the new reel is installed. */
+    readonly board: number;
+    /** Cumulative reels on the lane after the change, the initial reel counted. */
+    readonly reels: number;
+    /** Reason of the change; always `replenish`. */
+    readonly reason: 'replenish';
+}
+
+/** Replenishment schedule of one feeder lane. */
+export interface FeederScheduleLane {
+    readonly id: string;
+    readonly package: string;
+    /** Components the lane supplies on one board. */
+    readonly picksPerBoard: number;
+    /** Maximum parts on one reel of this lane. */
+    readonly capacity: number;
+    /** Parts loaded on the lane before the run. */
+    readonly initialLoaded: number;
+    /** Parts the lane consumes over the whole run. */
+    readonly picks: number;
+    /** Reels the run uses, the initial reel plus every replenishment. */
+    readonly reels: number;
+    /** Reel changes in board order. */
+    readonly changes: readonly FeederScheduleChange[];
+    /** Whether the initial stock or a zero capacity leaves a board uncovered. */
+    readonly short: boolean;
+    /** Parts left on the last reel after the final board. */
+    readonly remainingAfterRun: number;
+}
+
+/** Read-only feeder replenishment schedule for a production run. */
+export interface FeederScheduleReport {
+    readonly format: 'open-smt-feeder-schedule';
+    readonly version: number;
+    readonly units: string;
+    /** Boards the schedule covers. */
+    readonly boards: number;
+    /** Number of reel changes across every lane. */
+    readonly changeCount: number;
+    /** Number of reels across every lane, the initial reels included. */
+    readonly reelCount: number;
+    /** Whether every lane covers the run. */
+    readonly ok: boolean;
+    /** One entry per feeder lane, in id order. */
+    readonly lanes: readonly FeederScheduleLane[];
+}
+
 /** Generic checks a first-article sheet tells an inspector to perform. */
 export type FirstArticleCheck = 'placement' | 'orientation' | 'package' | 'feeder';
 

@@ -556,6 +556,21 @@ fn consumption(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the read-only feeder replenishment schedule for a build quantity.
+///
+/// The first argument is the document path and the second a JSON object whose
+/// `boards` field is the number of boards the schedule covers.
+#[function]
+fn feeder_schedule(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let request = object(&ctx, 1)?;
+    let boards = optional_u32(&request, "boards")?.ok_or_else(|| argument_error("`boards` is required"))?;
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.schedule(boards).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Returns the read-only cycle time and throughput estimate.
 ///
 /// An optional second argument is a JSON object of machine-model options;
@@ -708,6 +723,7 @@ register_module![
     reflow,
     reflow_window,
     consumption,
+    feeder_schedule,
     takt,
     takt_heatmap,
     machine_export,
