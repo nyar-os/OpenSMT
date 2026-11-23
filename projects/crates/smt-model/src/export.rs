@@ -180,7 +180,7 @@ pub fn markdown(document: &SmtDocument, placement: &PlacementReport, feeders: &F
     text
 }
 
-fn escape(value: &str) -> String {
+pub(crate) fn escape(value: &str) -> String {
     if value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('|') {
         format!("\"{}\"", value.replace('"', "\"\""))
     }
@@ -189,7 +189,7 @@ fn escape(value: &str) -> String {
     }
 }
 
-fn number(value: f64) -> String {
+pub(crate) fn number(value: f64) -> String {
     let rounded = (value * 1000.0).round() / 1000.0;
     if rounded.abs() < 1e-9 { "0".to_string() } else { format!("{rounded}") }
 }

@@ -5,6 +5,7 @@
 //! CLI, the native addon and the TypeScript SDK cannot drift apart.
 
 use std::{
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
     str::FromStr,
@@ -22,7 +23,9 @@ use crate::{
     export::{feeder_csv, first_article_csv, markdown, program_csv, write_atomic},
     feeder::{self, FeederLoadingReport},
     first_article::{self, FirstArticleReport},
+    heatmap::{self, HeatmapReport},
     import::ImportReport,
+    machine_program::{self, MachineProgramExport, MachineProgramVerify},
     model::{Board, Component, Feeder, Panel, ReflowProfile, Side, SmtDocument, UNITS},
     panel_fit::{self, PanelFitReport},
     panel_map::{self, PanelMapReport},
@@ -612,6 +615,73 @@ impl OpenSmt {
     /// document is never modified.
     pub fn takt(&self, options: &TaktOptions) -> Result<TaktReport, SmtError> {
         takt::estimate(self.document()?, options)
+    }
+
+    /// Returns the read-only takt bottleneck heat map of the open document.
+    ///
+    /// The map runs the same allocation and nearest-neighbour sequence as the
+    /// default [`OpenSmt::takt`] estimate, attributes the step time to each
+    /// step, package and side, and reports shares and cumulative package
+    /// shares. The document is never modified.
+    pub fn heatmap(&self) -> Result<HeatmapReport, SmtError> {
+        heatmap::heatmap(self.document()?)
+    }
+
+    /// Writes the neutral machine program and reads it back for verification.
+    ///
+    /// `nozzles` maps a package name to the nozzle id the program should carry;
+    /// a package without an entry exports an empty nozzle. The report states
+    /// whether the written file parsed back to the same program. A malformed
+    /// nozzle map reports `program/invalid`, and anything the allocation or the
+    /// sequence rejects fails with its own code. The document is never modified.
+    pub fn export_machine_program(
+        &self,
+        target: &Path,
+        nozzles: &BTreeMap<String, String>,
+    ) -> Result<MachineProgramExport, SmtError> {
+        let program = machine_program::build(self.document()?, nozzles)?;
+        let text = machine_program::render(&program);
+        write_atomic(target, &text)?;
+        let readback = machine_program::parse(&text)?;
+        if !machine_program::verify(&program, &readback).is_empty() {
+            return Err(SmtError::new("program/invalid", "the written machine program did not read back identically"));
+        }
+        Ok(MachineProgramExport {
+            format: machine_program::FORMAT.to_string(),
+            version: 1,
+            units: program.units.clone(),
+            path: target.display().to_string(),
+            steps: program.components,
+            bytes: text.len(),
+            verified: true,
+        })
+    }
+
+    /// Checks a machine program file against the open document.
+    ///
+    /// The document program is rebuilt with the same `nozzles` map and compared
+    /// field by field; the report lists every difference and is `ok` only when
+    /// there is none. An unreadable file reports `io/read`, a malformed program
+    /// reports `program/invalid`. Neither file is modified.
+    pub fn verify_machine_program(
+        &self,
+        source: &Path,
+        nozzles: &BTreeMap<String, String>,
+    ) -> Result<MachineProgramVerify, SmtError> {
+        let expected = machine_program::build(self.document()?, nozzles)?;
+        let text = fs::read_to_string(source)
+            .map_err(|error| SmtError::new("io/read", format!("cannot read `{}`: {error}", source.display())))?;
+        let actual = machine_program::parse(&text)?;
+        let mismatches = machine_program::verify(&expected, &actual);
+        Ok(MachineProgramVerify {
+            format: machine_program::FORMAT.to_string(),
+            version: 1,
+            units: expected.units.clone(),
+            path: source.display().to_string(),
+            steps: expected.components,
+            ok: mismatches.is_empty(),
+            mismatches,
+        })
     }
 
     /// Returns the read-only feeder station assignment of the open document.

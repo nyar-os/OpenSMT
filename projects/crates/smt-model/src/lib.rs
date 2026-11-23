@@ -20,6 +20,8 @@
 //! * a read-only feeder changeover sequence between two documents;
 //! * a read-only reflow process-window margin report;
 //! * a read-only feeder consumption plan for a build quantity;
+//! * a read-only takt bottleneck heat map by step, package and side;
+//! * a neutral machine program interchange with a readback check;
 //! * CSV program and feeder sheets, plus JSON and Markdown reports.
 //!
 //! Paste-aperture generation and vendor machine programs are **not**
@@ -37,7 +39,9 @@ mod error;
 mod export;
 mod feeder;
 mod first_article;
+mod heatmap;
 mod import;
+mod machine_program;
 mod model;
 mod panel_fit;
 mod panel_map;
@@ -65,7 +69,12 @@ pub use crate::{
     first_article::{
         FirstArticleLane, FirstArticleMaterial, FirstArticleReport, FirstArticleStep, sheet as first_article_sheet,
     },
+    heatmap::{HeatPackage, HeatSide, HeatStep, HeatmapReport, heatmap as takt_heatmap},
     import::{ImportLoss, ImportReport},
+    machine_program::{
+        MachineProgram, MachineProgramExport, MachineProgramVerify, ProgramMismatch, build as build_machine_program,
+        parse as parse_machine_program, render as render_machine_program, verify as verify_machine_program,
+    },
     model::{Board, Component, FORMAT, Feeder, Panel, ReflowProfile, Side, SmtDocument, UNITS, VERSION, Zone},
     panel_fit::{PanelFitReport, fit as panel_fit},
     panel_map::{MappedComponent, PanelInstance, PanelMapReport, PanelPlacement, map as panel_map},
@@ -94,7 +103,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "reflowProfile": "supported",
     "placementProgram": "supported",
     "pasteAperture": "unsupported",
-    "machineProgram": "unsupported",
+    "machineProgram": "supported",
     "lineBalance": "supported",
     "dualLane": "supported",
     "multiLane": "supported",
@@ -104,13 +113,15 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "reflowWindow": "supported",
     "feederConsumption": "supported",
     "panelMap": "supported",
-    "firstArticle": "supported"
+    "firstArticle": "supported",
+    "taktHeatmap": "supported"
   },
   "io": {
     "osmt": "supported",
     "programCsv": "supported",
     "feedersCsv": "supported",
     "firstArticleCsv": "supported",
+    "machineProgramCsv": "supported",
     "json": "supported",
     "md": "supported",
     "kicad": "unsupported",
@@ -134,6 +145,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "feederConsumption": "reels are derived from lane capacity and the per-board feeder allocation; splices, reel changes, scrap and moisture exposure are not modelled",
     "panelMap": "row-major instances of the stored panel array; no board rotation, edge rail, fiducial, tooling area or panel outline is modelled",
     "firstArticle": "repeats the placement program with the allocated lane pitch and a fixed four-item checklist; it records no inspection result and models no component polarity",
+    "taktHeatmap": "attributes the analytical step time of the default machine model to each step, package and side; it models no acceleration, tape advance, vision or nozzle physics",
+    "machineProgram": "neutral CSV interchange of the placement program with a readback check; it is not a Fuji, Yamaha, Juki or ASM dialect and takes nozzle ids only from a caller-supplied package map",
     "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }
 }"#;
