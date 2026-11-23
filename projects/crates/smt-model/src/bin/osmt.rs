@@ -26,6 +26,7 @@ Usage:
   osmt feeder update <file> --id <id> [--package <pkg>] [--pitch <mm>] [--capacity <n>] [--loaded <n>]
   osmt feeder remove <file> --id <id>
   osmt feeder report <file>
+  osmt bom check <file> --bom <bom.csv>
   osmt profile set <file> --speed <mm/min> --liquidus <c> --zones \"name:length:temp;...\"
   osmt validate <file>
   osmt placement <file> [--out program.csv] [--optimize]
@@ -86,6 +87,7 @@ fn run(args: &[String]) -> Result<i32, SmtError> {
         "panel" => panel_command(args),
         "component" => component_command(args),
         "feeder" => feeder_command(args),
+        "bom" => bom_command(args),
         "profile" => profile_command(args),
         "validate" => {
             let file = positional(args, 1, "validate <file>")?;
@@ -266,6 +268,16 @@ fn feeder_command(args: &[String]) -> Result<i32, SmtError> {
         }
         _ => Err(SmtError::new("cli/missing-argument", "usage: osmt feeder add|update|remove|report <file> ...")),
     }
+}
+
+fn bom_command(args: &[String]) -> Result<i32, SmtError> {
+    if args.get(1).map(String::as_str) != Some("check") {
+        return Err(SmtError::new("cli/missing-argument", "usage: osmt bom check <file> --bom <bom.csv>"));
+    }
+    let file = positional(args, 2, "bom check <file> --bom <bom.csv>")?;
+    let values = Options::parse(&args[3..], &["--bom"], &[])?;
+    let bom = values.require("--bom")?;
+    print_json(&session(file)?.bom_check(Path::new(bom))?)
 }
 
 fn profile_command(args: &[String]) -> Result<i32, SmtError> {

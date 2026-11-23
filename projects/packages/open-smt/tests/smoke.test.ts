@@ -49,6 +49,8 @@ test('the error surface includes coverage and capability codes', () => {
     assert.ok(errorCodes.includes('balance/invalid-machines'));
     assert.ok(errorCodes.includes('schedule/invalid-strategy'));
     assert.ok(errorCodes.includes('schedule/invalid-lanes'));
+    assert.ok(errorCodes.includes('bom/missing-column'));
+    assert.ok(errorCodes.includes('bom/duplicate-refdes'));
 });
 
 test('balance splits components and rejects zero machines', { skip: skipWithoutNative }, async () => {
@@ -111,6 +113,59 @@ test('panel fit reports how many boards fit and leaves the document unchanged', 
             assert.equal(error.code, 'panel/invalid');
             return true;
         });
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('bom check reports missing, extra and quantity findings and leaves the document unchanged', {
+    skip: skipWithoutNative,
+}, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-bom-'));
+    const file = path.join(directory, 'panel.osmt');
+    const bomFile = path.join(directory, 'bom.csv');
+    const badBomFile = path.join(directory, 'bad-bom.csv');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'R2', package: '0603', x: 20, y: 10 });
+        await document.addComponent({ refdes: 'C1', package: '0805', x: 30, y: 10 });
+        const before = document.revision;
+
+        await fs.writeFile(bomFile, 'package,quantity,refdes\n0603,3,R1;R2;R3\nQFN-32,1,U1\n');
+        const report = await document.bomCheck(bomFile);
+        assert.equal(report.format, 'open-smt-bom-check');
+        assert.equal(report.version, 1);
+        assert.equal(report.ok, false);
+        assert.equal(report.bomLines, 2);
+        assert.equal(report.components, 3);
+        assert.deepEqual(report.missing, [
+            { package: '0603', refdes: 'R3' },
+            { package: 'QFN-32', refdes: 'U1' },
+        ]);
+        assert.deepEqual(report.extra, [{ package: '0805', refdes: 'C1' }]);
+        assert.deepEqual(report.quantityMismatches, [
+            { package: '0603', bomQuantity: 3, placedQuantity: 2, difference: -1 },
+            { package: '0805', bomQuantity: 0, placedQuantity: 1, difference: 1 },
+            { package: 'QFN-32', bomQuantity: 1, placedQuantity: 0, difference: -1 },
+        ]);
+
+        await fs.writeFile(bomFile, 'package,quantity,refdes\n0603,2,R1;R2\n0805,1,C1\n');
+        const clean = await document.bomCheck(bomFile);
+        assert.equal(clean.ok, true);
+        assert.deepEqual(clean.missing, []);
+        assert.deepEqual(clean.extra, []);
+        assert.deepEqual(clean.quantityMismatches, []);
+
+        await fs.writeFile(badBomFile, 'package,refdes\n0603,R1\n');
+        await assert.rejects(document.bomCheck(badBomFile), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'bom/missing-column');
+            return true;
+        });
+        assert.equal(document.revision, before);
     } finally {
         await session.dispose();
         await fs.rm(directory, { recursive: true, force: true });

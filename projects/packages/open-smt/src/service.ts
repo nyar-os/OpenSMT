@@ -10,6 +10,7 @@ import { nativeBinding } from './native.js';
 import type {
     BalanceReport,
     BoardRequest,
+    BomCheckReport,
     ComponentRequest,
     ComponentUpdateRequest,
     DocumentSummary,
@@ -188,6 +189,11 @@ export function feederReport(path: string): FeederLoadingReport {
 /** Returns the read-only panel fit report for a maximum panel size. */
 export function panelFit(path: string, request: PanelFitRequest): PanelFitReport {
     return decode<PanelFitReport>(() => binding('panel.fit').panel_fit(path, JSON.stringify(request)));
+}
+
+/** Returns the read-only BOM cross-check against the BOM CSV at `bomPath`. */
+export function bomCheck(path: string, bomPath: string): BomCheckReport {
+    return decode<BomCheckReport>(() => binding('bom.check').bom_check(path, bomPath));
 }
 
 /** Returns the multi-machine line balance, optionally improved per machine. */

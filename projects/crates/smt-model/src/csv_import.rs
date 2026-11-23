@@ -177,14 +177,14 @@ fn board_for(components: &[Component]) -> Board {
 }
 
 /// One physical CSV record and the line it started on.
-struct Record {
-    line: usize,
-    fields: Vec<String>,
+pub(crate) struct Record {
+    pub(crate) line: usize,
+    pub(crate) fields: Vec<String>,
 }
 
 /// Splits the source into records, honouring quoted fields and skipping empty
 /// lines.
-fn read_records(source: &str) -> Result<Vec<Record>, SmtError> {
+pub(crate) fn read_records(source: &str) -> Result<Vec<Record>, SmtError> {
     let mut records = Vec::new();
     let mut fields = Vec::new();
     let mut field = String::new();

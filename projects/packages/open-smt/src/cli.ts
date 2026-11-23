@@ -286,6 +286,8 @@ async function dispatch(args: readonly string[]): Promise<number> {
             return componentCommand(args.slice(1));
         case 'feeder':
             return feederCommand(args.slice(1));
+        case 'bom':
+            return bomCommand(args.slice(1));
         case 'profile':
             return profileCommand(args.slice(1));
         case 'validate':
@@ -471,6 +473,15 @@ async function feederCommand(args: readonly string[]): Promise<number> {
         });
     }
     throw failure('cli/missing-argument', 'missingArgument', { usage: 'feeder add|update|remove|report <file> ...' });
+}
+
+async function bomCommand(args: readonly string[]): Promise<number> {
+    if (args[0] !== 'check') {
+        throw failure('cli/missing-argument', 'missingArgument', { usage: 'bom check <file> --bom <bom.csv>' });
+    }
+    return readDocument(args.slice(1), 'bom check <file> --bom <bom.csv>', ['--bom'], async (document, parsed) => {
+        print(await document.bomCheck(required(parsed, '--bom')));
+    });
 }
 
 async function scheduleCommand(args: readonly string[]): Promise<number> {

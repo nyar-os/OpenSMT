@@ -20,6 +20,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | optional 2-opt placement optimisation | ✅ supported |
 | feeder allocation by id and loaded quantity | ✅ supported |
 | feeder loading report (package counts and suggested slots) | ✅ supported |
+| BOM cross-check (missing, extra and quantity findings) | ✅ supported |
 | multi-feeder split of one package | ✅ supported |
 | panel board count and panel dimensions | ✅ supported |
 | panel fit report (boards fitting a maximum panel size) | ✅ supported |
@@ -148,6 +149,27 @@ The machine-readable version is printed by `open-smt capabilities` and by
     revision. Allocation and the placement program are recomputed from the
     edited document, so a changed package is reflected by the next
     `feeders`/`placement` call.
+13. **BOM cross-check.** `bomCheck` (CLI `bom check <file> --bom <bom.csv>`)
+    compares the placement list with a BOM CSV without changing either side.
+    The header must declare `package` and `quantity` and may declare `refdes`
+    (a `;`-separated list); names are case-insensitive, fields may be
+    double-quoted and empty lines are skipped, exactly as in the CSV placement
+    import. Unknown or duplicate columns, a wrong field count, an empty
+    package, a non-integer or zero quantity and a repeated reference
+    designator report a `bom/...` code that names the physical line. BOM rows
+    are grouped by package name and their quantities summed; placements are
+    grouped by package and counted. For every package in ascending name order
+    the report lists the BOM reference designators with no placement
+    (`missing`), the placed reference designators the BOM does not declare
+    (`extra`) and the packages whose summed BOM quantity differs from the
+    placed count (`quantityMismatches`, with `difference = placed − bom`).
+    A reference-designator-level check only runs for packages whose BOM rows
+    enumerate refdes; a BOM row without refdes is compared by quantity only,
+    and a package absent from the BOM contributes its whole placement list to
+    `extra`. Packages are matched by exact name; part-number aliases are not
+    resolved. `ok` is true only when all three lists are empty. The findings
+    are ordered by package name, then by reference designator, and the report
+    is deterministic.
 
 ## KiCad PCB import
 
@@ -235,6 +257,15 @@ are skipped. Rows keep the order of the source.
 | `import/invalid-side` | a CSV row states a side other than top or bottom |
 | `import/duplicate-refdes` | a CSV row repeats a reference designator |
 | `import/outside-board` | a CSV row has a negative coordinate |
+| `bom/parse` | the BOM CSV cannot be tokenised or is empty |
+| `bom/missing-column` | the BOM header lacks `package` or `quantity` |
+| `bom/unknown-column` | the BOM header declares a column other than `package`, `quantity` or `refdes` |
+| `bom/duplicate-column` | the BOM header declares the same column twice |
+| `bom/invalid-header` | a BOM header column has an empty name |
+| `bom/invalid-row` | a BOM row has a different field count than the header |
+| `bom/invalid-value` | a BOM row has an empty package or a zero quantity |
+| `bom/invalid-number` | a BOM `quantity` field is not an integer |
+| `bom/duplicate-refdes` | the BOM declares the same reference designator twice |
 | `board/invalid` | a board size is not finite and positive |
 | `panel/invalid` | zero rows/columns, a negative gap, or an invalid panel-fit maximum or gap |
 | `balance/invalid-machines` | a balance requested fewer than 1 or more than 64 machines |
@@ -265,9 +296,10 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/validation.rs` | every code above and warning-only documents |
 | `tests/feeder.rs` | package counts, slot numbering in package order, reference designator document order, deduplicated sorted sides, empty document, determinism; partial feeder update (pitch/capacity/loaded, package move reflected by allocation, invalid capacity/loaded/pitch/package, unknown id, empty request, one revision, untouched fields, round trip, determinism) |
 | `tests/panel_fit.rs` | exact-fit 2 × 3 arithmetic, leftover gaps, too-small dimensions, zero waste, gap effects, utilization, stored-gap default versus override, invalid maxima and gaps, determinism, unchanged document |
+| `tests/bom.rs` | matching BOM, missing/extra/quantity findings, a refdes placed under another package, quantity-only rows, empty document and empty BOM, case-insensitive quoted headers, deterministic order-independent JSON, stable `bom/...` error codes, unchanged document bytes and revision, missing BOM file |
 | `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as; partial component update (move, rotation normalisation, side and package changes, height set and cleared, untouched fields, invalid requests, one revision, determinism, round trip) |
 | `tests/import.rs` | KiCad footprint mapping, rotation, both sides, reference sources, loss ledger, outline errors, duplicate/missing references, empty board, determinism, existing target; CSV row order, reordered/quoted/UPPERCASE columns, empty lines, side and rotation defaults, duplicate refdes, missing column, invalid number, invalid side, line numbers, negative coordinate, determinism, one revision, existing target |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit and component-update smokes |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, BOM-check and component-update smokes |
 
 ## Limitations
 
@@ -282,6 +314,9 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 - The panel fit report assumes an axis-aligned grid of whole boards. It does not
   rotate boards, add edge rails, reserve fiducial or tooling areas, or derive a
   panel outline, and it never changes the stored panel array.
+- The BOM cross-check matches packages by exact name; reference-designator
+  findings only run for packages whose BOM rows enumerate refdes, and
+  part-number aliases are not resolved. It never writes the document or the BOM.
 - Reflow uses set-points, not measured thermocouple data, and models no
   convection or board thermal mass.
 - Only the top and bottom sides are supported.

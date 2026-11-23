@@ -12,6 +12,7 @@ import type {
     BalanceReport,
     Board,
     BoardRequest,
+    BomCheckReport,
     ComponentRequest,
     ComponentUpdateRequest,
     DocumentSummary,
@@ -175,6 +176,12 @@ export class SmtDocument {
     async panelFit(request: PanelFitRequest): Promise<PanelFitReport> {
         this.assertOpen();
         return service.panelFit(this.state.path, request);
+    }
+
+    /** Returns the read-only BOM cross-check against the BOM CSV at `bomPath`. */
+    async bomCheck(bomPath: string): Promise<BomCheckReport> {
+        this.assertOpen();
+        return service.bomCheck(this.state.path, bomPath);
     }
 
     /** Returns the multi-machine line balance, optionally improved per machine. */

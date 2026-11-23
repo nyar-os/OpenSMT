@@ -194,6 +194,24 @@ document order and `sides` deduplicated and sorted. An empty document reports
 zero placements, zero packages and no slots. Slot numbers are suggestions only:
 they do not describe a physical machine slot or a tape layout.
 
+## bom check
+
+```shell
+open-smt bom check <file> --bom <bom.csv>
+```
+
+Prints the read-only BOM cross-check as JSON. The BOM CSV declares `package`
+and `quantity` per row and may declare a `;`-separated `refdes` list; column
+names are case-insensitive, fields may be double-quoted and empty lines are
+skipped. The report contains `format` (`open-smt-bom-check`), `version`,
+`units`, `ok`, `bomLines`, `components`, `missing` (BOM reference designators
+with no placement), `extra` (placed reference designators the BOM does not
+declare) and `quantityMismatches` (per package: `bomQuantity`,
+`placedQuantity` and `difference = placedQuantity - bomQuantity`). Findings
+are ordered by package name, then by reference designator. A malformed BOM
+reports a `bom/...` code naming the physical line. Neither the document nor
+the BOM file is modified.
+
 ## profile set
 
 ```shell
@@ -354,6 +372,7 @@ open-smt feeder add panel.osmt --id F1 --package 0603 --pitch 4 --capacity 500
 open-smt feeder add panel.osmt --id F2 --package QFN-32 --pitch 12 --capacity 50
 open-smt feeder update panel.osmt --id F1 --loaded 300
 open-smt feeder report panel.osmt
+open-smt bom check panel.osmt --bom bom.csv
 open-smt validate panel.osmt
 open-smt placement panel.osmt
 open-smt schedule dual panel.osmt

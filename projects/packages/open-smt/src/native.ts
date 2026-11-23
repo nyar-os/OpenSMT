@@ -34,6 +34,7 @@ export interface NativeBinding {
     feeders(path: string): string;
     feeder_report(path: string): string;
     panel_fit(path: string, requestJson: string): string;
+    bom_check(path: string, bomPath: string): string;
     balance(path: string, machines: number, optimize?: boolean): string;
     dual_lane(path: string, strategy?: string, improve?: boolean): string;
     schedule_lanes(path: string, lanes: number, strategy?: string, improve?: boolean): string;

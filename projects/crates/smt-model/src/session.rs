@@ -15,6 +15,7 @@ use serde::Serialize;
 use crate::{
     CAPABILITIES_JSON, SmtError,
     balance::{self, BalanceReport},
+    bom::{self, BomCheckReport},
     dual::{self, DualLaneReport, DualLaneStrategy, LanesReport},
     export::{feeder_csv, markdown, program_csv, write_atomic},
     feeder::{self, FeederLoadingReport},
@@ -496,6 +497,18 @@ impl OpenSmt {
         gap_y: Option<f64>,
     ) -> Result<PanelFitReport, SmtError> {
         panel_fit::fit(self.document()?, max_width, max_depth, gap_x, gap_y)
+    }
+
+    /// Returns the read-only BOM cross-check against the BOM CSV at `bom`.
+    ///
+    /// The report compares the placement list with the BOM and names missing
+    /// and extra reference designators plus per-package quantity mismatches.
+    /// Neither the document nor the BOM file is modified.
+    pub fn bom_check(&self, bom: &Path) -> Result<BomCheckReport, SmtError> {
+        let document = self.document()?;
+        let text = fs::read_to_string(bom)
+            .map_err(|error| SmtError::new("io/read", format!("cannot read `{}`: {error}", bom.display())))?;
+        bom::check(document, &text)
     }
 
     /// Returns the placement program of the open document.

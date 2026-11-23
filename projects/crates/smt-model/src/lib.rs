@@ -15,6 +15,7 @@
 //!   longest-first (LPT), with an optional pairwise-swap improvement pass;
 //! * a reflow profile evaluator that integrates time above liquidus over linear
 //!   zone ramps;
+//! * a read-only BOM cross-check against a BOM CSV;
 //! * CSV program and feeder sheets, plus JSON and Markdown reports.
 //!
 //! Paste-aperture generation and vendor machine programs are **not**
@@ -23,6 +24,7 @@
 #![deny(missing_docs)]
 
 mod balance;
+mod bom;
 mod csv_import;
 mod dual;
 mod error;
@@ -38,6 +40,7 @@ pub mod validate;
 
 pub use crate::{
     balance::{BalanceReport, MAX_MACHINES, MIN_MACHINES, MachineFeeder, MachineReport, balance, balance_with},
+    bom::{BomCheckReport, BomFinding, BomQuantityMismatch, check as bom_check},
     dual::{
         DualLaneReport, DualLaneStrategy, DualLaneTask, LANES, LaneSchedule, LanesReport, MAX_LANES, MIN_LANES,
         plan_document_lanes, plan_dual_lane, plan_dual_lane_tasks, plan_dual_lane_tasks_with_strategy,
@@ -65,6 +68,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "placementOptimization": "supported",
     "feederAllocation": "supported",
     "feederLoadingReport": "supported",
+    "bomCheck": "supported",
     "panelization": "supported",
     "panelFit": "supported",
     "reflowProfile": "supported",
@@ -93,6 +97,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "dualLane": "greedy or LPT heuristic with an optional single-swap pass, not an optimal schedule",
     "multiLane": "greedy or LPT heuristic on 2 to 16 lanes with an optional pairwise-swap pass, not an optimal schedule",
     "feederLoadingReport": "slot numbers are suggestions only; no machine slot, tape direction or pitch constraint is modelled",
+    "bomCheck": "packages are matched by exact name; refdes-level findings only run for packages whose BOM rows enumerate refdes",
     "panelFit": "axis-aligned grid of whole boards only; no rotation, edge rail, fiducial or panel outline is modelled",
     "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }

@@ -195,6 +195,43 @@ export interface PanelFitReport {
     readonly utilization: number;
 }
 
+/** One reference designator the BOM and the placement table disagree about. */
+export interface BomFinding {
+    readonly package: string;
+    /** The disputed reference designator. */
+    readonly refdes: string;
+}
+
+/** One package whose placed count differs from the BOM quantity. */
+export interface BomQuantityMismatch {
+    readonly package: string;
+    /** Quantity the BOM declares for this package. */
+    readonly bomQuantity: number;
+    /** Number of placements of this package. */
+    readonly placedQuantity: number;
+    /** `placedQuantity - bomQuantity`. */
+    readonly difference: number;
+}
+
+/** Read-only BOM cross-check report. */
+export interface BomCheckReport {
+    readonly format: string;
+    readonly version: number;
+    readonly units: string;
+    /** Whether the placement table matches the BOM. */
+    readonly ok: boolean;
+    /** Number of data rows in the BOM. */
+    readonly bomLines: number;
+    /** Number of placements in the document. */
+    readonly components: number;
+    /** BOM reference designators with no placement, in package then refdes order. */
+    readonly missing: readonly BomFinding[];
+    /** Placed reference designators with no BOM entry, in package then refdes order. */
+    readonly extra: readonly BomFinding[];
+    /** Packages whose counts disagree, in package order. */
+    readonly quantityMismatches: readonly BomQuantityMismatch[];
+}
+
 /** Placement program report. */
 export interface PlacementReport {
     readonly format: string;
