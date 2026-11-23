@@ -199,7 +199,7 @@ fn update_component_package_changes_feeder_allocation() {
     session.add_feeder(Feeder::new("F2", "0805", 4.0, 100)).expect("F2");
 
     let before = session.feeders().expect("allocation");
-    assert!(before.feeders.iter().find(|feeder| feeder.id == "F1").expect("F1").refdes.contains(&"R1".to_string()));
+    assert!(before.feeders.iter().find(|feeder| feeder.id == "F1").expect("F1").refdes.iter().any(|i| i == "R1"));
 
     session
         .update_component("R1", ComponentUpdate { package: Some("0805".to_string()), ..ComponentUpdate::default() })
