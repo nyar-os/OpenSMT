@@ -32,6 +32,7 @@ use crate::{
     place::{self, FeederReport, PlacementReport},
     reflow::{self, ReflowReport},
     reflow_window::{self, ReflowWindowLimits, ReflowWindowReport},
+    schedule::{self, FeederScheduleReport},
     station::{self, StationReport},
     takt::{self, TaktOptions, TaktReport},
     validate::{self, ValidationReport},
@@ -605,6 +606,16 @@ impl OpenSmt {
     /// feeder fails like the `feeders` report. The document is never modified.
     pub fn consumption(&self, boards: u32) -> Result<ConsumptionReport, SmtError> {
         consumption::plan(self.document()?, boards)
+    }
+
+    /// Returns the read-only feeder replenishment schedule for `boards` boards.
+    ///
+    /// A zero board count reports `schedule/invalid`; a missing or undersized
+    /// feeder fails like the `feeders` report. A lane that cannot cover a board
+    /// is reported as short instead of failing, and the document is never
+    /// modified.
+    pub fn schedule(&self, boards: u32) -> Result<FeederScheduleReport, SmtError> {
+        schedule::plan(self.document()?, boards)
     }
 
     /// Returns the read-only cycle time and throughput estimate of the open

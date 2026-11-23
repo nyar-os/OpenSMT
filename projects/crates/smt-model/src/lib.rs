@@ -20,6 +20,7 @@
 //! * a read-only feeder changeover sequence between two documents;
 //! * a read-only reflow process-window margin report;
 //! * a read-only feeder consumption plan for a build quantity;
+//! * a read-only feeder replenishment schedule across a production run;
 //! * a read-only takt bottleneck heat map by step, package and side;
 //! * a neutral machine program interchange with a readback check;
 //! * CSV program and feeder sheets, plus JSON and Markdown reports.
@@ -48,6 +49,7 @@ mod panel_map;
 mod place;
 mod reflow;
 mod reflow_window;
+mod schedule;
 mod session;
 mod station;
 mod takt;
@@ -84,6 +86,10 @@ pub use crate::{
     },
     reflow::{AMBIENT, ReflowReport, ZoneReport, evaluate as evaluate_reflow},
     reflow_window::{ReflowWindowLimits, ReflowWindowReport, WindowCheck, WindowZone, evaluate as evaluate_reflow_window},
+    schedule::{
+        FeederScheduleReport, ReelChange, ScheduleLane, plan as plan_feeder_schedule, plan_lane,
+        report as feeder_schedule_report,
+    },
     session::{ComponentUpdate, DEFAULT_BOARD, DocumentSummary, ExportFormat, ExportReport, FeederUpdate, OpenSmt, Report},
     station::{DEFAULT_SLOT_PITCH, Station, StationReport, assign as assign_stations},
     takt::{TaktOptions, TaktReport, estimate as takt_estimate},
@@ -112,6 +118,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "changeoverSequence": "supported",
     "reflowWindow": "supported",
     "feederConsumption": "supported",
+    "feederSchedule": "supported",
     "panelMap": "supported",
     "firstArticle": "supported",
     "taktHeatmap": "supported"
@@ -143,6 +150,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "changeoverSequence": "lanes are matched by id and compared by package and exact pitch; the downtime is a fixed time per reel change, not a measured rate",
     "reflowWindow": "metrics and ramp rates come from zone set-points, not measured thermocouple data; the comparison is against caller-supplied limits",
     "feederConsumption": "reels are derived from lane capacity and the per-board feeder allocation; splices, reel changes, scrap and moisture exposure are not modelled",
+    "feederSchedule": "replenishment installs one full reel when the next board is not covered; splices, partial reels, scrap, moisture exposure and changeover time are not modelled",
     "panelMap": "row-major instances of the stored panel array; no board rotation, edge rail, fiducial, tooling area or panel outline is modelled",
     "firstArticle": "repeats the placement program with the allocated lane pitch and a fixed four-item checklist; it records no inspection result and models no component polarity",
     "taktHeatmap": "attributes the analytical step time of the default machine model to each step, package and side; it models no acceleration, tape advance, vision or nozzle physics",
