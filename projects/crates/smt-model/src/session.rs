@@ -16,6 +16,7 @@ use crate::{
     CAPABILITIES_JSON, SmtError,
     balance::{self, BalanceReport},
     bom::{self, BomCheckReport},
+    changeover::{self, ChangeoverReport},
     dual::{self, DualLaneReport, DualLaneStrategy, LanesReport},
     export::{feeder_csv, markdown, program_csv, write_atomic},
     feeder::{self, FeederLoadingReport},
@@ -24,6 +25,7 @@ use crate::{
     panel_fit::{self, PanelFitReport},
     place::{self, FeederReport, PlacementReport},
     reflow::{self, ReflowReport},
+    station::{self, StationReport},
     takt::{self, TaktOptions, TaktReport},
     validate::{self, ValidationReport},
 };
@@ -568,6 +570,32 @@ impl OpenSmt {
     /// document is never modified.
     pub fn takt(&self, options: &TaktOptions) -> Result<TaktReport, SmtError> {
         takt::estimate(self.document()?, options)
+    }
+
+    /// Returns the read-only feeder station assignment of the open document.
+    ///
+    /// The report sequences the same placement program as [`OpenSmt::placement`]
+    /// and orders the feeder lanes along the tape bank. `slot_pitch` is the
+    /// distance between neighbouring slots in millimetres; a non-finite or
+    /// non-positive value reports `station/invalid`. The document is never
+    /// modified.
+    pub fn stations(&self, slot_pitch: f64) -> Result<StationReport, SmtError> {
+        station::assign(self.document()?, slot_pitch)
+    }
+
+    /// Returns the read-only feeder changeover sequence from the open document
+    /// to the document at `other`.
+    ///
+    /// `feeder_change_seconds` is the time assumed for one reel change; a
+    /// non-finite or non-positive value reports `changeover/invalid`. Neither
+    /// document is modified.
+    pub fn changeover(&self, other: &Path, feeder_change_seconds: f64) -> Result<ChangeoverReport, SmtError> {
+        let document = self.document()?;
+        let text = fs::read_to_string(other)
+            .map_err(|error| SmtError::new("io/read", format!("cannot read `{}`: {error}", other.display())))?;
+        let next: SmtDocument = serde_json::from_str(&text)
+            .map_err(|error| SmtError::new("document/parse", format!("cannot parse `{}`: {error}", other.display())))?;
+        changeover::plan(document, &next, feeder_change_seconds)
     }
 
     /// Exports the open document and returns the created files.

@@ -16,6 +16,8 @@
 //! * a reflow profile evaluator that integrates time above liquidus over linear
 //!   zone ramps;
 //! * a read-only BOM cross-check against a BOM CSV;
+//! * a read-only feeder station assignment along the tape bank;
+//! * a read-only feeder changeover sequence between two documents;
 //! * CSV program and feeder sheets, plus JSON and Markdown reports.
 //!
 //! Paste-aperture generation and vendor machine programs are **not**
@@ -25,6 +27,7 @@
 
 mod balance;
 mod bom;
+mod changeover;
 mod csv_import;
 mod dual;
 mod error;
@@ -36,12 +39,14 @@ mod panel_fit;
 mod place;
 mod reflow;
 mod session;
+mod station;
 mod takt;
 pub mod validate;
 
 pub use crate::{
     balance::{BalanceReport, MAX_MACHINES, MIN_MACHINES, MachineFeeder, MachineReport, balance, balance_with},
     bom::{BomCheckReport, BomFinding, BomQuantityMismatch, check as bom_check},
+    changeover::{ChangeoverAction, ChangeoverKind, ChangeoverReport, DEFAULT_FEEDER_CHANGE_SECONDS, plan as plan_changeover},
     dual::{
         DualLaneReport, DualLaneStrategy, DualLaneTask, LANES, LaneSchedule, LanesReport, MAX_LANES, MIN_LANES,
         plan_document_lanes, plan_dual_lane, plan_dual_lane_tasks, plan_dual_lane_tasks_with_strategy,
@@ -59,6 +64,7 @@ pub use crate::{
     },
     reflow::{AMBIENT, ReflowReport, ZoneReport, evaluate as evaluate_reflow},
     session::{ComponentUpdate, DEFAULT_BOARD, DocumentSummary, ExportFormat, ExportReport, FeederUpdate, OpenSmt, Report},
+    station::{DEFAULT_SLOT_PITCH, Station, StationReport, assign as assign_stations},
     takt::{TaktOptions, TaktReport, estimate as takt_estimate},
     validate::{Issue, Severity, ValidationReport},
 };
@@ -80,7 +86,9 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "lineBalance": "supported",
     "dualLane": "supported",
     "multiLane": "supported",
-    "cycleTimeEstimate": "supported"
+    "cycleTimeEstimate": "supported",
+    "feederStationAssignment": "supported",
+    "changeoverSequence": "supported"
   },
   "io": {
     "osmt": "supported",
@@ -103,6 +111,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "bomCheck": "packages are matched by exact name; refdes-level findings only run for packages whose BOM rows enumerate refdes",
     "panelFit": "axis-aligned grid of whole boards only; no rotation, edge rail, fiducial or panel outline is modelled",
     "cycleTimeEstimate": "analytical estimate over the placement program with a fixed machine model; no acceleration, tape advance or nozzle physics is modelled",
+    "feederStationAssignment": "heuristic lane order by mean placement X over the nearest-neighbour program; models only tape-bank travel along X, not slot capacity, tape direction or nozzle constraints",
+    "changeoverSequence": "lanes are matched by id and compared by package and exact pitch; the downtime is a fixed time per reel change, not a measured rate",
     "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }
 }"#;
