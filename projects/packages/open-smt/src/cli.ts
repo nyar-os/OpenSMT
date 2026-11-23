@@ -99,6 +99,15 @@ function boardCount(options: ParsedOptions, ctx: CommandContext): number {
     return boards;
 }
 
+/** Parses `--boards` for the feeder schedule and rejects zero with `schedule/invalid`. */
+function scheduleBoardCount(options: ParsedOptions, ctx: CommandContext): number {
+    const boards = integerOption(options, ctx, 'boards');
+    if (boards < 1) {
+        throw failure(ctx, 'schedule/invalid', 'invalidScheduleBoards', { count: String(boards) });
+    }
+    return boards;
+}
+
 function exportFormat(value: string, ctx: CommandContext): ExportFormat {
     if (value === 'program' || value === 'csv') {
         return 'program';
@@ -501,6 +510,22 @@ feederCommand
         guard(ctx, async () => {
             await editDocument(options, ctx, 'feeder consumption <file> --boards <n>', async (document) => {
                 print(await document.consumption(boardCount(options, ctx)));
+            });
+        }),
+    );
+feederCommand
+    .command('schedule', 'cli.cmd.feeder-schedule')
+    .option('--boards <n>', 'cli.opt.boards')
+    .option('--out <file>', 'cli.opt.out')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'feeder schedule <file> --boards <n> [--out <file>]', async (document) => {
+                const report = await document.schedule(scheduleBoardCount(options, ctx));
+                const target = optionText(options, 'out');
+                if (target !== undefined) {
+                    fs.writeFileSync(target, JSON.stringify(report, null, 2));
+                }
+                print(report);
             });
         }),
     );

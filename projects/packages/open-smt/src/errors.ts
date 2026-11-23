@@ -46,6 +46,7 @@ export const errorCodes = [
     'balance/invalid-machines',
     'schedule/invalid-strategy',
     'schedule/invalid-lanes',
+    'schedule/invalid',
     'takt/invalid',
     'station/invalid',
     'changeover/invalid',

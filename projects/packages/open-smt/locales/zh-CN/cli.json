@@ -20,6 +20,7 @@
             "feeder-report": "报告供料器装载与覆盖情况",
             "feeder-optimize": "沿料站排分配供料器槽位",
             "feeder-consumption": "按生产批量规划供料器物料消耗",
+            "feeder-schedule": "规划整个生产过程中的供料器换料补给",
             "bom": "将文档与 BOM 核对",
             "bom-check": "对照 BOM CSV 报告缺失、多余与数量差异",
             "quality": "生成首件检验记录",
@@ -104,6 +105,7 @@
             "invalidStrategy": "未知双通道策略 `{strategy}`；仅支持 greedy 或 lpt",
             "invalidLanes": "通道数 `{count}` 必须是 2 到 16 之间的整数",
             "invalidBoards": "板数 `{count}` 必须是正整数",
+            "invalidScheduleBoards": "板数 `{count}` 必须是正整数",
             "invalidNozzles": "吸嘴映射项 `{entry}` 必须写成 `封装=吸嘴`"
         }
     }

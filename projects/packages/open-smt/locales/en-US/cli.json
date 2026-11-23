@@ -20,6 +20,7 @@
             "feeder-report": "Report feeder loading and coverage",
             "feeder-optimize": "Assign feeder slots along the tape bank",
             "feeder-consumption": "Plan feeder consumption for a build quantity",
+            "feeder-schedule": "Plan feeder reel replenishment across a production run",
             "bom": "Check the document against a BOM",
             "bom-check": "Report missing, extra and quantity findings against a BOM CSV",
             "quality": "Generate first-article inspection records",
@@ -104,6 +105,7 @@
             "invalidStrategy": "unknown dual-lane strategy `{strategy}`; only greedy or lpt is supported",
             "invalidLanes": "lane count `{count}` must be an integer from 2 to 16",
             "invalidBoards": "board count `{count}` must be a positive integer",
+            "invalidScheduleBoards": "board count `{count}` must be a positive integer",
             "invalidNozzles": "nozzle map entry `{entry}` must be `package=nozzle`"
         }
     }
