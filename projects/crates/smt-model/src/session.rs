@@ -24,6 +24,7 @@ use crate::{
     panel_fit::{self, PanelFitReport},
     place::{self, FeederReport, PlacementReport},
     reflow::{self, ReflowReport},
+    takt::{self, TaktOptions, TaktReport},
     validate::{self, ValidationReport},
 };
 
@@ -557,6 +558,16 @@ impl OpenSmt {
     /// Returns the reflow evaluation of the open document.
     pub fn reflow(&self) -> Result<ReflowReport, SmtError> {
         reflow::evaluate(self.document()?)
+    }
+
+    /// Returns the read-only cycle time and throughput estimate of the open
+    /// document.
+    ///
+    /// The estimate runs the same allocation and sequence as
+    /// [`OpenSmt::placement`] and applies the machine model in `options`. The
+    /// document is never modified.
+    pub fn takt(&self, options: &TaktOptions) -> Result<TaktReport, SmtError> {
+        takt::estimate(self.document()?, options)
     }
 
     /// Exports the open document and returns the created files.

@@ -321,6 +321,28 @@ open-smt reflow <file>
 Prints peak temperature, total time, time above liquidus and one entry per zone
 with entry/exit temperature and seconds above liquidus.
 
+## takt
+
+```shell
+open-smt takt <file> [--place-seconds <s>] [--head-speed <mm/s>] [--feeder-change-seconds <s>] [--feeder-changes <n>] [--nozzle-change-seconds <s>] [--nozzle-changes <n>] [--machines <n>] [--optimize]
+```
+
+Prints the read-only cycle time and throughput estimate as JSON. The estimate
+runs the same feeder allocation and placement sequence as `placement`, then
+applies a fixed machine model: `--place-seconds` (default `0.6`) per component,
+`--head-speed` (default `200` mm/s) for head travel, and `--feeder-changes`
+times `--feeder-change-seconds` (default `30`) plus `--nozzle-changes` times
+`--nozzle-change-seconds` (default `5`) as per-board overhead. The report
+contains `components`, `picks`, `travelMm` (identical to the program's
+`travelLength`), the `placeSeconds`, `travelSeconds` and `overheadSeconds`
+segments, `boardSeconds`, `machineCount`, `machineSeconds`
+(`boardSeconds / machineCount`), `boardsPerHour` and `componentsPerHour`.
+`--machines` splits the work evenly over 1 to 64 machines; an out-of-range
+count, a negative or non-finite machine parameter reports `takt/invalid`, and
+`--optimize` adds the `optimized` and `travelSaved` fields of the placement
+report. An empty document estimates zero time and reports zero throughput. The
+document is not modified.
+
 ## export
 
 ```shell
@@ -378,5 +400,6 @@ open-smt placement panel.osmt
 open-smt schedule dual panel.osmt
 open-smt schedule lanes panel.osmt --count 3 --strategy lpt --improve
 open-smt reflow panel.osmt
+open-smt takt panel.osmt --machines 2
 open-smt export panel.osmt --format program --out program.csv
 ```

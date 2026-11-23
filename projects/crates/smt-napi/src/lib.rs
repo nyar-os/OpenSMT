@@ -16,7 +16,7 @@ use serde::Serialize;
 use serde_json::Value;
 use smt_model::{
     Board, Component, ComponentUpdate, DualLaneStrategy, ExportFormat, Feeder, FeederUpdate, OpenSmt, Panel, ReflowProfile,
-    Side, SmtError, Zone,
+    Side, SmtError, TaktOptions, Zone,
 };
 use wae::{CallContext, Error, JsValue, Result, function, register_module};
 
@@ -479,6 +479,27 @@ fn reflow(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the read-only cycle time and throughput estimate.
+///
+/// An optional second argument is a JSON object of machine-model options;
+/// omitted fields keep their defaults.
+#[function]
+fn takt(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let options = match ctx.args().get(1) {
+        Some(_) => {
+            let request = object(&ctx, 1)?;
+            serde_json::from_value::<TaktOptions>(request)
+                .map_err(|error| argument_error(&format!("invalid takt options: {error}")))?
+        }
+        None => TaktOptions::default(),
+    };
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.takt(&options).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Exports a document as `program`, `feeders`, `json` or `md`.
 #[function]
 fn export(ctx: CallContext) -> Result<JsValue> {
@@ -528,6 +549,7 @@ register_module![
     dual_lane,
     schedule_lanes,
     reflow,
+    takt,
     export,
     report
 ];

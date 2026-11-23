@@ -36,6 +36,7 @@ mod panel_fit;
 mod place;
 mod reflow;
 mod session;
+mod takt;
 pub mod validate;
 
 pub use crate::{
@@ -58,6 +59,7 @@ pub use crate::{
     },
     reflow::{AMBIENT, ReflowReport, ZoneReport, evaluate as evaluate_reflow},
     session::{ComponentUpdate, DEFAULT_BOARD, DocumentSummary, ExportFormat, ExportReport, FeederUpdate, OpenSmt, Report},
+    takt::{TaktOptions, TaktReport, estimate as takt_estimate},
     validate::{Issue, Severity, ValidationReport},
 };
 
@@ -77,7 +79,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "machineProgram": "unsupported",
     "lineBalance": "supported",
     "dualLane": "supported",
-    "multiLane": "supported"
+    "multiLane": "supported",
+    "cycleTimeEstimate": "supported"
   },
   "io": {
     "osmt": "supported",
@@ -99,6 +102,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "feederLoadingReport": "slot numbers are suggestions only; no machine slot, tape direction or pitch constraint is modelled",
     "bomCheck": "packages are matched by exact name; refdes-level findings only run for packages whose BOM rows enumerate refdes",
     "panelFit": "axis-aligned grid of whole boards only; no rotation, edge rail, fiducial or panel outline is modelled",
+    "cycleTimeEstimate": "analytical estimate over the placement program with a fixed machine model; no acceleration, tape advance or nozzle physics is modelled",
     "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }
 }"#;

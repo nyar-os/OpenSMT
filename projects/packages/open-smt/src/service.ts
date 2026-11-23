@@ -32,6 +32,8 @@ import type {
     ReflowReport,
     Report,
     Side,
+    TaktOptions,
+    TaktReport,
     ValidationReport,
 } from './types.js';
 
@@ -228,6 +230,15 @@ export function lanes(
 /** Returns the reflow evaluation. */
 export function reflow(path: string): ReflowReport {
     return decode<ReflowReport>(() => binding('reflow').reflow(path));
+}
+
+/**
+ * Returns the read-only cycle time and throughput estimate.
+ *
+ * Omitted option fields keep their machine-model defaults.
+ */
+export function takt(path: string, options: TaktOptions = {}): TaktReport {
+    return decode<TaktReport>(() => binding('takt').takt(path, JSON.stringify(options)));
 }
 
 /** Exports a document as `program`, `feeders`, `json` or `md`. */

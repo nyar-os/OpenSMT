@@ -33,6 +33,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | vendor machine programs (Fuji, Yamaha, Juki, ASM) | ❌ not implemented |
 | line balancing | ✅ supported |
 | multi-lane scheduling (2–16 lanes, including the dual-lane report) | ✅ supported (greedy or LPT, optional swaps; not optimal) |
+| cycle time and throughput estimate (takt) | ✅ supported (analytical machine model; not a measured rate) |
 | KiCad PCB (`.kicad_pcb`) import | ✅ supported |
 | CSV placement (`.csv`) import | ✅ supported |
 | Altium / ODB import | ❌ not implemented |
@@ -171,6 +172,21 @@ The machine-readable version is printed by `open-smt capabilities` and by
     are ordered by package name, then by reference designator, and the report
     is deterministic.
 
+14. **Cycle time estimate.** `takt` (CLI `open-smt takt <file>`) runs the same
+    feeder allocation and placement sequence as the placement program and
+    applies a fixed machine model: `0.6` s per component, `200` mm/s head speed,
+    `30` s per feeder change and `5` s per nozzle change, all overridable. The
+    report contains `components`, `picks`, `travelMm` (identical to the
+    program's `travelLength`), the `placeSeconds`, `travelSeconds` and
+    `overheadSeconds` segments, `boardSeconds`, `machineSeconds`
+    (`boardSeconds / machineCount`, evenly over 1–64 machines), `boardsPerHour`
+    and `componentsPerHour`. Invalid machine parameters report `takt/invalid`.
+    The estimate is read-only and never changes the document.
+
+    ```shell
+    open-smt takt panel.osmt --machines 2
+    ```
+
 ## KiCad PCB import
 
 `open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
@@ -297,9 +313,10 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/feeder.rs` | package counts, slot numbering in package order, reference designator document order, deduplicated sorted sides, empty document, determinism; partial feeder update (pitch/capacity/loaded, package move reflected by allocation, invalid capacity/loaded/pitch/package, unknown id, empty request, one revision, untouched fields, round trip, determinism) |
 | `tests/panel_fit.rs` | exact-fit 2 × 3 arithmetic, leftover gaps, too-small dimensions, zero waste, gap effects, utilization, stored-gap default versus override, invalid maxima and gaps, determinism, unchanged document |
 | `tests/bom.rs` | matching BOM, missing/extra/quantity findings, a refdes placed under another package, quantity-only rows, empty document and empty BOM, case-insensitive quoted headers, deterministic order-independent JSON, stable `bom/...` error codes, unchanged document bytes and revision, missing BOM file |
+| `tests/takt.rs` | default machine model matching the placement program, changeover overhead segments, custom machine parameters, even multi-machine split and throughput, empty document zero time, 2-opt saving fields, feeder error propagation, invalid machine parameters, serde defaults, determinism, unchanged document |
 | `tests/session.rs` | create, edit, reopen, export, in-use feeder, atomic save-as; partial component update (move, rotation normalisation, side and package changes, height set and cleared, untouched fields, invalid requests, one revision, determinism, round trip) |
 | `tests/import.rs` | KiCad footprint mapping, rotation, both sides, reference sources, loss ledger, outline errors, duplicate/missing references, empty board, determinism, existing target; CSV row order, reordered/quoted/UPPERCASE columns, empty lines, side and rotation defaults, duplicate refdes, missing column, invalid number, invalid side, line numbers, negative coordinate, determinism, one revision, existing target |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, BOM-check and component-update smokes |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, BOM-check, takt and component-update smokes |
 
 ## Limitations
 
@@ -317,6 +334,11 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 - The BOM cross-check matches packages by exact name; reference-designator
   findings only run for packages whose BOM rows enumerate refdes, and
   part-number aliases are not resolved. It never writes the document or the BOM.
+- The cycle time estimate is analytical: it assumes a constant head speed and a
+  fixed overhead per component, and models no acceleration, tape advance, vision
+  or nozzle physics. The feeder and nozzle change counts are caller estimates,
+  not plan data, and multi-machine throughput is an even split, not a line
+  simulation.
 - Reflow uses set-points, not measured thermocouple data, and models no
   convection or board thermal mass.
 - Only the top and bottom sides are supported.

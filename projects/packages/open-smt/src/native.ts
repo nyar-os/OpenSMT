@@ -39,6 +39,7 @@ export interface NativeBinding {
     dual_lane(path: string, strategy?: string, improve?: boolean): string;
     schedule_lanes(path: string, lanes: number, strategy?: string, improve?: boolean): string;
     reflow(path: string): string;
+    takt(path: string, requestJson?: string): string;
     export(path: string, format: string, target: string): string;
     report(path: string): string;
 }

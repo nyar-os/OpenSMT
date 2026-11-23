@@ -340,6 +340,27 @@ async function dispatch(args: readonly string[]): Promise<number> {
             return readDocument(args.slice(1), 'reflow <file>', [], async (document) => {
                 print(await document.reflow());
             });
+        case 'takt':
+            return readDocument(
+                args.slice(1),
+                'takt <file> [--place-seconds <s>] [--head-speed <mm/s>] [--feeder-change-seconds <s>] [--feeder-changes <n>] [--nozzle-change-seconds <s>] [--nozzle-changes <n>] [--machines <n>] [--optimize]',
+                ['--place-seconds', '--head-speed', '--feeder-change-seconds', '--feeder-changes', '--nozzle-change-seconds', '--nozzle-changes', '--machines'],
+                async (document, parsed) => {
+                    print(
+                        await document.takt({
+                            placeSeconds: number(parsed, '--place-seconds'),
+                            headSpeed: number(parsed, '--head-speed'),
+                            feederChangeSeconds: number(parsed, '--feeder-change-seconds'),
+                            feederChanges: integer(parsed, '--feeder-changes', 0),
+                            nozzleChangeSeconds: number(parsed, '--nozzle-change-seconds'),
+                            nozzleChanges: integer(parsed, '--nozzle-changes', 0),
+                            machineCount: integer(parsed, '--machines', 1),
+                            optimize: parsed.flags.has('--optimize'),
+                        }),
+                    );
+                },
+                ['--optimize'],
+            );
         case 'export':
             return readDocument(args.slice(1), 'export <file> --format <format> --out <path>', ['--format', '--out'], async (document, parsed) => {
                 const format = exportFormat(parsed.options.get('--format') ?? 'program');

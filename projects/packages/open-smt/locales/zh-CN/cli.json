@@ -24,6 +24,7 @@
             "open-smt schedule dual <file> [--strategy greedy|lpt] [--improve]",
             "open-smt schedule lanes <file> --count <n> [--strategy greedy|lpt] [--improve]",
             "open-smt reflow <file>",
+            "open-smt takt <file> [--place-seconds <s>] [--head-speed <mm/s>] [--feeder-changes <n>] [--nozzle-changes <n>] [--machines <n>] [--optimize]",
             "open-smt export <file> --format program|feeders|json|md --out <path>",
             "open-smt report <file>",
             "open-smt capabilities",

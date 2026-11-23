@@ -33,6 +33,8 @@ import type {
     ReflowProfileRequest,
     ReflowReport,
     Report,
+    TaktOptions,
+    TaktReport,
     ValidationReport,
 } from './types.js';
 
@@ -206,6 +208,16 @@ export class SmtDocument {
     async reflow(): Promise<ReflowReport> {
         this.assertOpen();
         return service.reflow(this.state.path);
+    }
+
+    /**
+     * Returns the read-only cycle time and throughput estimate.
+     *
+     * Omitted option fields keep their machine-model defaults.
+     */
+    async takt(options: TaktOptions = {}): Promise<TaktReport> {
+        this.assertOpen();
+        return service.takt(this.state.path, options);
     }
 
     /** Exports the document as `program`, `feeders`, `json` or `md`. */

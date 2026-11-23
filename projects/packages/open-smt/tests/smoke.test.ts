@@ -51,6 +51,7 @@ test('the error surface includes coverage and capability codes', () => {
     assert.ok(errorCodes.includes('schedule/invalid-lanes'));
     assert.ok(errorCodes.includes('bom/missing-column'));
     assert.ok(errorCodes.includes('bom/duplicate-refdes'));
+    assert.ok(errorCodes.includes('takt/invalid'));
 });
 
 test('balance splits components and rejects zero machines', { skip: skipWithoutNative }, async () => {
@@ -255,6 +256,47 @@ test('component update edits a placed component in place', { skip: skipWithoutNa
             return true;
         });
         assert.equal(document.revision, before + 1);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('takt estimates cycle time and splits it over machines', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-takt-'));
+    const file = path.join(directory, 'panel.osmt');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'R2', package: '0603', x: 50, y: 10 });
+        await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 100 });
+        const before = document.revision;
+
+        const report = await document.takt();
+        assert.equal(report.format, 'open-smt-takt');
+        assert.equal(report.version, 1);
+        assert.equal(report.components, 2);
+        assert.equal(report.picks, 2);
+        assert.ok(report.travelMm > 0);
+        assert.ok(Math.abs(report.placeSeconds - 2 * 0.6) < 1e-9);
+        assert.ok(Math.abs(report.boardSeconds - (report.placeSeconds + report.travelSeconds + report.overheadSeconds)) < 1e-9);
+        assert.ok(Math.abs(report.boardsPerHour - 3600 / report.boardSeconds) < 1e-9);
+
+        const doubled = await document.takt({ machineCount: 2 });
+        assert.ok(Math.abs(doubled.machineSeconds - report.boardSeconds / 2) < 1e-9);
+        assert.ok(Math.abs(doubled.boardsPerHour - 2 * report.boardsPerHour) < 1e-9);
+
+        const optimized = await document.takt({ optimize: true });
+        assert.equal(optimized.optimized, true);
+        assert.equal(typeof optimized.travelSaved, 'number');
+
+        await assert.rejects(document.takt({ headSpeed: 0 }), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'takt/invalid');
+            return true;
+        });
+        assert.equal(document.revision, before);
     } finally {
         await session.dispose();
         await fs.rm(directory, { recursive: true, force: true });

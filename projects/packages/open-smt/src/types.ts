@@ -320,6 +320,65 @@ export interface LanesReport {
     readonly balanceRatio: number;
 }
 
+/**
+ * Machine model of a cycle time estimate.
+ *
+ * Omitted fields keep their defaults: `0.6` s per component, `200` mm/s head
+ * speed, `30` s per feeder change, `5` s per nozzle change, zero changes per
+ * board, one machine and no 2-opt pass.
+ */
+export interface TaktOptions {
+    /** Fixed pick-and-place overhead per component, in seconds. */
+    readonly placeSeconds?: number;
+    /** Head travel speed in millimetres per second. */
+    readonly headSpeed?: number;
+    /** Time to change one feeder reel, in seconds. */
+    readonly feederChangeSeconds?: number;
+    /** Feeder changes assumed per board. */
+    readonly feederChanges?: number;
+    /** Time to switch one nozzle, in seconds. */
+    readonly nozzleChangeSeconds?: number;
+    /** Nozzle changes assumed per board. */
+    readonly nozzleChanges?: number;
+    /** Number of machines the work is split across evenly, 1 to 64. */
+    readonly machineCount?: number;
+    /** Whether the sequence is improved with the 2-opt pass first. */
+    readonly optimize?: boolean;
+}
+
+/** Read-only cycle time and throughput estimate of one board. */
+export interface TaktReport {
+    readonly format: string;
+    readonly version: number;
+    readonly units: string;
+    /** Number of placement points on one board. */
+    readonly components: number;
+    /** Nozzle pick-and-place cycles per board; one per component. */
+    readonly picks: number;
+    /** Head travel of the program, in millimetres, matching the sequence. */
+    readonly travelMm: number;
+    /** Placement segment of the estimate, in seconds. */
+    readonly placeSeconds: number;
+    /** Travel segment of the estimate, in seconds. */
+    readonly travelSeconds: number;
+    /** Feeder and nozzle change overhead, in seconds. */
+    readonly overheadSeconds: number;
+    /** Estimated time of one board on one machine, in seconds. */
+    readonly boardSeconds: number;
+    /** Number of machines the work is split across. */
+    readonly machineCount: number;
+    /** `boardSeconds / machineCount`, the effective per-machine board time. */
+    readonly machineSeconds: number;
+    /** Boards produced per hour; zero when a machine takes zero seconds. */
+    readonly boardsPerHour: number;
+    /** Components placed per hour across every machine. */
+    readonly componentsPerHour: number;
+    /** Present and true when the sequence was produced with the 2-opt pass. */
+    readonly optimized?: boolean;
+    /** Millimetres saved by 2-opt; present when optimization was requested. */
+    readonly travelSaved?: number;
+}
+
 /** One evaluated reflow zone. */
 export interface ZoneReport {
     readonly name: string;
