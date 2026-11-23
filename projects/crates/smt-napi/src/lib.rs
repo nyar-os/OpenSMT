@@ -400,6 +400,16 @@ fn feeders(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the read-only component list report.
+#[function]
+fn component_list(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.component_list().map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Returns the read-only feeder loading report.
 #[function]
 fn feeder_report(ctx: CallContext) -> Result<JsValue> {
@@ -712,6 +722,7 @@ register_module![
     validate,
     placement,
     feeders,
+    component_list,
     feeder_report,
     panel_map,
     first_article,

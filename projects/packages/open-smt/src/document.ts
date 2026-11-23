@@ -14,6 +14,7 @@ import type {
     BoardRequest,
     BomCheckReport,
     ChangeoverReport,
+    ComponentListReport,
     ComponentRequest,
     ComponentUpdateRequest,
     ConsumptionReport,
@@ -178,6 +179,12 @@ export class SmtDocument {
     async feederSetup(): Promise<FeederReport> {
         this.assertOpen();
         return service.feeders(this.state.path);
+    }
+
+    /** Returns the read-only component list report with the current feeder allocation. */
+    async componentList(): Promise<ComponentListReport> {
+        this.assertOpen();
+        return service.componentList(this.state.path);
     }
 
     /** Returns the read-only feeder loading report. */

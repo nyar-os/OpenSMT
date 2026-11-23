@@ -158,6 +158,42 @@ export interface FeederLoadingReport {
     readonly slots: readonly FeederSlot[];
 }
 
+/** One package grouping of the component list report. */
+export interface ComponentListPackage {
+    readonly package: string;
+    /** Number of components of this package. */
+    readonly count: number;
+    /** Reference designators in document order. */
+    readonly refdes: readonly string[];
+}
+
+/** One placed component of the component list report. */
+export interface ComponentListEntry {
+    readonly refdes: string;
+    readonly package: string;
+    readonly side: Side;
+    readonly x: number;
+    readonly y: number;
+    readonly rotation: number;
+    /** Component height; omitted when unknown. */
+    readonly height?: number;
+    /** Feeder that supplies the component; `null` when unallocated. */
+    readonly feeder: string | null;
+}
+
+/** Read-only component list report with the current feeder allocation. */
+export interface ComponentListReport {
+    readonly format: 'open-smt-component-list';
+    readonly version: number;
+    readonly units: string;
+    readonly componentCount: number;
+    readonly unassignedCount: number;
+    /** One entry per package, in first-seen order. */
+    readonly packages: readonly ComponentListPackage[];
+    /** Components in document order. */
+    readonly components: readonly ComponentListEntry[];
+}
+
 /** Read-only panel fit report for a maximum panel size. */
 export interface PanelFitReport {
     readonly format: string;

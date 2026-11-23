@@ -32,6 +32,7 @@ export interface NativeBinding {
     validate(path: string): string;
     placement(path: string, optimize?: boolean): string;
     feeders(path: string): string;
+    component_list(path: string): string;
     feeder_report(path: string): string;
     panel_map(path: string): string;
     first_article(path: string): string;

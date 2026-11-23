@@ -267,6 +267,49 @@ test('component update edits a placed component in place', { skip: skipWithoutNa
     }
 });
 
+test('component list reports document order, package grouping and feeder allocation', {
+    skip: skipWithoutNative,
+}, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-component-list-'));
+    const file = path.join(directory, 'panel.osmt');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R2', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 20, y: 10, height: 0.8 });
+        await document.addComponent({ refdes: 'C1', package: '0805', side: 'bottom', x: 30, y: 10 });
+        await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 10, loaded: 1 });
+        const before = document.revision;
+
+        const report = await document.componentList();
+        assert.equal(report.format, 'open-smt-component-list');
+        assert.equal(report.version, 1);
+        assert.equal(report.units, 'mm');
+        assert.equal(report.componentCount, 3);
+        assert.equal(report.unassignedCount, 2);
+        assert.deepEqual(
+            report.components.map((row) => [row.refdes, row.package, row.side, row.feeder]),
+            [
+                ['R2', '0603', 'top', null],
+                ['R1', '0603', 'top', 'F1'],
+                ['C1', '0805', 'bottom', null],
+            ],
+        );
+        assert.equal(report.components[1]?.height, 0.8);
+        assert.deepEqual(
+            report.packages.map((entry) => [entry.package, entry.count, entry.refdes]),
+            [
+                ['0603', 2, ['R2', 'R1']],
+                ['0805', 1, ['C1']],
+            ],
+        );
+        assert.equal(document.revision, before);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
 test('takt estimates cycle time and splits it over machines', { skip: skipWithoutNative }, async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-takt-'));
     const file = path.join(directory, 'panel.osmt');

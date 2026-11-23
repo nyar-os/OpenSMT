@@ -12,6 +12,7 @@ import type {
     BoardRequest,
     BomCheckReport,
     ChangeoverReport,
+    ComponentListReport,
     ComponentRequest,
     ComponentUpdateRequest,
     ConsumptionReport,
@@ -193,6 +194,11 @@ export function placement(path: string, optimize = false): PlacementReport {
 /** Returns the feeder setup. */
 export function feeders(path: string): FeederReport {
     return decode<FeederReport>(() => binding('feeders').feeders(path));
+}
+
+/** Returns the read-only component list report with the current feeder allocation. */
+export function componentList(path: string): ComponentListReport {
+    return decode<ComponentListReport>(() => binding('component.list').component_list(path));
 }
 
 /** Returns the read-only feeder loading report. */
