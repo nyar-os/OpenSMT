@@ -24,10 +24,12 @@ import type {
     FeederReport,
     FeederRequest,
     FeederUpdateRequest,
+    FirstArticleReport,
     ImportReport,
     LanesReport,
     PanelFitReport,
     PanelFitRequest,
+    PanelMapReport,
     PanelRequest,
     PlacementReport,
     ReflowProfileRequest,
@@ -196,6 +198,16 @@ export function feederReport(path: string): FeederLoadingReport {
 /** Returns the read-only panel fit report for a maximum panel size. */
 export function panelFit(path: string, request: PanelFitRequest): PanelFitReport {
     return decode<PanelFitReport>(() => binding('panel.fit').panel_fit(path, JSON.stringify(request)));
+}
+
+/** Returns the read-only single-board to panel coordinate map. */
+export function panelMap(path: string): PanelMapReport {
+    return decode<PanelMapReport>(() => binding('panel.map').panel_map(path));
+}
+
+/** Returns the read-only first-article inspection sheet. */
+export function firstArticle(path: string): FirstArticleReport {
+    return decode<FirstArticleReport>(() => binding('first-article').first_article(path));
 }
 
 /** Returns the read-only BOM cross-check against the BOM CSV at `bomPath`. */

@@ -387,6 +387,26 @@ fn feeder_report(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the read-only panel coordinate map.
+#[function]
+fn panel_map(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.panel_map().map_err(fail)?;
+    respond(&ctx, &report)
+}
+
+/// Returns the read-only first-article inspection sheet.
+#[function]
+fn first_article(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.first_article().map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Returns the read-only panel fit report for a maximum panel size.
 ///
 /// The request carries `maxWidth` and `maxDepth`; `gapX` and `gapY` default to
@@ -613,6 +633,8 @@ register_module![
     placement,
     feeders,
     feeder_report,
+    panel_map,
+    first_article,
     panel_fit,
     bom_check,
     balance,

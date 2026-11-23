@@ -13,7 +13,7 @@ export type Units = 'mm';
 export type Side = 'top' | 'bottom';
 
 /** Export formats `exportDocument()` can write. */
-export type ExportFormat = 'program' | 'feeders' | 'json' | 'md';
+export type ExportFormat = 'program' | 'feeders' | 'fai' | 'json' | 'md';
 
 /** Severity of a validation finding. */
 export type Severity = 'error' | 'warning' | 'notice';
@@ -193,6 +193,69 @@ export interface PanelFitReport {
     readonly wastedDepth: number;
     /** `panelWidth × panelDepth / (maxWidth × maxDepth)` when a board fits. */
     readonly utilization: number;
+}
+
+/** One board instance of the panel array. */
+export interface PanelInstance {
+    /** Board number, starting at 1 in row-major order. */
+    readonly board: number;
+    /** Panel row, starting at 1. */
+    readonly row: number;
+    /** Panel column, starting at 1. */
+    readonly column: number;
+    /** X offset of the board origin, `(column - 1) × (width + gapX)`. */
+    readonly offsetX: number;
+    /** Y offset of the board origin, `(row - 1) × (depth + gapY)`. */
+    readonly offsetY: number;
+}
+
+/** One component placement in panel coordinates. */
+export interface PanelPlacement {
+    /** Board number the placement belongs to, starting at 1. */
+    readonly board: number;
+    /** Panel X coordinate, `offsetX + component x`. */
+    readonly x: number;
+    /** Panel Y coordinate, `offsetY + component y`. */
+    readonly y: number;
+}
+
+/** One component with its placement on every board instance. */
+export interface MappedComponent {
+    readonly refdes: string;
+    readonly package: string;
+    readonly side: Side;
+    /** X coordinate on the single board. */
+    readonly x: number;
+    /** Y coordinate on the single board. */
+    readonly y: number;
+    readonly rotation: number;
+    /** Placements in board order; empty when the coordinates are not finite. */
+    readonly instances: readonly PanelPlacement[];
+}
+
+/** Read-only single-board to panel coordinate map. */
+export interface PanelMapReport {
+    readonly format: 'open-smt-panel-map';
+    readonly version: number;
+    readonly units: string;
+    readonly width: number;
+    readonly depth: number;
+    readonly thickness: number;
+    readonly rows: number;
+    readonly columns: number;
+    readonly gapX: number;
+    readonly gapY: number;
+    readonly boardCount: number;
+    readonly panelWidth: number;
+    readonly panelDepth: number;
+    /** Board origins in row-major order, one per board. */
+    readonly instances: readonly PanelInstance[];
+    /** Components in document order, each with its board placements. */
+    readonly components: readonly MappedComponent[];
+    /** Components whose coordinates fall outside the single board. */
+    readonly outsideBoard: number;
+    /** Whether every component lies inside the single board. */
+    readonly ok: boolean;
 }
 
 /** One reference designator the BOM and the placement table disagree about. */
@@ -603,6 +666,75 @@ export interface ConsumptionReport {
     readonly feeders: readonly FeederConsumption[];
     /** Whether the loaded quantities cover the run. */
     readonly ok: boolean;
+}
+
+/** Generic checks a first-article sheet tells an inspector to perform. */
+export type FirstArticleCheck = 'placement' | 'orientation' | 'package' | 'feeder';
+
+/** One lane that supplies a package on the first-article sheet. */
+export interface FirstArticleLane {
+    readonly id: string;
+    /** Tape pitch in millimetres. */
+    readonly pitch: number;
+    readonly loaded: number;
+    readonly capacity: number;
+    /** Components the allocation assigns to the lane. */
+    readonly assigned: number;
+}
+
+/** Material block of one package on the first-article sheet. */
+export interface FirstArticleMaterial {
+    readonly package: string;
+    /** Components of this package on one board. */
+    readonly components: number;
+    /** Distinct board sides, `top` before `bottom`. */
+    readonly sides: readonly Side[];
+    /** Lanes that supply the package, in id order. */
+    readonly lanes: readonly FirstArticleLane[];
+}
+
+/** One row of the first-article inspection sheet. */
+export interface FirstArticleStep {
+    /** One-based row number in program order. */
+    readonly step: number;
+    readonly refdes: string;
+    readonly package: string;
+    readonly side: Side;
+    readonly x: number;
+    readonly y: number;
+    readonly rotation: number;
+    /** Feeder lane that supplies the component. */
+    readonly feeder: string;
+    /** Tape pitch of that lane, in millimetres. */
+    readonly pitch: number;
+}
+
+/** Read-only first-article inspection sheet. */
+export interface FirstArticleReport {
+    readonly format: 'open-smt-first-article';
+    readonly version: number;
+    readonly units: string;
+    /** Document revision the sheet was produced from. */
+    readonly revision: number;
+    readonly board: Board;
+    readonly panel: Panel;
+    readonly boardCount: number;
+    readonly panelWidth: number;
+    readonly panelDepth: number;
+    /** Components on one board. */
+    readonly components: number;
+    readonly topComponents: number;
+    readonly bottomComponents: number;
+    /** Distinct packages. */
+    readonly packages: number;
+    /** Declared feeder lanes. */
+    readonly feeders: number;
+    /** Generic checks the sheet supports, in fixed order. */
+    readonly checklist: readonly FirstArticleCheck[];
+    /** One material block per package, in package order. */
+    readonly materials: readonly FirstArticleMaterial[];
+    /** One inspection row per placement step, in program order. */
+    readonly steps: readonly FirstArticleStep[];
 }
 
 /** Full report returned by `report()`. */

@@ -26,10 +26,12 @@ import type {
     FeederReport,
     FeederRequest,
     FeederUpdateRequest,
+    FirstArticleReport,
     LanesReport,
     Panel,
     PanelFitReport,
     PanelFitRequest,
+    PanelMapReport,
     PanelRequest,
     PlacementReport,
     ReflowProfileRequest,
@@ -183,6 +185,18 @@ export class SmtDocument {
     async panelFit(request: PanelFitRequest): Promise<PanelFitReport> {
         this.assertOpen();
         return service.panelFit(this.state.path, request);
+    }
+
+    /** Returns the read-only single-board to panel coordinate map. */
+    async panelMap(): Promise<PanelMapReport> {
+        this.assertOpen();
+        return service.panelMap(this.state.path);
+    }
+
+    /** Returns the read-only first-article inspection sheet. */
+    async firstArticle(): Promise<FirstArticleReport> {
+        this.assertOpen();
+        return service.firstArticle(this.state.path);
     }
 
     /** Returns the read-only BOM cross-check against the BOM CSV at `bomPath`. */
