@@ -13,6 +13,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | rectangular board in millimetres | ✅ supported |
 | panel array with row/column gaps | ✅ supported |
 | component list with side, rotation and height | ✅ supported |
+| component list report with package counts and feeder assignment | ✅ supported |
 | partial component update (in-place edit) | ✅ supported |
 | feeder setup with package, pitch, capacity and loaded quantity | ✅ supported |
 | partial feeder update (in-place edit) | ✅ supported |
@@ -381,6 +382,21 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt feeder schedule panel.osmt --boards 250
     ```
 
+24. **Component list report.** `componentList` (CLI `component list <file>`)
+    lists every component in document order with its `refdes`, `package`,
+    `side`, `x`, `y`, `rotation`, the `height` when the document stores one, and
+    the feeder lane the current allocation assigns (`null` when unallocated).
+    Packages are grouped in first-seen order with their `count` and reference
+    designators in document order. The feeder column reuses the same allocation
+    as the `feeders` report, so `unassignedCount` is the number of components
+    with no loaded lane of their package. No validation runs: the report is
+    meant to be read before a feeder setup exists, and it never writes. An empty
+    document reports zero counts and empty arrays.
+
+    ```shell
+    open-smt component list panel.osmt
+    ```
+
 ## KiCad PCB import
 
 `open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
@@ -511,6 +527,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/reflow.rs` | default profile numbers, exact single-zone integral, below-liquidus profile, zone order |
 | `tests/validation.rs` | every code above and warning-only documents |
 | `tests/feeder.rs` | package counts, slot numbering in package order, reference designator document order, deduplicated sorted sides, empty document, determinism; partial feeder update (pitch/capacity/loaded, package move reflected by allocation, invalid capacity/loaded/pitch/package, unknown id, empty request, one revision, untouched fields, round trip, determinism) |
+| `tests/component_list.rs` | document-order rows with side, rotation and height, first-seen package grouping and reference designators, height omitted when unknown, split allocation across loaded lanes matching the `feeders` report, unassigned components, empty document, determinism and unchanged document |
 | `tests/panel_fit.rs` | exact-fit 2 × 3 arithmetic, leftover gaps, too-small dimensions, zero waste, gap effects, utilization, stored-gap default versus override, invalid maxima and gaps, determinism, unchanged document |
 | `tests/bom.rs` | matching BOM, missing/extra/quantity findings, a refdes placed under another package, quantity-only rows, empty document and empty BOM, case-insensitive quoted headers, deterministic order-independent JSON, stable `bom/...` error codes, unchanged document bytes and revision, missing BOM file |
 | `tests/takt.rs` | default machine model matching the placement program, changeover overhead segments, custom machine parameters, even multi-machine split and throughput, empty document zero time, 2-opt saving fields, feeder error propagation, invalid machine parameters, serde defaults, determinism, unchanged document |
@@ -525,7 +542,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/first_article.rs` | program-order rows with lane pitch, package material grouping and side totals, recorded revision, fixed checklist, empty document, feeder coverage propagation, CSV header and empty check columns, determinism, unchanged document |
 | `tests/machine_program.rs` | fixed header and program order, station/pitch/nozzle/speed fields, three-decimal canonical values, render-parse round trip, tampered field and reordered row mismatches, step-count mismatch, malformed files, empty document, invalid nozzle map, feeder coverage propagation, deterministic unchanged document, export-readback and verify-file paths |
 | `tests/heatmap.rs` | step placement and inbound travel time, package ordering with cumulative shares, per-side origin restart, equality with the default takt board time, empty document, feeder coverage propagation, determinism, unchanged document |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, feeder-optimize, reflow-window, feeder-consumption and changeover smokes |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption and changeover smokes |
 
 ## Limitations
 
@@ -575,6 +592,9 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   row-major instance order. It does not rotate boards, add edge rails, reserve
   fiducial or tooling areas, or derive a panel outline, and it never changes the
   stored panel array.
+- The component list is a read-only view of the stored document and the current
+  feeder allocation. It reports no derived placement sequence, does not validate
+  the document and does not model physical machine slots.
 - The first-article sheet repeats the placement program with the allocated lane
   pitch and a fixed four-item checklist. It records no inspection result, models
   no component polarity or marking direction, and does not read a BOM.

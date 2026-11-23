@@ -167,6 +167,25 @@ written.
 open-smt component remove <file> --refdes <R1>
 ```
 
+## component list
+
+```shell
+open-smt component list <file>
+```
+
+Prints a read-only component list. It does not read the feeder setup (a document
+without feeders is accepted) and writes nothing. The report contains `format`
+(`open-smt-component-list`), `version`, `units`, `componentCount`,
+`unassignedCount`, one `packages` entry per package in first-seen order and the
+`components` rows in document order.
+
+Each package entry is `package`, `count` and `refdes` in document order. Each
+component row is `refdes`, `package`, `side`, `x`, `y`, `rotation`, `height`
+only when the document stores one, and `feeder` (the assigned lane id or `null`).
+The feeder column uses the same allocation as `feeders`, so `unassignedCount`
+counts components whose package has no loaded lane left. An empty document
+reports zero counts and empty arrays.
+
 ## feeder add
 
 ```shell
