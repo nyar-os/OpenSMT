@@ -1,6 +1,6 @@
 {
     "name": "@wae/open-smt-darwin-arm64",
-    "version": "0.0.4",
+    "version": "0.0.5",
     "description": "macOS arm64 native addon for @wae/open-smt",
     "license": "MPL-2.0",
     "os": ["darwin"],
