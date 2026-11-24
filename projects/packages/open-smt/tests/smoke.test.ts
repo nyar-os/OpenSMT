@@ -483,6 +483,82 @@ test('first article builds a check sheet and exports it as csv', { skip: skipWit
     }
 });
 
+test('svg and pdf drawings are written through the sdk and the cli', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-drawing-'));
+    const file = path.join(directory, 'panel.osmt');
+    const svgFile = path.join(directory, 'sdk.svg');
+    const pdfFile = path.join(directory, 'sdk.pdf');
+    const cliSvg = path.join(directory, 'cli.svg');
+    const cliPdf = path.join(directory, 'cli.pdf');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.setPanel({ rows: 2, columns: 1, gapX: 5, gapY: 5 });
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'C1', package: '0805', side: 'bottom', x: 40, y: 30, rotation: 90 });
+        await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 100 });
+        await document.addFeeder({ id: 'F2', package: '0805', pitch: 8, capacity: 50 });
+        const before = document.revision;
+
+        const svg = await document.exportDocument('svg', svgFile);
+        assert.equal(svg.format, 'svg');
+        assert.ok(svg.bytes > 0);
+        assert.equal(svg.drawing?.boards, 2);
+        assert.equal(svg.drawing?.components, 2);
+        assert.equal(svg.drawing?.placements, 4);
+        assert.equal(svg.drawing?.defaultSizeComponents, 2);
+        assert.equal(svg.drawing?.droppedCharacters, 0);
+        assert.deepEqual(svg.losses ?? [], []);
+        const svgText = await fs.readFile(svgFile, 'utf8');
+        assert.ok(svgText.startsWith('<?xml version="1.0" encoding="UTF-8"?>'));
+        assert.ok(svgText.includes('<svg xmlns="http://www.w3.org/2000/svg"'));
+        assert.ok(svgText.includes('viewBox="0 0 '));
+        assert.ok(svgText.includes('data-board="2"'));
+        assert.ok(svgText.includes('>R1</text>'));
+        assert.ok(svgText.includes('>0603 F1</text>'));
+        assert.ok(svgText.includes('>LEGEND</text>'));
+        assert.ok(svgText.includes('scale 1:1 in millimetres'));
+
+        const pdf = await document.exportDocument('pdf', pdfFile);
+        assert.equal(pdf.format, 'pdf');
+        const pdfText = (await fs.readFile(pdfFile)).toString('latin1');
+        assert.ok(pdfText.startsWith('%PDF-1.4'));
+        assert.ok(pdfText.includes('/MediaBox [0 0 841.89 595.28]'));
+        assert.ok(pdfText.includes('/BaseFont /Helvetica'));
+        assert.ok(pdfText.includes('/Count 1'));
+        assert.ok(pdfText.includes('(R1) Tj'));
+        assert.equal(document.revision, before);
+
+        await fs.cp(path.join(packageRoot, 'locales'), cliLocales, { recursive: true, force: true });
+        const cliSvgRun = await run(process.execPath, [
+            cliPath,
+            'export',
+            file,
+            '--format',
+            'svg',
+            '--out',
+            cliSvg,
+        ]);
+        assert.equal(JSON.parse(cliSvgRun.stdout).format, 'svg');
+        assert.ok((await fs.readFile(cliSvg, 'utf8')).includes('>C1</text>'));
+
+        const cliPdfRun = await run(process.execPath, [
+            cliPath,
+            'export',
+            file,
+            '--format',
+            'pdf',
+            '--out',
+            cliPdf,
+        ]);
+        assert.equal(JSON.parse(cliPdfRun.stdout).format, 'pdf');
+        assert.ok((await fs.readFile(cliPdf)).toString('latin1').includes('%PDF-1.4'));
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
 test('reflow window compares the profile with limits and leaves the document unchanged', {
     skip: skipWithoutNative,
 }, async () => {

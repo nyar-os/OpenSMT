@@ -347,7 +347,7 @@ export function changeover(path: string, nextPath: string, feederChangeSeconds?:
     );
 }
 
-/** Exports a document as `program`, `feeders`, `json` or `md`. */
+/** Exports a document as `program`, `feeders`, `fai`, `json`, `md`, `svg` or `pdf`. */
 export function exportDocument(path: string, format: ExportFormat, target: string): ExportReport {
     return decode<ExportReport>(() => binding('export').export(path, format, target));
 }

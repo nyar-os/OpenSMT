@@ -13,7 +13,7 @@ export type Units = 'mm';
 export type Side = 'top' | 'bottom';
 
 /** Export formats `exportDocument()` can write. */
-export type ExportFormat = 'program' | 'feeders' | 'fai' | 'json' | 'md';
+export type ExportFormat = 'program' | 'feeders' | 'fai' | 'json' | 'md' | 'svg' | 'pdf';
 
 /** Severity of a validation finding. */
 export type Severity = 'error' | 'warning' | 'notice';
@@ -1015,12 +1015,39 @@ export interface Report {
     readonly programLines: number;
 }
 
+/** One aggregated text loss in a drawing export. */
+export interface DrawingLoss {
+    /** Stable code describing the loss; `drawing/non-ascii-text`. */
+    readonly code: string;
+    /** Number of characters replaced by `?`. */
+    readonly count: number;
+}
+
+/** Counts of a rendered SVG or PDF drawing. */
+export interface DrawingSummary {
+    readonly units: string;
+    readonly panelWidth: number;
+    readonly panelDepth: number;
+    readonly boards: number;
+    readonly components: number;
+    readonly placements: number;
+    /** Component rectangles drawn with the fixed default footprint. */
+    readonly defaultSizeComponents: number;
+    readonly feederLanes: number;
+    /** Non-ASCII characters written as `?`. */
+    readonly droppedCharacters: number;
+}
+
 /** Result of `exportDocument()`. */
 export interface ExportReport {
     readonly format: ExportFormat;
     readonly path: string;
     readonly files: readonly string[];
     readonly bytes: number;
+    /** Present only when the export dropped text; drawing exports only. */
+    readonly losses?: readonly DrawingLoss[] | undefined;
+    /** Present only for `svg` and `pdf` exports. */
+    readonly drawing?: DrawingSummary | undefined;
 }
 
 /** One aggregated entry of an import loss ledger. */

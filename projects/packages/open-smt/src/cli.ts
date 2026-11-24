@@ -118,7 +118,7 @@ function exportFormat(value: string, ctx: CommandContext): ExportFormat {
     if (value === 'fai' || value === 'first-article') {
         return 'fai';
     }
-    if (value === 'json' || value === 'md') {
+    if (value === 'json' || value === 'md' || value === 'svg' || value === 'pdf') {
         return value;
     }
     if (value === 'kicad' || value === 'altium' || value === 'odb') {
