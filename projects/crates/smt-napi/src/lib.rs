@@ -105,7 +105,8 @@ fn fail(error: SmtError) -> Error {
 
 /// Reads an optional `{ "nozzles": { "0603": "N1" } }` request.
 fn nozzle_map(ctx: &CallContext, index: usize) -> Result<BTreeMap<String, String>> {
-    let Some(_) = ctx.args().get(index) else {
+    let Some(_) = ctx.args().get(index)
+    else {
         return Ok(BTreeMap::new());
     };
     let request = object(ctx, index)?;
