@@ -15,8 +15,9 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | component list with side, rotation and height | ✅ supported |
 | component list report with package counts and feeder assignment | ✅ supported |
 | partial component update (in-place edit) | ✅ supported |
-| feeder setup with package, pitch, capacity and loaded quantity | ✅ supported |
-| partial feeder update (in-place edit) | ✅ supported |
+| feeder setup with package, pitch, capacity, loaded quantity and leader/trailer/manual scrap | ✅ supported |
+| reel splice at a placement step | ✅ supported |
+| partial feeder update (in-place edit, including scrap) | ✅ supported |
 | deterministic placement sequence | ✅ supported |
 | optional 2-opt placement optimisation | ✅ supported |
 | feeder allocation by id and loaded quantity | ✅ supported |
@@ -39,8 +40,8 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | cycle time and throughput estimate (takt) | ✅ supported (analytical machine model; not a measured rate) |
 | feeder station assignment along the tape bank | ✅ supported (heuristic by mean placement X; not optimal) |
 | feeder changeover sequence between two documents | ✅ supported (id/package/pitch comparison; fixed time per change) |
-| feeder consumption plan for a build quantity | ✅ supported (reels from lane capacity; not a splice or scrap model) |
-| feeder replenishment schedule across a production run | ✅ supported (one full reel when the next board is not covered; no splice or partial-reel model) |
+| feeder consumption plan for a build quantity | ✅ supported (net picks, gross consumption and scrap; reels from lane capacity and splices) |
+| feeder replenishment schedule across a production run | ✅ supported (splice and scrap aware; one full reel when the next board is not covered; no partial-reel model) |
 | panel coordinate map (single board to every panel instance) | ✅ supported |
 | first-article inspection sheet (JSON and CSV) | ✅ supported |
 | takt bottleneck heat map (step, package and side shares) | ✅ supported |
@@ -150,7 +151,8 @@ The machine-readable version is printed by `open-smt capabilities` and by
 12. **Feeder update.** `updateFeeder` (CLI `feeder update <file> --id <id> ...`)
     applies a partial edit to one feeder and saves one revision. The feeder id
     identifies the lane and never changes. At least one of `package`, `pitch`,
-    `capacity` or `loaded` must be supplied; omitted fields keep their value. An
+    `capacity`, `loaded`, `leaderWaste`, `trailerWaste` or `scrap` must be
+    supplied; omitted fields keep their value. An
     empty request, an empty package, a non-positive or non-finite pitch, a zero
     capacity or a loaded quantity above the capacity reports `feeder/invalid`,
     so lowering `capacity` below the current `loaded` is rejected the same way
@@ -257,15 +259,23 @@ The machine-readable version is printed by `open-smt capabilities` and by
 18. **Feeder consumption plan.** `consumption` (CLI
     `feeder consumption <file> --boards <n>`) runs the same allocation as
     `feeders`, so a lane's per-board picks equal its `assigned` count. With
-    `run = boards`, a lane's `picks = assigned × run`,
-    `reels = ceil(picks / capacity)` (zero when `picks` is zero),
-    `remainder = picks − (reels − 1) × capacity` (zero when no reel is needed)
-    and `short` is `picks > loaded`, so the currently loaded reel cannot cover a
-    run that needs more than one reel. Packages are aggregated in name order with
-    their per-board component count, total picks, lane count, summed reels and
-    any short lane. `boards` must be at least 1, otherwise `consumption/invalid`.
-    `ok` is true when no lane is short. Allocation errors (`feeder/missing`,
-    `feeder/capacity`) propagate, and the plan never changes the document.
+    `run = boards`, a lane's `picks = assigned × run` is the **net** placed
+    quantity. A reel provides
+    `usable = capacity − leaderWaste − trailerWaste` parts; every splice adds one
+    reel with `usable − spliceLeaderWaste − spliceTrailerWaste` parts. Reels are
+    `1 + splices` plus the extra full reels needed for the remaining
+    `picks + feederScrap + spliceLeaderWaste + spliceTrailerWaste + spliceScrap`
+    demand (zero when the lane supplies nothing). `scrap` sums per-reel
+    leader/trailer waste over every reel plus the splice and feeder manual scrap,
+    and `gross = picks + scrap`; scrap is never folded into `picks`.
+    `remainder = picks − (reels − 1) × usable` (zero when no reel is needed) and
+    `short` is `gross > loaded + splices × usable`, so the loaded reel and the
+    spliced reels cannot cover gross consumption. Packages are aggregated in name
+    order with their per-board component count, total picks, total gross, scrap,
+    lane count, summed reels and any short lane. `boards` must be at least 1,
+    otherwise `consumption/invalid`. `ok` is true when no lane is short.
+    Allocation errors (`feeder/missing`, `feeder/capacity`) propagate, and the
+    plan never changes the document.
 
     ```shell
     open-smt feeder consumption panel.osmt --boards 250
@@ -360,23 +370,35 @@ The machine-readable version is printed by `open-smt capabilities` and by
     `feeder schedule <file> --boards <n> [--out <file>]`) runs the same
     allocation as `feeder consumption`, so a lane's per-board picks equal its
     `assigned` count. Boards are simulated from 1 to `boards`. A lane starts at
-    its stored `loaded` quantity and consumes `picksPerBoard` after every board.
-    When a lane with a positive `capacity` cannot cover the next board
+    its stored `loaded` quantity minus its per-reel leader/trailer waste and its
+    manual `scrap`. A splice joins one new reel when the 1-based placement step
+    `sequence` is reached on the first board; its picks before the joint are
+    counted from the program, so the new reel is available for the rest of that
+    board and the cumulative used quantity never resets. A change's `board` is
+    the 1-based board after which it happens, its `reels` is the cumulative reel
+    count and `sequence` carries the placement step of a splice. Splice waste is
+    `leaderWaste + trailerWaste + scrap` on top of the lane's per-reel waste.
+    When a lane with positive usable capacity cannot cover the next board
     (`remaining < picksPerBoard`), one full reel is installed after the current
-    board, so a change's `board` is the 1-based board after which it happens
-    (the new reel is available before board `board + 1`) and its `reels` is the
-    cumulative reel count after the change, the initial reel counted. A lane's
-    `reels` is the initial reel plus every replenishment (`0` when the lane
-    supplies nothing). A lane is `short` when its initial `loaded` quantity
-    cannot cover even the first board, or its `capacity` is zero while it has
-    demand. A short lane still consumes what it has (never below zero),
+    board. A lane's `reels` is the initial reel plus every splice and
+    replenishment (`0` when the lane supplies nothing). A lane is `short` when
+    its stock cannot cover a board at any point, including a zero-capacity lane
+    with demand. A short lane still consumes what it has (never below zero),
     replenishes when it can and is simulated to the end, so the report is always
     produced and deterministic. `picks = picksPerBoard × boards`,
-    `remainingAfterRun` is the stock left after the final board, `changeCount`
-    and `reelCount` sum the lanes and `ok` is true when no lane is short. Lanes
-    are reported in feeder id order. `boards` must be at least 1, otherwise
-    `schedule/invalid`. Feeder coverage errors (`feeder/missing`,
+    `scrap` sums every reel's leader/trailer waste and manual scrap,
+    `gross = picks + scrap`, `remainingAfterRun` is the usable stock left after
+    the final board, `changeCount`, `reelCount`, `totalPicks`, `totalGross`,
+    `totalScrap` and `splices` sum the lanes, and `ok` is true when no lane is
+    short. Lanes are reported in feeder id order. `boards` must be at least 1,
+    otherwise `schedule/invalid`. Feeder coverage errors (`feeder/missing`,
     `feeder/capacity`) propagate unchanged, and the document is never modified.
+    A splice is edited with `feeder splice <file> --id <id> --sequence <n>
+    [--leader-waste <n>] [--trailer-waste <n>] [--scrap <n>]`; per-feeder waste
+    is edited with `feeder scrap <file> --id <id> [--leader-waste <n>]
+    [--trailer-waste <n>] [--scrap <n>]`. The splice sequence must lie in the
+    placement program and a lane may hold one splice per step, otherwise
+    `feeder/splice-invalid`; an unknown lane reports `feeder/unknown-id`.
 
     ```shell
     open-smt feeder schedule panel.osmt --boards 250
@@ -503,8 +525,11 @@ are skipped. Rows keep the order of the source.
 | `component/outside-board` | a component lies outside the board |
 | `feeder/invalid` | empty id/package, non-positive pitch/capacity, loaded > capacity |
 | `feeder/duplicate-id` | a feeder id is declared twice |
+| `feeder/unknown-id` | an update, removal or splice names a feeder that does not exist |
+| `feeder/in-use` | a feeder is the only supplier of a used package or still has splices |
 | `feeder/missing` | a used package has no feeder |
 | `feeder/capacity` | loaded parts do not cover the component count |
+| `feeder/splice-invalid` | a splice step is outside the placement program, or a lane repeats a step |
 | `profile/invalid` | empty zones, non-positive length/temperature/speed/liquidus |
 | `station/invalid` | a feeder station assignment requested a non-positive or non-finite slot pitch |
 | `changeover/invalid` | a changeover requested a non-positive or non-finite time per reel change |
@@ -538,11 +563,12 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/reflow_window.rs` | default profile metrics and zone ramp rates, margin arithmetic, pass/fail verdict, heating-only profile, invalid limits, determinism, unchanged document |
 | `tests/consumption.rs` | reels and last-reel remainder arithmetic, a short run, multi-lane package totals, empty document, zero boards, feeder coverage propagation, determinism, unchanged document |
 | `tests/feeder_schedule.rs` | no reel for a covered run, replenishment after the board that exhausts the stock, multiple reels, a short lane and a zero-capacity lane through the report builder, zero capacity rejected by validation, empty document, zero boards, feeder coverage propagation, id order, determinism, unchanged document |
+| `tests/splice_scrap.rs` | cross-splice consumption without resetting used quantity, splice delaying replenishment, leader/trailer and manual scrap separated from net picks, scrap edited through `updateFeeder`, invalid step/feeder/duplicate splice rejection with one revision, persisted splice history, deterministic reports, zero-capacity splice lane |
 | `tests/panel_map.rs` | row-major instance offsets and panel arithmetic, document-order component mapping into every board, single-board identity, outside and non-finite component handling, empty document, invalid board and panel codes, determinism, unchanged document |
 | `tests/first_article.rs` | program-order rows with lane pitch, package material grouping and side totals, recorded revision, fixed checklist, empty document, feeder coverage propagation, CSV header and empty check columns, determinism, unchanged document |
 | `tests/machine_program.rs` | fixed header and program order, station/pitch/nozzle/speed fields, three-decimal canonical values, render-parse round trip, tampered field and reordered row mismatches, step-count mismatch, malformed files, empty document, invalid nozzle map, feeder coverage propagation, deterministic unchanged document, export-readback and verify-file paths |
 | `tests/heatmap.rs` | step placement and inbound travel time, package ordering with cumulative shares, per-side origin restart, equality with the default takt board time, empty document, feeder coverage propagation, determinism, unchanged document |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption and changeover smokes |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption, splice/scrap SDK edits, splice/scrap CLI commands and changeover smokes |
 
 ## Limitations
 
@@ -550,10 +576,13 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   optional 2-opt pass is a bounded local search over each side's route; it
   improves travel but does not guarantee an optimal tour. Neither mode models
   nozzles, head count, feeder positions or vision time.
-- The feeder model has no lane index, tape direction or splice handling. The
-  feeder loading report numbers packages from 1 in name order, but those slot
-  numbers are suggestions only: they do not describe a physical machine slot or
-  a tape layout, and the report never writes a feeder setup.
+- The feeder model has no lane index or tape direction. Splice records carry a
+  placement step and are applied on the first board; they do not model joint
+  position inside a tape, splice time, operator identity or a partial reel's
+  remaining length. The feeder loading report numbers packages from 1 in name
+  order, but those slot numbers are suggestions only: they do not describe a
+  physical machine slot or a tape layout, and the report never writes a feeder
+  setup.
 - The panel fit report assumes an axis-aligned grid of whole boards. It does not
   rotate boards, add edge rails, reserve fiducial or tooling areas, or derive a
   panel outline, and it never changes the stored panel array.
@@ -580,14 +609,15 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   Ramp rates are derived from the set-points, not from a measured profile, and
   the report does not model a soak dwell band or a cooling slope after the last
   zone.
-- The feeder consumption plan derives reels from lane capacity and the per-board
-  allocation. It does not model splices, mid-run reel changes, scrap or moisture
-  exposure.
+- The feeder consumption plan derives reels from lane capacity, splices and the
+  per-board allocation. It models leader/trailer and manual scrap, but not
+  partial reels or moisture exposure.
 - The feeder replenishment schedule installs one full reel whenever the next
-  board is not covered. It does not model splices, partial reels, scrap or
-  moisture exposure, reel load time or machine downtime. Allocation never
-  assigns a lane more parts than it has loaded and validation rejects zero
-  capacity, so a normal document never reports a short lane.
+  board is not covered and applies splices at board granularity on the first
+  board. It does not model partial reels, moisture exposure, reel load time,
+  splice downtime or machine downtime. Allocation never assigns a lane more
+  parts than it has loaded and validation rejects zero capacity, so a normal
+  document never reports a short lane.
 - The panel coordinate map assumes the stored axis-aligned panel array and
   row-major instance order. It does not rotate boards, add edge rails, reserve
   fiducial or tooling areas, or derive a panel outline, and it never changes the

@@ -64,7 +64,11 @@ session, they cannot disagree about a program or an error code.
       "rotation": 0, "height": null }
   ],
   "feeders": [
-    { "id": "F1", "package": "0603", "pitch": 4, "capacity": 500, "loaded": 500 }
+    { "id": "F1", "package": "0603", "pitch": 4, "capacity": 500, "loaded": 500,
+      "leaderWaste": 0, "trailerWaste": 0, "scrap": 0 }
+  ],
+  "splices": [
+    { "feeder": "F1", "sequence": 12, "leaderWaste": 0, "trailerWaste": 0, "scrap": 0 }
   ],
   "profile": {
     "conveyorSpeed": 600,
@@ -90,6 +94,6 @@ but unimplemented routes and maps to exit code `2`.
 ## Node-API surface
 
 `version`, `capabilities`, `create`, `open`, `import`, `import_csv`, `save`, `board_set`, `panel_set`,
-`component_add`, `component_update`, `component_remove`, `feeder_add`, `feeder_update`, `feeder_remove`,
+`component_add`, `component_update`, `component_remove`, `feeder_add`, `feeder_update`, `feeder_splice`, `feeder_remove`,
 `profile_set`, `validate`, `placement`, `feeders`, `balance`, `dual_lane`,
 `reflow`, `export`, `report`.

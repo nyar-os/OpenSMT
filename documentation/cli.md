@@ -190,17 +190,19 @@ reports zero counts and empty arrays.
 
 ```shell
 open-smt feeder add <file> --id <id> --package <pkg> --pitch <mm> --capacity <n>
-                     [--loaded <n>]
+                     [--loaded <n>] [--leader-waste <n>] [--trailer-waste <n>] [--scrap <n>]
 ```
 
-`--loaded` defaults to `--capacity`. A loaded quantity larger than the capacity
-is rejected with `feeder/invalid`.
+`--loaded` defaults to `--capacity`. `--leader-waste`, `--trailer-waste` and
+`--scrap` default to `0`. A loaded quantity larger than the capacity is rejected
+with `feeder/invalid`.
 
 ## feeder update
 
 ```shell
 open-smt feeder update <file> --id <id> [--package <pkg>] [--pitch <mm>]
                      [--capacity <n>] [--loaded <n>]
+                     [--leader-waste <n>] [--trailer-waste <n>] [--scrap <n>]
 ```
 
 Applies a partial edit to one feeder and writes one revision. `--id` selects the
@@ -214,6 +216,34 @@ current loaded quantity is rejected the same way as `feeder add` rejects
 feeder rules as `feeder add`, so a failed update writes nothing and keeps the
 revision. Allocation and the placement program are recomputed from the document,
 so a changed package is visible to the next `feeders` and `placement` call.
+
+### feeder splice
+
+```shell
+open-smt feeder splice <file> --id <id> --sequence <n>
+                     [--leader-waste <n>] [--trailer-waste <n>] [--scrap <n>]
+```
+
+Records one splice and writes one revision. `--sequence` is the 1-based placement
+program step at which the remaining tape is joined to a new reel; it must lie in
+`1..=componentCount`. `--leader-waste`, `--trailer-waste` and `--scrap` are extra
+waste charged once at the joint and default to `0`. A step outside the program,
+or a second splice on the same lane and step, reports
+`feeder/splice-invalid`; an unknown `--id` reports `feeder/unknown-id`. The
+splice is stored with the document and keeps the cumulative used quantity
+continuous across the joint.
+
+### feeder scrap
+
+```shell
+open-smt feeder scrap <file> --id <id> [--leader-waste <n>] [--trailer-waste <n>] [--scrap <n>]
+```
+
+Sets the per-reel leader/trailer waste and the manual scrap quantity of one lane
+and writes one revision. At least one option is required. The values apply to
+every reel of the lane; manual scrap is charged once at the start of the run.
+The command is a convenience wrapper over `feeder update` with the same
+`feeder/invalid` and `feeder/unknown-id` errors.
 
 ## feeder remove
 
@@ -271,15 +301,21 @@ runs the same feeder allocation as `feeders`, so a lane's per-board picks equal
 its `assigned` count, and multiplies them by `--boards`. `--boards` is required
 and must be a positive integer; `0` reports `consumption/invalid` and exits with
 code `1`. The report contains `format` (`open-smt-consumption`), `version`,
-`units`, `boards`, `componentsPerBoard`, `totalPicks`, one `packages` entry per
-package in name order (`package`, `componentsPerBoard`, `totalPicks`, `feeders`,
-`reels`, `short`) and one `feeders` entry per lane in id order (`id`, `package`,
-`picksPerBoard`, `picks`, `capacity`, `loaded`, `reels`, `remainder`, `short`).
-A lane's `reels` is `ceil(picks / capacity)` and `remainder` is the part count
-on the last reel; `short` is `picks > loaded`, so a run that needs more than one
-reel is always short. `ok` is true when no lane is short. Missing or undersized
-feeders fail like `feeders` (`feeder/missing`, `feeder/capacity`). The document
-is not modified.
+`units`, `boards`, `componentsPerBoard`, `totalPicks`, `totalGross`,
+`totalScrap`, `splices`, one `packages` entry per package in name order
+(`package`, `componentsPerBoard`, `totalPicks`, `totalGross`, `scrap`,
+`feeders`, `reels`, `short`) and one `feeders` entry per lane in id order (`id`,
+`package`, `picksPerBoard`, `picks`, `gross`, `scrap`, `splices`, `capacity`,
+`loaded`, `reels`, `remainder`, `short`). `picks` is the **net** placed
+quantity and `gross = picks + scrap`; scrap is never folded into `picks`.
+`scrap` sums each reel's leader/trailer waste plus the feeder and splice manual
+scrap. A reel provides `capacity − leaderWaste − trailerWaste` parts and every
+splice adds one reel, so `reels` accounts for splices before the remaining
+demand is covered by extra full reels. `remainder` is the net part count on the
+last reel; `short` is `gross > loaded + splices × usable`, so the loaded and
+spliced reels cannot cover gross consumption. `ok` is true when no lane is
+short. Missing or undersized feeders fail like `feeders` (`feeder/missing`,
+`feeder/capacity`). The document is not modified.
 
 ### feeder schedule
 
@@ -293,22 +329,29 @@ as `feeder consumption`, so a lane's per-board picks equal its `assigned` count.
 `--boards` is required and must be a positive integer; `0` reports
 `schedule/invalid` and exits with code `1`. The report contains `format`
 (`open-smt-feeder-schedule`), `version`, `units`, `boards`, `changeCount`,
-`reelCount`, `ok` and one `lanes` entry per feeder in id order (`id`, `package`,
-`picksPerBoard`, `capacity`, `initialLoaded`, `picks`, `reels`, `changes`,
-`short`, `remainingAfterRun`).
+`reelCount`, `totalPicks`, `totalGross`, `totalScrap`, `splices`, `ok` and one
+`lanes` entry per feeder in id order (`id`, `package`, `picksPerBoard`,
+`capacity`, `initialLoaded`, `picks`, `gross`, `scrap`, `splices`, `reels`,
+`changes`, `short`, `remainingAfterRun`).
 
-Every lane starts with its stored `loaded` quantity and consumes
-`picksPerBoard` after each board. A lane with a positive `capacity` replenishes
-with one full reel when its remaining stock cannot cover the next board. Each
-change is `{ board, reels, reason: "replenish" }`, where `board` is the 1-based
-board after which the reel is installed (before board `board + 1`) and `reels`
-is the cumulative reel count after the change. `reels` is the initial reel plus
-every replenishment (zero when the lane supplies nothing), `picks` is
-`picksPerBoard × boards` and `remainingAfterRun` is the stock left after the
-last board. A lane is `short` when its initial stock cannot cover the first
-board or its capacity is zero with demand; a short lane is still simulated and
-sets `ok` to false. Missing or undersized feeders fail like `feeders`
-(`feeder/missing`, `feeder/capacity`). The document is not modified.
+Every lane starts with its stored `loaded` quantity minus its per-reel
+leader/trailer waste and manual scrap, then consumes `picksPerBoard` after each
+board. A splice joins one new reel when its 1-based placement step is reached on
+the first board; the cumulative used quantity continues, and the joint charges
+the lane's per-reel waste plus the splice `leaderWaste`, `trailerWaste` and
+`scrap`. A lane with positive usable capacity replenishes with one full reel
+when its remaining stock cannot cover the next board. Each change is
+`{ board, reels, reason, sequence? }`, where `board` is the 1-based board after
+which the reel is installed (before board `board + 1`), `reason` is `splice` or
+`replenish`, `reels` is the cumulative reel count after the change and
+`sequence` is present only for a splice. `reels` is the initial reel plus every
+splice and replenishment (zero when the lane supplies nothing), `picks` is
+`picksPerBoard × boards`, `scrap` is the total waste, `gross = picks + scrap`
+and `remainingAfterRun` is the usable stock left after the last board. A lane is
+`short` when its stock cannot cover a board at any point or its capacity is zero
+with demand; a short lane is still simulated and sets `ok` to false. Missing or
+undersized feeders fail like `feeders` (`feeder/missing`, `feeder/capacity`).
+The document is not modified.
 
 ## bom check
 
@@ -640,6 +683,8 @@ open-smt component update panel.osmt --refdes U1 --clear-height
 open-smt feeder add panel.osmt --id F1 --package 0603 --pitch 4 --capacity 500
 open-smt feeder add panel.osmt --id F2 --package QFN-32 --pitch 12 --capacity 50
 open-smt feeder update panel.osmt --id F1 --loaded 300
+open-smt feeder splice panel.osmt --id F1 --sequence 12 --leader-waste 2 --scrap 1
+open-smt feeder scrap panel.osmt --id F2 --trailer-waste 3 --scrap 2
 open-smt feeder report panel.osmt
 open-smt feeder optimize panel.osmt --slot-pitch 16
 open-smt feeder consumption panel.osmt --boards 250
