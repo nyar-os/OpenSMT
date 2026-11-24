@@ -17,6 +17,8 @@
             "feeder": "Add, update, remove, report or optimize feeders",
             "feeder-add": "Declare a feeder in place",
             "feeder-update": "Update a declared feeder in place",
+            "feeder-splice": "Record a reel splice at a placement step",
+            "feeder-scrap": "Set leader/trailer waste or manual scrap on a feeder",
             "feeder-remove": "Remove a declared feeder in place",
             "feeder-report": "Report feeder loading and coverage",
             "feeder-optimize": "Assign feeder slots along the tape bank",
@@ -71,6 +73,10 @@
             "pitch": "Feeder tape pitch in millimetres",
             "capacity": "Feeder capacity in units",
             "loaded": "Units loaded on the feeder",
+            "leader-waste": "Leader tape units wasted per reel",
+            "trailer-waste": "Trailer tape units wasted per reel",
+            "scrap": "Manual scrap units",
+            "sequence": "1-based placement step at which a splice joins a new reel",
             "bom": "BOM CSV path",
             "speed": "Conveyor speed in millimetres per minute",
             "liquidus": "Liquidus temperature in degrees Celsius",
@@ -107,7 +113,8 @@
             "invalidLanes": "lane count `{count}` must be an integer from 2 to 16",
             "invalidBoards": "board count `{count}` must be a positive integer",
             "invalidScheduleBoards": "board count `{count}` must be a positive integer",
-            "invalidNozzles": "nozzle map entry `{entry}` must be `package=nozzle`"
+            "invalidNozzles": "nozzle map entry `{entry}` must be `package=nozzle`",
+            "scrapRequired": "at least one of --leader-waste, --trailer-waste or --scrap is required"
         }
     }
 }

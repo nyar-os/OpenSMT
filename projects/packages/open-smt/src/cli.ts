@@ -447,6 +447,9 @@ feederCommand
     .option('--pitch <mm>', 'cli.opt.pitch')
     .option('--capacity <n>', 'cli.opt.capacity')
     .option('--loaded <n>', 'cli.opt.loaded')
+    .option('--leader-waste <n>', 'cli.opt.leader-waste')
+    .option('--trailer-waste <n>', 'cli.opt.trailer-waste')
+    .option('--scrap <n>', 'cli.opt.scrap')
     .actionCtx((options, _args, ctx) =>
         guard(ctx, async () => {
             await editDocument(options, ctx, 'feeder add <file>', async (document) => {
@@ -457,6 +460,15 @@ feederCommand
                         pitch: requiredNumber(options, ctx, 'pitch'),
                         capacity: integerOption(options, ctx, 'capacity'),
                         loaded: numberOption(options, ctx, 'loaded'),
+                        leaderWaste:
+                            optionText(options, 'leader-waste') === undefined
+                                ? undefined
+                                : integerOption(options, ctx, 'leader-waste'),
+                        trailerWaste:
+                            optionText(options, 'trailer-waste') === undefined
+                                ? undefined
+                                : integerOption(options, ctx, 'trailer-waste'),
+                        scrap: optionText(options, 'scrap') === undefined ? undefined : integerOption(options, ctx, 'scrap'),
                     }),
                 );
             });
@@ -469,6 +481,9 @@ feederCommand
     .option('--pitch <mm>', 'cli.opt.pitch')
     .option('--capacity <n>', 'cli.opt.capacity')
     .option('--loaded <n>', 'cli.opt.loaded')
+    .option('--leader-waste <n>', 'cli.opt.leader-waste')
+    .option('--trailer-waste <n>', 'cli.opt.trailer-waste')
+    .option('--scrap <n>', 'cli.opt.scrap')
     .actionCtx((options, _args, ctx) =>
         guard(ctx, async () => {
             await editDocument(options, ctx, 'feeder update <file> --id <id>', async (document) => {
@@ -478,9 +493,66 @@ feederCommand
                         pitch: numberOption(options, ctx, 'pitch'),
                         capacity: optionText(options, 'capacity') === undefined ? undefined : integerOption(options, ctx, 'capacity'),
                         loaded: optionText(options, 'loaded') === undefined ? undefined : integerOption(options, ctx, 'loaded'),
+                        leaderWaste: optionText(options, 'leader-waste') === undefined ? undefined : integerOption(options, ctx, 'leader-waste'),
+                        trailerWaste: optionText(options, 'trailer-waste') === undefined ? undefined : integerOption(options, ctx, 'trailer-waste'),
+                        scrap: optionText(options, 'scrap') === undefined ? undefined : integerOption(options, ctx, 'scrap'),
                     }),
                 );
             });
+        }),
+    );
+feederCommand
+    .command('splice', 'cli.cmd.feeder-splice')
+    .option('--id <id>', 'cli.opt.id')
+    .option('--sequence <n>', 'cli.opt.sequence')
+    .option('--leader-waste <n>', 'cli.opt.leader-waste')
+    .option('--trailer-waste <n>', 'cli.opt.trailer-waste')
+    .option('--scrap <n>', 'cli.opt.scrap')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'feeder splice <file> --id <id> --sequence <n>', async (document) => {
+                print(
+                    await document.addSplice({
+                        id: requiredOption(options, ctx, 'id'),
+                        sequence: integerOption(options, ctx, 'sequence'),
+                        leaderWaste:
+                            optionText(options, 'leader-waste') === undefined
+                                ? undefined
+                                : integerOption(options, ctx, 'leader-waste'),
+                        trailerWaste:
+                            optionText(options, 'trailer-waste') === undefined
+                                ? undefined
+                                : integerOption(options, ctx, 'trailer-waste'),
+                        scrap: optionText(options, 'scrap') === undefined ? undefined : integerOption(options, ctx, 'scrap'),
+                    }),
+                );
+            });
+        }),
+    );
+feederCommand
+    .command('scrap', 'cli.cmd.feeder-scrap')
+    .option('--id <id>', 'cli.opt.id')
+    .option('--leader-waste <n>', 'cli.opt.leader-waste')
+    .option('--trailer-waste <n>', 'cli.opt.trailer-waste')
+    .option('--scrap <n>', 'cli.opt.scrap')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(
+                options,
+                ctx,
+                'feeder scrap <file> --id <id> [--leader-waste <n>] [--trailer-waste <n>] [--scrap <n>]',
+                async (document) => {
+                    const leaderWaste =
+                        optionText(options, 'leader-waste') === undefined ? undefined : integerOption(options, ctx, 'leader-waste');
+                    const trailerWaste =
+                        optionText(options, 'trailer-waste') === undefined ? undefined : integerOption(options, ctx, 'trailer-waste');
+                    const scrap = optionText(options, 'scrap') === undefined ? undefined : integerOption(options, ctx, 'scrap');
+                    if (leaderWaste === undefined && trailerWaste === undefined && scrap === undefined) {
+                        throw failure(ctx, 'feeder/invalid', 'scrapRequired');
+                    }
+                    print(await document.updateFeeder(requiredOption(options, ctx, 'id'), { leaderWaste, trailerWaste, scrap }));
+                },
+            );
         }),
     );
 feederCommand

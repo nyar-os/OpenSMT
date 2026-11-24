@@ -25,6 +25,7 @@ import type {
     FeederReport,
     FeederRequest,
     FeederScheduleReport,
+    FeederSpliceRequest,
     FeederUpdateRequest,
     FirstArticleReport,
     ImportReport,
@@ -162,6 +163,13 @@ export function removeComponent(path: string, refdes: string): DocumentSummary {
 /** Adds a feeder and returns the updated summary. */
 export function addFeeder(path: string, request: FeederRequest): DocumentSummary {
     return decode<DocumentSummary>(() => binding('feeder.add').feeder_add(path, JSON.stringify(request)));
+}
+
+/** Records a reel splice and returns the updated summary. */
+export function addSplice(path: string, request: FeederSpliceRequest): DocumentSummary {
+    return decode<DocumentSummary>(() =>
+        binding('feeder.splice').feeder_splice(path, JSON.stringify(request)),
+    );
 }
 
 /** Applies a partial edit to a feeder and returns the updated summary. */

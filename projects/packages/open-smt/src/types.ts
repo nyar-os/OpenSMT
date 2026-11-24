@@ -52,6 +52,26 @@ export interface Feeder {
     readonly pitch: number;
     readonly capacity: number;
     readonly loaded: number;
+    /** Leader tape components wasted when a reel is installed. */
+    readonly leaderWaste: number;
+    /** Trailer tape components wasted when a reel is exhausted. */
+    readonly trailerWaste: number;
+    /** Extra manual scrap for this lane, in components. */
+    readonly scrap: number;
+}
+
+/** One splice between the remaining tape and a new reel. */
+export interface Splice {
+    /** Feeder lane that is spliced. */
+    readonly feeder: string;
+    /** 1-based placement program step at which the new reel is joined. */
+    readonly sequence: number;
+    /** Additional leader waste at the joint. */
+    readonly leaderWaste: number;
+    /** Additional trailer waste at the joint. */
+    readonly trailerWaste: number;
+    /** Manual scrap at the joint. */
+    readonly scrap: number;
 }
 
 /** One reflow zone. */
@@ -80,6 +100,7 @@ export interface DocumentSummary {
     readonly panel: Panel;
     readonly components: number;
     readonly feeders: number;
+    readonly splices: number;
 }
 
 /** One validation finding with a stable code. */
@@ -785,17 +806,23 @@ export interface FeederConsumption {
     readonly package: string;
     /** Components the lane supplies on one board. */
     readonly picksPerBoard: number;
-    /** Parts the lane consumes over the whole run. */
+    /** Net parts the lane places over the whole run. */
     readonly picks: number;
+    /** Gross parts drawn from reels: `picks` plus every scrap charge. */
+    readonly gross: number;
+    /** Leader/trailer waste and manual scrap over the run. */
+    readonly scrap: number;
+    /** Splice events applied to this lane. */
+    readonly splices: number;
     /** Maximum parts on one reel of this lane. */
     readonly capacity: number;
     /** Parts currently loaded on the lane. */
     readonly loaded: number;
-    /** Full reels needed for the run; zero when the lane supplies nothing. */
+    /** Reels needed for the run; zero when the lane supplies nothing. */
     readonly reels: number;
-    /** Parts on the last reel, between 1 and `capacity`; zero when no reel is needed. */
+    /** Net parts placed from the last reel; zero when no reel is needed. */
     readonly remainder: number;
-    /** Whether the currently loaded quantity covers the run. */
+    /** Whether the loaded quantity and splice reels cover gross consumption. */
     readonly short: boolean;
 }
 
@@ -804,8 +831,12 @@ export interface PackageConsumption {
     readonly package: string;
     /** Components of this package on one board. */
     readonly componentsPerBoard: number;
-    /** Parts of this package consumed over the run. */
+    /** Net parts of this package placed over the run. */
     readonly totalPicks: number;
+    /** Gross parts of this package drawn from reels. */
+    readonly totalGross: number;
+    /** Leader/trailer waste and manual scrap of this package. */
+    readonly scrap: number;
     /** Lanes that supply this package. */
     readonly feeders: number;
     /** Reels needed across every lane of this package. */
@@ -823,8 +854,14 @@ export interface ConsumptionReport {
     readonly boards: number;
     /** Components on one board. */
     readonly componentsPerBoard: number;
-    /** Parts the run consumes across every lane. */
+    /** Net parts the run places across every lane. */
     readonly totalPicks: number;
+    /** Gross parts the run draws from reels across every lane. */
+    readonly totalGross: number;
+    /** Leader/trailer waste and manual scrap across every lane. */
+    readonly totalScrap: number;
+    /** Splice events across every lane. */
+    readonly splices: number;
     readonly packages: readonly PackageConsumption[];
     readonly feeders: readonly FeederConsumption[];
     /** Whether the loaded quantities cover the run. */
@@ -837,8 +874,10 @@ export interface FeederScheduleChange {
     readonly board: number;
     /** Cumulative reels on the lane after the change, the initial reel counted. */
     readonly reels: number;
-    /** Reason of the change; always `replenish`. */
-    readonly reason: 'replenish';
+    /** Reason of the change. */
+    readonly reason: 'replenish' | 'splice';
+    /** Placement step of a splice; absent for a replenishment. */
+    readonly sequence?: number;
 }
 
 /** Replenishment schedule of one feeder lane. */
@@ -851,9 +890,15 @@ export interface FeederScheduleLane {
     readonly capacity: number;
     /** Parts loaded on the lane before the run. */
     readonly initialLoaded: number;
-    /** Parts the lane consumes over the whole run. */
+    /** Net parts the lane places over the whole run. */
     readonly picks: number;
-    /** Reels the run uses, the initial reel plus every replenishment. */
+    /** Gross parts drawn from reels: `picks` plus every scrap charge. */
+    readonly gross: number;
+    /** Leader/trailer waste and manual scrap over the run. */
+    readonly scrap: number;
+    /** Splice events applied to this lane. */
+    readonly splices: number;
+    /** Reels the run uses, the initial reel plus every splice and replenishment. */
     readonly reels: number;
     /** Reel changes in board order. */
     readonly changes: readonly FeederScheduleChange[];
@@ -874,6 +919,14 @@ export interface FeederScheduleReport {
     readonly changeCount: number;
     /** Number of reels across every lane, the initial reels included. */
     readonly reelCount: number;
+    /** Net parts across every lane. */
+    readonly totalPicks: number;
+    /** Gross parts across every lane. */
+    readonly totalGross: number;
+    /** Scrap across every lane. */
+    readonly totalScrap: number;
+    /** Splice events across every lane. */
+    readonly splices: number;
     /** Whether every lane covers the run. */
     readonly ok: boolean;
     /** One entry per feeder lane, in id order. */
@@ -1058,6 +1111,19 @@ export interface FeederRequest {
     readonly pitch: number;
     readonly capacity: number;
     readonly loaded?: number;
+    readonly leaderWaste?: number;
+    readonly trailerWaste?: number;
+    readonly scrap?: number;
+}
+
+/** Request of `addSplice()`; `leaderWaste`, `trailerWaste` and `scrap` default to 0. */
+export interface FeederSpliceRequest {
+    readonly id: string;
+    /** 1-based placement program step at which the new reel is joined. */
+    readonly sequence: number;
+    readonly leaderWaste?: number;
+    readonly trailerWaste?: number;
+    readonly scrap?: number;
 }
 
 /**
@@ -1071,6 +1137,9 @@ export interface FeederUpdateRequest {
     readonly pitch?: number;
     readonly capacity?: number;
     readonly loaded?: number;
+    readonly leaderWaste?: number;
+    readonly trailerWaste?: number;
+    readonly scrap?: number;
 }
 
 /** Request of `setProfile()`. */

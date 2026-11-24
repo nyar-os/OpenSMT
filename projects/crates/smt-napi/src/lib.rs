@@ -18,7 +18,7 @@ use serde::Serialize;
 use serde_json::Value;
 use smt_model::{
     Board, Component, ComponentUpdate, DEFAULT_FEEDER_CHANGE_SECONDS, DEFAULT_SLOT_PITCH, DualLaneStrategy, ExportFormat,
-    Feeder, FeederUpdate, OpenSmt, Panel, ReflowProfile, ReflowWindowLimits, Side, SmtError, TaktOptions, Zone,
+    Feeder, FeederUpdate, OpenSmt, Panel, ReflowProfile, ReflowWindowLimits, Side, SmtError, Splice, TaktOptions, Zone,
 };
 use wae::{CallContext, Error, JsValue, Result, function, register_module};
 
@@ -105,8 +105,7 @@ fn fail(error: SmtError) -> Error {
 
 /// Reads an optional `{ "nozzles": { "0603": "N1" } }` request.
 fn nozzle_map(ctx: &CallContext, index: usize) -> Result<BTreeMap<String, String>> {
-    let Some(_) = ctx.args().get(index)
-    else {
+    let Some(_) = ctx.args().get(index) else {
         return Ok(BTreeMap::new());
     };
     let request = object(ctx, index)?;
@@ -300,6 +299,9 @@ fn feeder_add(ctx: CallContext) -> Result<JsValue> {
     if let Some(loaded) = optional_u32(&request, "loaded")? {
         feeder.loaded = loaded;
     }
+    feeder.leader_waste = optional_u32(&request, "leaderWaste")?.unwrap_or(0);
+    feeder.trailer_waste = optional_u32(&request, "trailerWaste")?.unwrap_or(0);
+    feeder.scrap = optional_u32(&request, "scrap")?.unwrap_or(0);
     let mut session = OpenSmt::new();
     session.open(Path::new(&path)).map_err(fail)?;
     let summary = session.add_feeder(feeder).map_err(fail)?;
@@ -308,8 +310,8 @@ fn feeder_add(ctx: CallContext) -> Result<JsValue> {
 
 /// Applies a partial edit to a feeder and saves the document.
 ///
-/// The request carries `id` plus any of `package`, `pitch`, `capacity` and
-/// `loaded`.
+/// The request carries `id` plus any of `package`, `pitch`, `capacity`,
+/// `loaded`, `leaderWaste`, `trailerWaste` and `scrap`.
 #[function]
 fn feeder_update(ctx: CallContext) -> Result<JsValue> {
     let path = text(&ctx, 0)?;
@@ -320,10 +322,33 @@ fn feeder_update(ctx: CallContext) -> Result<JsValue> {
         pitch: number_field(&request, "pitch")?,
         capacity: optional_u32(&request, "capacity")?,
         loaded: optional_u32(&request, "loaded")?,
+        leader_waste: optional_u32(&request, "leaderWaste")?,
+        trailer_waste: optional_u32(&request, "trailerWaste")?,
+        scrap: optional_u32(&request, "scrap")?,
     };
     let mut session = OpenSmt::new();
     session.open(Path::new(&path)).map_err(fail)?;
     let summary = session.update_feeder(&id, update).map_err(fail)?;
+    respond(&ctx, &summary)
+}
+
+/// Records a reel splice and saves the document.
+///
+/// The request carries `id`, `sequence` and optionally `leaderWaste`,
+/// `trailerWaste` and `scrap`.
+#[function]
+fn feeder_splice(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let request = object(&ctx, 1)?;
+    let id = text_field(&request, "id")?;
+    let sequence = optional_u32(&request, "sequence")?.ok_or_else(|| argument_error("`sequence` is required"))?;
+    let mut splice = Splice::new(id, sequence);
+    splice.leader_waste = optional_u32(&request, "leaderWaste")?.unwrap_or(0);
+    splice.trailer_waste = optional_u32(&request, "trailerWaste")?.unwrap_or(0);
+    splice.scrap = optional_u32(&request, "scrap")?.unwrap_or(0);
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let summary = session.add_splice(splice).map_err(fail)?;
     respond(&ctx, &summary)
 }
 
@@ -717,6 +742,7 @@ register_module![
     component_remove,
     feeder_add,
     feeder_update,
+    feeder_splice,
     feeder_remove,
     profile_set,
     validate,

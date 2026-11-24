@@ -1,14 +1,22 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 import { OpenSMT, OpenSMTError, errorCodes, isOpenSMTError } from '../src/index.js';
 import { nativeBinding } from '../src/native.js';
 
 const nativeMissing = nativeBinding() === undefined;
 const skipWithoutNative = nativeMissing ? 'the native addon is not installed' : false;
+const run = promisify(execFile);
+const testDirectory = path.dirname(fileURLToPath(import.meta.url));
+const packageRoot = path.resolve(testDirectory, '..', '..');
+const cliPath = path.join(packageRoot, 'dist-test', 'src', 'cli.js');
+const cliLocales = path.join(packageRoot, 'dist-test', 'locales');
 
 test('the session stores its locale and starts empty', () => {
     const session = new OpenSMT({ locale: 'zh-CN' });
@@ -562,6 +570,126 @@ test('feeder consumption plans reels for a build quantity', { skip: skipWithoutN
             return true;
         });
         assert.equal(document.revision, before);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('splice and scrap edits reach consumption and schedule reports', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-splice-'));
+    const file = path.join(directory, 'panel.osmt');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'R2', package: '0603', x: 50, y: 10 });
+        await document.addComponent({ refdes: 'R3', package: '0603', x: 50, y: 50 });
+        await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 4 });
+        const before = document.revision;
+
+        const spliced = await document.addSplice({ id: 'F1', sequence: 2, scrap: 1 });
+        assert.equal(spliced.splices, 1);
+        assert.equal(spliced.revision, before + 1);
+        await document.updateFeeder('F1', { scrap: 2 });
+
+        const consumption = await document.consumption(3);
+        assert.equal(consumption.feeders[0]?.picks, 9);
+        assert.equal(consumption.feeders[0]?.gross, 12);
+        assert.equal(consumption.feeders[0]?.scrap, 3);
+        assert.equal(consumption.feeders[0]?.splices, 1);
+        assert.equal(consumption.totalGross, 12);
+        assert.equal(consumption.totalScrap, 3);
+        assert.equal(consumption.splices, 1);
+
+        const schedule = await document.schedule(3);
+        assert.equal(schedule.lanes[0]?.gross, 12);
+        assert.equal(schedule.lanes[0]?.scrap, 3);
+        assert.equal(schedule.lanes[0]?.splices, 1);
+        assert.equal(schedule.lanes[0]?.changes[0]?.reason, 'splice');
+        assert.equal(schedule.lanes[0]?.changes[0]?.sequence, 2);
+        assert.equal(schedule.totalGross, 12);
+        assert.equal(schedule.totalScrap, 3);
+        assert.equal(schedule.splices, 1);
+
+        await assert.rejects(document.addSplice({ id: 'F1', sequence: 9 }), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'feeder/splice-invalid');
+            return true;
+        });
+        await assert.rejects(document.addSplice({ id: 'F9', sequence: 1 }), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'feeder/unknown-id');
+            return true;
+        });
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('the cli records splices and scrap and reports gross consumption', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-cli-splice-'));
+    const file = path.join(directory, 'panel.osmt');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'R2', package: '0603', x: 20, y: 10 });
+        await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 10 });
+        await fs.cp(path.join(packageRoot, 'locales'), cliLocales, { recursive: true, force: true });
+
+        const spliced = await run(process.execPath, [
+            cliPath,
+            'feeder',
+            'splice',
+            file,
+            '--id',
+            'F1',
+            '--sequence',
+            '1',
+            '--leader-waste',
+            '1',
+            '--scrap',
+            '1',
+        ]);
+        assert.equal(JSON.parse(spliced.stdout).splices, 1);
+
+        const scrap = await run(process.execPath, [
+            cliPath,
+            'feeder',
+            'scrap',
+            file,
+            '--id',
+            'F1',
+            '--trailer-waste',
+            '1',
+            '--scrap',
+            '2',
+        ]);
+        assert.equal(JSON.parse(scrap.stdout).splices, 1);
+
+        const consumption = await run(process.execPath, [
+            cliPath,
+            'feeder',
+            'consumption',
+            file,
+            '--boards',
+            '2',
+        ]);
+        const report = JSON.parse(consumption.stdout);
+        assert.equal(report.splices, 1);
+        assert.equal(report.totalPicks, 4);
+        assert.ok(report.totalGross > report.totalPicks);
+        assert.ok(report.totalScrap > 0);
+
+        await assert.rejects(
+            run(process.execPath, [cliPath, 'feeder', 'splice', file, '--id', 'F1', '--sequence', '9']),
+            (error: unknown) => {
+                assert.equal((error as { code?: number }).code, 1);
+                return true;
+            },
+        );
     } finally {
         await session.dispose();
         await fs.rm(directory, { recursive: true, force: true });

@@ -27,6 +27,7 @@ import type {
     FeederReport,
     FeederRequest,
     FeederScheduleReport,
+    FeederSpliceRequest,
     FeederUpdateRequest,
     FirstArticleReport,
     LanesReport,
@@ -139,6 +140,13 @@ export class SmtDocument {
     async addFeeder(request: FeederRequest): Promise<DocumentSummary> {
         this.assertOpen();
         this.state = service.addFeeder(this.state.path, request);
+        return this.state;
+    }
+
+    /** Records a reel splice at a placement step. */
+    async addSplice(request: FeederSpliceRequest): Promise<DocumentSummary> {
+        this.assertOpen();
+        this.state = service.addSplice(this.state.path, request);
         return this.state;
     }
 

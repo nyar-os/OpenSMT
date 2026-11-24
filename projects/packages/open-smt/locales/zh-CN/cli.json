@@ -17,6 +17,8 @@
             "feeder": "添加、更新、移除、报告或优化供料器",
             "feeder-add": "就地声明供料器",
             "feeder-update": "就地更新已声明的供料器",
+            "feeder-splice": "记录某个贴装序号处的接料",
+            "feeder-scrap": "设置供料器的引导带/尾料浪费或手动报废量",
             "feeder-remove": "就地移除已声明的供料器",
             "feeder-report": "报告供料器装载与覆盖情况",
             "feeder-optimize": "沿料站排分配供料器槽位",
@@ -71,6 +73,10 @@
             "pitch": "供料器料带间距（毫米）",
             "capacity": "供料器容量（个数）",
             "loaded": "供料器已装载数量",
+            "leader-waste": "每盘引导带浪费数量",
+            "trailer-waste": "每盘尾料浪费数量",
+            "scrap": "手动报废数量",
+            "sequence": "接料发生的贴装序号，从 1 开始",
             "bom": "BOM CSV 路径",
             "speed": "传送带速度（毫米/分钟）",
             "liquidus": "液相温度（摄氏度）",
@@ -107,7 +113,8 @@
             "invalidLanes": "通道数 `{count}` 必须是 2 到 16 之间的整数",
             "invalidBoards": "板数 `{count}` 必须是正整数",
             "invalidScheduleBoards": "板数 `{count}` 必须是正整数",
-            "invalidNozzles": "吸嘴映射项 `{entry}` 必须写成 `封装=吸嘴`"
+            "invalidNozzles": "吸嘴映射项 `{entry}` 必须写成 `封装=吸嘴`",
+            "scrapRequired": "至少需要指定 --leader-waste、--trailer-waste 或 --scrap 之一"
         }
     }
 }

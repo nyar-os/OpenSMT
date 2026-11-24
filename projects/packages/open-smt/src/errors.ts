@@ -62,6 +62,7 @@ export const errorCodes = [
     'feeder/duplicate-id',
     'feeder/unknown-id',
     'feeder/in-use',
+    'feeder/splice-invalid',
     'feeder/missing',
     'feeder/capacity',
     'feeder/unused',
