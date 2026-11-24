@@ -27,7 +27,7 @@ use crate::{
     heatmap::{self, HeatmapReport},
     import::ImportReport,
     machine_program::{self, MachineProgramExport, MachineProgramVerify},
-    model::{Board, Component, Feeder, Panel, ReflowProfile, Side, SmtDocument, UNITS},
+    model::{Board, Component, Feeder, Panel, ReflowProfile, Side, SmtDocument, Splice, UNITS},
     panel_fit::{self, PanelFitReport},
     panel_map::{self, PanelMapReport},
     place::{self, FeederReport, PlacementReport},
@@ -62,6 +62,8 @@ pub struct DocumentSummary {
     pub components: usize,
     /// Number of feeders.
     pub feeders: usize,
+    /// Number of recorded splices.
+    pub splices: usize,
 }
 
 /// Supported export formats.
@@ -201,12 +203,24 @@ pub struct FeederUpdate {
     pub capacity: Option<u32>,
     /// Replacement loaded quantity.
     pub loaded: Option<u32>,
+    /// Replacement leader waste per reel.
+    pub leader_waste: Option<u32>,
+    /// Replacement trailer waste per reel.
+    pub trailer_waste: Option<u32>,
+    /// Replacement manual scrap quantity.
+    pub scrap: Option<u32>,
 }
 
 impl FeederUpdate {
     /// Returns whether the request names no field at all.
     pub const fn is_empty(&self) -> bool {
-        self.package.is_none() && self.pitch.is_none() && self.capacity.is_none() && self.loaded.is_none()
+        self.package.is_none()
+            && self.pitch.is_none()
+            && self.capacity.is_none()
+            && self.loaded.is_none()
+            && self.leader_waste.is_none()
+            && self.trailer_waste.is_none()
+            && self.scrap.is_none()
     }
 }
 
@@ -377,8 +391,7 @@ impl OpenSmt {
         if request.clear_height && request.height.is_some() {
             return Err(SmtError::new("component/invalid", "component update cannot set and clear the height at once"));
         }
-        let Some(component) = document.components.iter_mut().find(|component| component.refdes == refdes)
-        else {
+        let Some(component) = document.components.iter_mut().find(|component| component.refdes == refdes) else {
             return Err(SmtError::new("component/unknown-refdes", format!("component `{refdes}` does not exist")));
         };
         if let Some(package) = request.package {
@@ -398,8 +411,7 @@ impl OpenSmt {
         }
         if request.clear_height {
             component.height = None;
-        }
-        else if let Some(height) = request.height {
+        } else if let Some(height) = request.height {
             component.height = Some(height);
         }
         self.persist(document)
@@ -438,8 +450,7 @@ impl OpenSmt {
         if request.is_empty() {
             return Err(SmtError::new("feeder/invalid", "feeder update needs at least one field"));
         }
-        let Some(feeder) = document.feeders.iter_mut().find(|feeder| feeder.id == id)
-        else {
+        let Some(feeder) = document.feeders.iter_mut().find(|feeder| feeder.id == id) else {
             return Err(SmtError::new("feeder/unknown-id", format!("feeder `{id}` does not exist")));
         };
         if let Some(package) = request.package {
@@ -454,14 +465,54 @@ impl OpenSmt {
         if let Some(loaded) = request.loaded {
             feeder.loaded = loaded;
         }
+        if let Some(leader_waste) = request.leader_waste {
+            feeder.leader_waste = leader_waste;
+        }
+        if let Some(trailer_waste) = request.trailer_waste {
+            feeder.trailer_waste = trailer_waste;
+        }
+        if let Some(scrap) = request.scrap {
+            feeder.scrap = scrap;
+        }
+        self.persist(document)
+    }
+
+    /// Records a splice and saves the document.
+    ///
+    /// `splice.sequence` is the 1-based placement step at which the new reel is
+    /// joined; it must lie inside the placement program. The feeder must exist
+    /// and may hold only one splice per step. Invalid references report
+    /// `feeder/unknown-id` or `feeder/splice-invalid`, and nothing is written.
+    pub fn add_splice(&mut self, splice: Splice) -> Result<DocumentSummary, SmtError> {
+        let mut document = self.document()?.clone();
+        if !document.feeders.iter().any(|feeder| feeder.id == splice.feeder) {
+            return Err(SmtError::new("feeder/unknown-id", format!("splice references unknown feeder `{}`", splice.feeder)));
+        }
+        if splice.sequence == 0 || splice.sequence as usize > document.components.len() {
+            return Err(SmtError::new(
+                "feeder/splice-invalid",
+                format!(
+                    "splice on feeder `{}` names placement step {} but the program has {} steps",
+                    splice.feeder,
+                    splice.sequence,
+                    document.components.len()
+                ),
+            ));
+        }
+        if document.splices.iter().any(|entry| entry.feeder == splice.feeder && entry.sequence == splice.sequence) {
+            return Err(SmtError::new(
+                "feeder/splice-invalid",
+                format!("feeder `{}` already has a splice at placement step {}", splice.feeder, splice.sequence),
+            ));
+        }
+        document.splices.push(splice);
         self.persist(document)
     }
 
     /// Removes a feeder and saves the document.
     pub fn remove_feeder(&mut self, id: &str) -> Result<DocumentSummary, SmtError> {
         let mut document = self.document()?.clone();
-        let Some(feeder) = document.feeders.iter().find(|feeder| feeder.id == id)
-        else {
+        let Some(feeder) = document.feeders.iter().find(|feeder| feeder.id == id) else {
             return Err(SmtError::new("feeder/unknown-id", format!("feeder `{id}` does not exist")));
         };
         let used = document.components.iter().any(|component| component.package == feeder.package);
@@ -471,6 +522,9 @@ impl OpenSmt {
                 "feeder/in-use",
                 format!("feeder `{id}` is the only supplier of package `{}`", feeder.package),
             ));
+        }
+        if document.splices.iter().any(|splice| splice.feeder == id) {
+            return Err(SmtError::new("feeder/in-use", format!("feeder `{id}` still has recorded splices")));
         }
         document.feeders.retain(|entry| entry.id != id);
         self.persist(document)
@@ -781,6 +835,7 @@ impl OpenSmt {
             panel: document.panel,
             components: document.components.len(),
             feeders: document.feeders.len(),
+            splices: document.splices.len(),
         })
     }
 

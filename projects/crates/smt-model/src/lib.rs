@@ -3,7 +3,8 @@
 //! This crate implements a deliberately small assembly kernel:
 //!
 //! * one rectangular board, an optional panel array and a component list;
-//! * a feeder setup with package, pitch, capacity and loaded quantity;
+//! * a feeder setup with package, pitch, capacity, loaded quantity, per-reel
+//!   leader/trailer waste, manual scrap and placement-step reel splices;
 //! * a deterministic placement program: feeders are allocated in id order and
 //!   the head visits the nearest remaining component, top side first; an
 //!   optional 2-opt pass improves each side's route;
@@ -19,8 +20,10 @@
 //! * a read-only feeder station assignment along the tape bank;
 //! * a read-only feeder changeover sequence between two documents;
 //! * a read-only reflow process-window margin report;
-//! * a read-only feeder consumption plan for a build quantity;
-//! * a read-only feeder replenishment schedule across a production run;
+//! * a read-only feeder consumption plan that separates net picks, gross
+//!   consumption and leader/trailer/manual scrap;
+//! * a read-only feeder replenishment schedule that accounts for splices, scrap
+//!   and per-reel leader/trailer waste;
 //! * a read-only takt bottleneck heat map by step, package and side;
 //! * a neutral machine program interchange with a readback check;
 //! * CSV program and feeder sheets, plus JSON and Markdown reports.
@@ -79,7 +82,7 @@ pub use crate::{
         MachineProgram, MachineProgramExport, MachineProgramVerify, ProgramMismatch, build as build_machine_program,
         parse as parse_machine_program, render as render_machine_program, verify as verify_machine_program,
     },
-    model::{Board, Component, FORMAT, Feeder, Panel, ReflowProfile, Side, SmtDocument, UNITS, VERSION, Zone},
+    model::{Board, Component, FORMAT, Feeder, Panel, ReflowProfile, Side, SmtDocument, Splice, UNITS, VERSION, Zone},
     panel_fit::{PanelFitReport, fit as panel_fit},
     panel_map::{MappedComponent, PanelInstance, PanelMapReport, PanelPlacement, map as panel_map},
     place::{
@@ -89,7 +92,7 @@ pub use crate::{
     reflow::{AMBIENT, ReflowReport, ZoneReport, evaluate as evaluate_reflow},
     reflow_window::{ReflowWindowLimits, ReflowWindowReport, WindowCheck, WindowZone, evaluate as evaluate_reflow_window},
     schedule::{
-        FeederScheduleReport, ReelChange, ScheduleLane, plan as plan_feeder_schedule, plan_lane,
+        FeederScheduleReport, LaneSplice, ReelChange, ScheduleLane, plan as plan_feeder_schedule, plan_lane,
         report as feeder_schedule_report,
     },
     session::{ComponentUpdate, DEFAULT_BOARD, DocumentSummary, ExportFormat, ExportReport, FeederUpdate, OpenSmt, Report},
@@ -153,8 +156,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "feederStationAssignment": "heuristic lane order by mean placement X over the nearest-neighbour program; models only tape-bank travel along X, not slot capacity, tape direction or nozzle constraints",
     "changeoverSequence": "lanes are matched by id and compared by package and exact pitch; the downtime is a fixed time per reel change, not a measured rate",
     "reflowWindow": "metrics and ramp rates come from zone set-points, not measured thermocouple data; the comparison is against caller-supplied limits",
-    "feederConsumption": "reels are derived from lane capacity and the per-board feeder allocation; splices, reel changes, scrap and moisture exposure are not modelled",
-    "feederSchedule": "replenishment installs one full reel when the next board is not covered; splices, partial reels, scrap, moisture exposure and changeover time are not modelled",
+    "feederConsumption": "separates net picks, gross consumption and scrap; reels and splice stock follow lane capacity, but partial reels and moisture exposure are not modelled",
+    "feederSchedule": "splices and per-reel leader/trailer or manual scrap are applied at board granularity; partial reels, moisture exposure and changeover time are not modelled",
     "panelMap": "row-major instances of the stored panel array; no board rotation, edge rail, fiducial, tooling area or panel outline is modelled",
     "firstArticle": "repeats the placement program with the allocated lane pitch and a fixed four-item checklist; it records no inspection result and models no component polarity",
     "taktHeatmap": "attributes the analytical step time of the default machine model to each step, package and side; it models no acceleration, tape advance, vision or nozzle physics",

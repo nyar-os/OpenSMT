@@ -101,8 +101,7 @@ pub fn validate(document: &SmtDocument) -> ValidationReport {
                 "component/invalid",
                 format!("component `{}` has non-finite coordinates", component.refdes),
             ));
-        }
-        else if component.x < 0.0
+        } else if component.x < 0.0
             || component.y < 0.0
             || component.x > document.board.width
             || component.y > document.board.depth
@@ -120,8 +119,7 @@ pub fn validate(document: &SmtDocument) -> ValidationReport {
                 "component/invalid",
                 format!("component `{}` rotation must be between 0 and 360 degrees", component.refdes),
             ));
-        }
-        else if !is_right_angle(component.rotation) {
+        } else if !is_right_angle(component.rotation) {
             issues.push(Issue::warning(
                 "component/rotation",
                 format!("component `{}` rotation {} is not a multiple of 90 degrees", component.refdes, component.rotation),
@@ -144,8 +142,7 @@ pub fn validate(document: &SmtDocument) -> ValidationReport {
     for feeder in &document.feeders {
         if feeder.id.trim().is_empty() {
             issues.push(Issue::error("feeder/invalid", "a feeder id must be non-empty"));
-        }
-        else if !feeder_ids.insert(feeder.id.as_str()) {
+        } else if !feeder_ids.insert(feeder.id.as_str()) {
             issues.push(Issue::error("feeder/duplicate-id", format!("feeder `{}` is declared twice", feeder.id)));
         }
         if feeder.package.trim().is_empty() {
@@ -166,6 +163,30 @@ pub fn validate(document: &SmtDocument) -> ValidationReport {
     }
     if document.feeders.is_empty() {
         issues.push(Issue::warning("feeder/none", "the document has no feeders"));
+    }
+
+    let mut splice_keys = HashSet::new();
+    for splice in &document.splices {
+        if !feeder_ids.contains(splice.feeder.as_str()) {
+            issues.push(Issue::error("feeder/unknown-id", format!("splice references unknown feeder `{}`", splice.feeder)));
+        }
+        if splice.sequence == 0 || splice.sequence as usize > document.components.len() {
+            issues.push(Issue::error(
+                "feeder/splice-invalid",
+                format!(
+                    "splice on feeder `{}` names placement step {} but the program has {} steps",
+                    splice.feeder,
+                    splice.sequence,
+                    document.components.len()
+                ),
+            ));
+        }
+        if !splice_keys.insert((splice.feeder.as_str(), splice.sequence)) {
+            issues.push(Issue::error(
+                "feeder/splice-invalid",
+                format!("feeder `{}` declares more than one splice at placement step {}", splice.feeder, splice.sequence),
+            ));
+        }
     }
 
     let counts = package_counts(document);

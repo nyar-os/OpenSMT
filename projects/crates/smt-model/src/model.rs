@@ -37,6 +37,9 @@ pub struct SmtDocument {
     pub components: Vec<Component>,
     /// Feeder setup.
     pub feeders: Vec<Feeder>,
+    /// Reel splice events, one per joint between the remaining tape and a new reel.
+    #[serde(default)]
+    pub splices: Vec<Splice>,
     /// Reflow profile.
     pub profile: ReflowProfile,
 }
@@ -53,6 +56,7 @@ impl SmtDocument {
             panel: Panel::new(1, 1, 0.0, 0.0),
             components: Vec::new(),
             feeders: Vec::new(),
+            splices: Vec::new(),
             profile: ReflowProfile::default(),
         }
     }
@@ -180,12 +184,71 @@ pub struct Feeder {
     pub capacity: u32,
     /// Components actually loaded; allocation never exceeds this value.
     pub loaded: u32,
+    /// Leader tape components wasted when a reel is installed.
+    #[serde(default)]
+    pub leader_waste: u32,
+    /// Trailer tape components wasted when a reel is exhausted.
+    #[serde(default)]
+    pub trailer_waste: u32,
+    /// Extra manual scrap for this lane, in components.
+    #[serde(default)]
+    pub scrap: u32,
 }
 
 impl Feeder {
-    /// Creates a feeder that is loaded to capacity.
+    /// Creates a feeder that is loaded to capacity and has no waste or scrap.
     pub fn new(id: impl Into<String>, package: impl Into<String>, pitch: f64, capacity: u32) -> Self {
-        Self { id: id.into(), package: package.into(), pitch, capacity, loaded: capacity }
+        Self {
+            id: id.into(),
+            package: package.into(),
+            pitch,
+            capacity,
+            loaded: capacity,
+            leader_waste: 0,
+            trailer_waste: 0,
+            scrap: 0,
+        }
+    }
+
+    /// Leader plus trailer waste charged to every reel of this lane.
+    pub fn per_reel_waste(&self) -> u32 {
+        self.leader_waste.saturating_add(self.trailer_waste)
+    }
+}
+
+/// One splice: a new reel is joined to the remaining tape at a placement step.
+///
+/// `sequence` is the 1-based step in the placement program. The splice is
+/// applied on the first board when that step is reached; the cumulative used
+/// quantity never resets. `leader_waste`, `trailer_waste` and `scrap` are charged
+/// once at the joint, on top of the lane's per-reel waste.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Splice {
+    /// Feeder lane that is spliced.
+    pub feeder: String,
+    /// 1-based placement program step at which the new reel is joined.
+    pub sequence: u32,
+    /// Additional leader waste at the joint.
+    #[serde(default)]
+    pub leader_waste: u32,
+    /// Additional trailer waste at the joint.
+    #[serde(default)]
+    pub trailer_waste: u32,
+    /// Manual scrap at the joint.
+    #[serde(default)]
+    pub scrap: u32,
+}
+
+impl Splice {
+    /// Creates a splice with no extra waste.
+    pub fn new(feeder: impl Into<String>, sequence: u32) -> Self {
+        Self { feeder: feeder.into(), sequence, leader_waste: 0, trailer_waste: 0, scrap: 0 }
+    }
+
+    /// Leader plus trailer waste charged once at the joint.
+    pub fn splice_waste(&self) -> u32 {
+        self.leader_waste.saturating_add(self.trailer_waste)
     }
 }
 
