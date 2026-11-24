@@ -634,7 +634,7 @@ Neither document is modified.
 ## export
 
 ```shell
-open-smt export <file> --format program|feeders|fai|json|md --out <path>
+open-smt export <file> --format program|feeders|fai|json|md|svg|pdf --out <path>
 ```
 
 | Format | Content |
@@ -644,6 +644,17 @@ open-smt export <file> --format program|feeders|fai|json|md --out <path>
 | `fai` | first-article inspection sheet CSV, one row per step with empty check columns |
 | `json` | the full report |
 | `md` | Markdown board, feeder, reflow and program tables |
+| `svg` | placement drawing as SVG: panel and board frames, rotated component rectangles, refdes/package/lane labels, legend, feeder table and title block |
+| `pdf` | the same placement drawing as one A4 landscape page fitted and centred, with Helvetica |
+
+The `svg` and `pdf` sheets use a millimetre `viewBox`; the SVG opens at 8 px/mm
+and the PDF maps 1 mm to 2.834646 pt before fitting. Component rectangles use a
+fixed 2.0 × 1.2 mm footprint because the document stores no body size, and a
+multi-board panel labels board 1 only. Labels are ASCII-only: non-ASCII text is
+written as `?` and reported under `losses` as `drawing/non-ascii-text`, while
+`drawing` reports the panel size, board/component/placement counts and the
+number of default footprints. An empty document still produces a framed sheet
+with its title block. Two exports of one document are byte-identical.
 
 These are export formats. `kicad`, `altium` and `odb` are still declared but
 unimplemented and exit with code `2`. The separate `import` command reads a
@@ -704,4 +715,6 @@ open-smt machine verify panel.osmt --program machine.csv --nozzles "0603=N1;QFN-
 open-smt changeover panel.osmt job-b.osmt
 open-smt export panel.osmt --format program --out program.csv
 open-smt export panel.osmt --format fai --out first-article.csv
+open-smt export panel.osmt --format svg --out panel.svg
+open-smt export panel.osmt --format pdf --out panel.pdf
 ```

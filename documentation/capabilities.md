@@ -33,6 +33,8 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | neutral machine program CSV with readback verification | ✅ supported |
 | feeder setup CSV | ✅ supported |
 | JSON / Markdown reports | ✅ supported |
+| SVG placement drawing (panel, components, labels, legend, title block) | ✅ supported (1:1 mm at 8 px/mm; fixed 2.0 × 1.2 mm footprint; ASCII-only labels) |
+| PDF placement drawing (same sheet, A4 landscape) | ✅ supported (fit to page, Helvetica; same fixed footprint and ASCII-only labels) |
 | paste aperture / stencil generation | ❌ not implemented |
 | vendor machine programs (Fuji, Yamaha, Juki, ASM) | ❌ not implemented |
 | line balancing | ✅ supported |
@@ -419,6 +421,36 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt component list panel.osmt
     ```
 
+25. **Placement drawings.** `export --format svg` and `export --format pdf` render
+    the stored board, panel, component and feeder data as a placement sheet. The
+    sheet contains the panel frame, one outlined board per panel instance with
+    its `B1…Bn` label, one rotated rectangle per component on every board,
+    reference-label and package/lane labels, a colour legend, a feeder lane
+    table and a title block. The title block records the document id, revision,
+    units, board/component/placement/feeder counts, the fixed footprint
+    assumption and the scale. Component rectangles are `2.0 × 1.2` mm
+    (`DEFAULT_COMPONENT_WIDTH_MM` by `DEFAULT_COMPONENT_HEIGHT_MM`) with the
+    stored clockwise rotation, because the model stores no body size; the
+    drawing reports that every component used this default. The lane tag follows
+    the current feeder allocation when it is valid and otherwise the first
+    feeder in document order that supplies the package. A multi-board panel
+    labels board 1 only to keep the sheet readable. Labels are ASCII-only: a
+    non-ASCII character becomes `?` and is reported as
+    `drawing/non-ascii-text` in the export `losses`; `drawing` reports the
+    geometry and counts. The SVG uses a millimetre `viewBox` and an
+    eight-pixel-per-millimetre `width`/`height`; the PDF is one A4 landscape
+    page (`/MediaBox [0 0 841.89 595.28]`) fitted and centred from the same
+    layout, using 2.834646 pt/mm before the fit factor, with Helvetica.
+    Coordinates are rounded to three decimals and no timestamp is written, so
+    two exports of one document are byte-identical. An invalid board or panel
+    reports `board/invalid` or `panel/invalid`; an empty document still writes a
+    framed sheet with its title block.
+
+    ```shell
+    open-smt export panel.osmt --format svg --out panel.svg
+    open-smt export panel.osmt --format pdf --out panel.pdf
+    ```
+
 ## KiCad PCB import
 
 `open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
@@ -568,7 +600,8 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/first_article.rs` | program-order rows with lane pitch, package material grouping and side totals, recorded revision, fixed checklist, empty document, feeder coverage propagation, CSV header and empty check columns, determinism, unchanged document |
 | `tests/machine_program.rs` | fixed header and program order, station/pitch/nozzle/speed fields, three-decimal canonical values, render-parse round trip, tampered field and reordered row mismatches, step-count mismatch, malformed files, empty document, invalid nozzle map, feeder coverage propagation, deterministic unchanged document, export-readback and verify-file paths |
 | `tests/heatmap.rs` | step placement and inbound travel time, package ordering with cumulative shares, per-side origin restart, equality with the default takt board time, empty document, feeder coverage propagation, determinism, unchanged document |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption, splice/scrap SDK edits, splice/scrap CLI commands and changeover smokes |
+| `tests/drawing.rs` | SVG panel/board/component/label/legend/title structure, XML escaping, rotated rectangle coordinates, byte-identical repeat renders, one-page A4 PDF with Helvetica and exact MediaBox, empty document, non-ASCII loss reporting, invalid board/panel codes, `svg`/`pdf` format parsing |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption, splice/scrap SDK edits, splice/scrap CLI commands, SVG/PDF drawing exports through the SDK and CLI, and changeover smokes |
 
 ## Limitations
 
@@ -656,3 +689,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   sized to the coordinates, components carry no height, and unknown columns are
   refused instead of ignored. Nets, feeders, panel arrays and reflow profiles
   are not read from CSV.
+- Placement drawings use a fixed `2.0 × 1.2` mm footprint because the model
+  stores no body size, and draw labels only on board 1 of a multi-board panel.
+  They are a placement reference, not a fabrication or assembly drawing, and
+  they replace non-ASCII label text with `?` (`drawing/non-ascii-text`).

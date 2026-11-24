@@ -25,8 +25,8 @@ projects/sites/homepage        static product site (VMZ)
    programs and feeder coverage. `schedule dual` assigns placement tasks to two
    lanes by cumulative task time and reports per-lane sequences and makespan.
 6. `reflow` evaluates the profile.
-7. `export` writes the program CSV, feeder CSV, JSON or Markdown through the same
-   atomic writer.
+7. `export` writes the program CSV, feeder CSV, JSON, Markdown or an SVG/PDF
+   placement drawing through the same atomic writer.
 
 Because the Node-API addon, the SDK and the CLI all call the same
 session, they cannot disagree about a program or an error code.
