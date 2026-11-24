@@ -406,7 +406,8 @@ impl OpenSmt {
         if request.clear_height && request.height.is_some() {
             return Err(SmtError::new("component/invalid", "component update cannot set and clear the height at once"));
         }
-        let Some(component) = document.components.iter_mut().find(|component| component.refdes == refdes) else {
+        let Some(component) = document.components.iter_mut().find(|component| component.refdes == refdes)
+        else {
             return Err(SmtError::new("component/unknown-refdes", format!("component `{refdes}` does not exist")));
         };
         if let Some(package) = request.package {
@@ -426,7 +427,8 @@ impl OpenSmt {
         }
         if request.clear_height {
             component.height = None;
-        } else if let Some(height) = request.height {
+        }
+        else if let Some(height) = request.height {
             component.height = Some(height);
         }
         self.persist(document)
@@ -465,7 +467,8 @@ impl OpenSmt {
         if request.is_empty() {
             return Err(SmtError::new("feeder/invalid", "feeder update needs at least one field"));
         }
-        let Some(feeder) = document.feeders.iter_mut().find(|feeder| feeder.id == id) else {
+        let Some(feeder) = document.feeders.iter_mut().find(|feeder| feeder.id == id)
+        else {
             return Err(SmtError::new("feeder/unknown-id", format!("feeder `{id}` does not exist")));
         };
         if let Some(package) = request.package {
@@ -527,7 +530,8 @@ impl OpenSmt {
     /// Removes a feeder and saves the document.
     pub fn remove_feeder(&mut self, id: &str) -> Result<DocumentSummary, SmtError> {
         let mut document = self.document()?.clone();
-        let Some(feeder) = document.feeders.iter().find(|feeder| feeder.id == id) else {
+        let Some(feeder) = document.feeders.iter().find(|feeder| feeder.id == id)
+        else {
             return Err(SmtError::new("feeder/unknown-id", format!("feeder `{id}` does not exist")));
         };
         let used = document.components.iter().any(|component| component.package == feeder.package);

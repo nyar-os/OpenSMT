@@ -94,7 +94,8 @@ impl DrawingSummary {
     pub fn losses(&self) -> Vec<DrawingLoss> {
         if self.dropped_characters == 0 {
             Vec::new()
-        } else {
+        }
+        else {
             vec![DrawingLoss { code: "drawing/non-ascii-text".to_string(), count: self.dropped_characters }]
         }
     }
@@ -541,7 +542,8 @@ fn push_pdf_panel(pdf: &mut Pdf, plan: &Plan, layout: &Layout) {
         }
     }
     for part in &plan.parts {
-        let Some((_, cx, cy)) = part.instances.iter().find(|(board, _, _)| *board == 1) else {
+        let Some((_, cx, cy)) = part.instances.iter().find(|(board, _, _)| *board == 1)
+        else {
             continue;
         };
         let label = part.feeder.as_deref().unwrap_or("-");
@@ -689,9 +691,11 @@ fn ascii(text: &str) -> (String, usize) {
     for character in text.chars() {
         if character.is_ascii() && !character.is_ascii_control() {
             escaped.push(character);
-        } else if matches!(character, '\n' | '\r' | '\t') {
+        }
+        else if matches!(character, '\n' | '\r' | '\t') {
             escaped.push(' ');
-        } else {
+        }
+        else {
             escaped.push('?');
             dropped += 1;
         }
@@ -736,9 +740,11 @@ impl Pdf {
         }
         let operator = if fill.is_some() && stroke.is_some() {
             "B"
-        } else if fill.is_some() {
+        }
+        else if fill.is_some() {
             "f"
-        } else {
+        }
+        else {
             "S"
         };
         self.content.push_str(&format!(
@@ -774,15 +780,18 @@ impl Pdf {
             let (px, py) = self.point(*x, *y);
             if index == 0 {
                 self.content.push_str(&format!("{px:.2} {py:.2} m "));
-            } else {
+            }
+            else {
                 self.content.push_str(&format!("{px:.2} {py:.2} l "));
             }
         }
         let operator = if fill.is_some() && stroke.is_some() {
             "h B"
-        } else if fill.is_some() {
+        }
+        else if fill.is_some() {
             "h f"
-        } else {
+        }
+        else {
             "h S"
         };
         self.content.push_str(&format!("{operator}\n"));

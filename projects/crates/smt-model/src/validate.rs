@@ -101,7 +101,8 @@ pub fn validate(document: &SmtDocument) -> ValidationReport {
                 "component/invalid",
                 format!("component `{}` has non-finite coordinates", component.refdes),
             ));
-        } else if component.x < 0.0
+        }
+        else if component.x < 0.0
             || component.y < 0.0
             || component.x > document.board.width
             || component.y > document.board.depth
@@ -119,7 +120,8 @@ pub fn validate(document: &SmtDocument) -> ValidationReport {
                 "component/invalid",
                 format!("component `{}` rotation must be between 0 and 360 degrees", component.refdes),
             ));
-        } else if !is_right_angle(component.rotation) {
+        }
+        else if !is_right_angle(component.rotation) {
             issues.push(Issue::warning(
                 "component/rotation",
                 format!("component `{}` rotation {} is not a multiple of 90 degrees", component.refdes, component.rotation),
@@ -142,7 +144,8 @@ pub fn validate(document: &SmtDocument) -> ValidationReport {
     for feeder in &document.feeders {
         if feeder.id.trim().is_empty() {
             issues.push(Issue::error("feeder/invalid", "a feeder id must be non-empty"));
-        } else if !feeder_ids.insert(feeder.id.as_str()) {
+        }
+        else if !feeder_ids.insert(feeder.id.as_str()) {
             issues.push(Issue::error("feeder/duplicate-id", format!("feeder `{}` is declared twice", feeder.id)));
         }
         if feeder.package.trim().is_empty() {

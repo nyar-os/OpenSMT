@@ -276,7 +276,8 @@ fn consume(remaining: &mut u64, demand: u64, short: &mut bool) {
     if *remaining < demand {
         *short = true;
         *remaining = 0;
-    } else {
+    }
+    else {
         *remaining -= demand;
     }
 }
