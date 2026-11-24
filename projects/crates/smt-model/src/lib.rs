@@ -39,6 +39,7 @@ mod changeover;
 mod component_list;
 mod consumption;
 mod csv_import;
+mod drawing;
 mod dual;
 mod error;
 mod export;
@@ -65,6 +66,10 @@ pub use crate::{
     changeover::{ChangeoverAction, ChangeoverKind, ChangeoverReport, DEFAULT_FEEDER_CHANGE_SECONDS, plan as plan_changeover},
     component_list::{ComponentListReport, ComponentPackage, ListedComponent, report as component_list_report},
     consumption::{ConsumptionReport, FeederConsumption, PackageConsumption, plan as plan_consumption},
+    drawing::{
+        DEFAULT_COMPONENT_HEIGHT_MM, DEFAULT_COMPONENT_WIDTH_MM, Drawing, DrawingLoss, DrawingSummary, PT_PER_MM,
+        SVG_PX_PER_MM, render_pdf, render_svg,
+    },
     dual::{
         DualLaneReport, DualLaneStrategy, DualLaneTask, LANES, LaneSchedule, LanesReport, MAX_LANES, MIN_LANES,
         plan_document_lanes, plan_dual_lane, plan_dual_lane_tasks, plan_dual_lane_tasks_with_strategy,
@@ -137,6 +142,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "machineProgramCsv": "supported",
     "json": "supported",
     "md": "supported",
+    "svg": "supported",
+    "pdf": "supported",
     "kicad": "unsupported",
     "altium": "unsupported",
     "odb": "unsupported"
@@ -162,6 +169,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "firstArticle": "repeats the placement program with the allocated lane pitch and a fixed four-item checklist; it records no inspection result and models no component polarity",
     "taktHeatmap": "attributes the analytical step time of the default machine model to each step, package and side; it models no acceleration, tape advance, vision or nozzle physics",
     "machineProgram": "neutral CSV interchange of the placement program with a readback check; it is not a Fuji, Yamaha, Juki or ASM dialect and takes nozzle ids only from a caller-supplied package map",
+    "svg": "one millimetre placement sheet at 8 px/mm; every component uses a fixed 2.0 x 1.2 mm footprint because the model stores no body size, labels are ASCII-only and a multi-board panel labels board 1 only",
+    "pdf": "one A4 landscape page fitted and centred from the same millimetre layout with Helvetica; the same fixed 2.0 x 1.2 mm footprint, ASCII-only labels and board-1 labels apply",
     "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }
 }"#;

@@ -20,6 +20,7 @@ use crate::{
     changeover::{self, ChangeoverReport},
     component_list::{self, ComponentListReport},
     consumption::{self, ConsumptionReport},
+    drawing::{self, DrawingLoss, DrawingSummary},
     dual::{self, DualLaneReport, DualLaneStrategy, LanesReport},
     export::{feeder_csv, first_article_csv, markdown, program_csv, write_atomic},
     feeder::{self, FeederLoadingReport},
@@ -79,6 +80,10 @@ pub enum ExportFormat {
     Json,
     /// The full report as Markdown.
     Md,
+    /// The placement drawing as SVG.
+    Svg,
+    /// The placement drawing as a one-page PDF.
+    Pdf,
 }
 
 impl ExportFormat {
@@ -90,6 +95,8 @@ impl ExportFormat {
             Self::FirstArticle => "fai",
             Self::Json => "json",
             Self::Md => "md",
+            Self::Svg => "svg",
+            Self::Pdf => "pdf",
         }
     }
 }
@@ -104,10 +111,12 @@ impl FromStr for ExportFormat {
             "fai" | "first-article" => Ok(Self::FirstArticle),
             "json" => Ok(Self::Json),
             "md" | "markdown" => Ok(Self::Md),
+            "svg" => Ok(Self::Svg),
+            "pdf" => Ok(Self::Pdf),
             "kicad" | "altium" | "odb" => Err(crate::not_implemented(&format!("`{value}` export"))),
             other => Err(SmtError::new(
                 "cli/unknown-format",
-                format!("unknown export format `{other}`; only program, feeders, fai, json or md is supported"),
+                format!("unknown export format `{other}`; only program, feeders, fai, json, md, svg or pdf is supported"),
             )),
         }
     }
@@ -125,6 +134,12 @@ pub struct ExportReport {
     pub files: Vec<String>,
     /// Number of bytes written.
     pub bytes: usize,
+    /// Aggregated losses of the written file, sorted by code; empty when none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub losses: Vec<DrawingLoss>,
+    /// Drawing counts; present only for `svg` and `pdf` exports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drawing: Option<DrawingSummary>,
 }
 
 /// Full report returned by [`OpenSmt::report`].
@@ -789,6 +804,8 @@ impl OpenSmt {
     /// Exports the open document and returns the created files.
     pub fn export(&self, format: ExportFormat, target: &Path) -> Result<ExportReport, SmtError> {
         let document = self.document()?;
+        let id = self.path.as_ref().and_then(|path| path.file_stem()).and_then(|value| value.to_str()).unwrap_or("document");
+        let mut summary = None;
         let text = match format {
             ExportFormat::Program => {
                 let feeders = place::allocate(document)?;
@@ -806,13 +823,26 @@ impl OpenSmt {
                 let reflow = reflow::evaluate(document)?;
                 markdown(document, &placement, &feeders, &reflow)
             }
+            ExportFormat::Svg => {
+                let drawing = drawing::render_svg(document, id)?;
+                summary = Some(drawing.summary);
+                drawing.text
+            }
+            ExportFormat::Pdf => {
+                let drawing = drawing::render_pdf(document, id)?;
+                summary = Some(drawing.summary);
+                drawing.text
+            }
         };
         write_atomic(target, &text)?;
+        let losses = summary.as_ref().map(DrawingSummary::losses).unwrap_or_default();
         Ok(ExportReport {
             format: format.as_str().to_string(),
             path: target.display().to_string(),
             files: vec![target.display().to_string()],
             bytes: text.len(),
+            losses,
+            drawing: summary,
         })
     }
 

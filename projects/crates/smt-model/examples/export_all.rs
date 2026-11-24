@@ -24,7 +24,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     session.add_feeder(Feeder::new("F2", "SOIC-8", 4.0, 500))?;
     session.add_feeder(Feeder::new("F3", "0805", 4.0, 3000))?;
 
-    for format in [ExportFormat::Program, ExportFormat::Feeders, ExportFormat::FirstArticle, ExportFormat::Json, ExportFormat::Md] {
+    for format in [
+        ExportFormat::Program,
+        ExportFormat::Feeders,
+        ExportFormat::FirstArticle,
+        ExportFormat::Json,
+        ExportFormat::Md,
+        ExportFormat::Svg,
+        ExportFormat::Pdf,
+    ] {
         let target = out.join(format!("demo.{}", format.as_str()));
         match session.export(format, &target) {
             Ok(report) => println!("OK {}: {} bytes -> {}", report.format, report.bytes, report.path),
