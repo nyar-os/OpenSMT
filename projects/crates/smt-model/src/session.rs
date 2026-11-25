@@ -35,6 +35,7 @@ use crate::{
     panel_fit::{self, PanelFitReport},
     panel_map::{self, PanelMapReport},
     paste::{self, PasteOptions, PasteReport},
+    pick_cycle::{self, PickCycleReport},
     place::{self, FeederReport, PlacementReport},
     reflow::{self, ReflowReport},
     reflow_window::{self, ReflowWindowLimits, ReflowWindowReport},
@@ -820,6 +821,17 @@ impl OpenSmt {
     /// shares. The document is never modified.
     pub fn heatmap(&self) -> Result<HeatmapReport, SmtError> {
         heatmap::heatmap(self.document()?)
+    }
+
+    /// Returns the read-only parallel pick-cycle grouping of the placement
+    /// program.
+    ///
+    /// Consecutive same-package picks on one side share a cycle of at most
+    /// `heads` picks; a package or side change starts a new cycle. `heads` must
+    /// be between 1 and 64, otherwise `pick-cycle/invalid`. The program is never
+    /// reordered and the document is never modified.
+    pub fn pick_cycle(&self, heads: u32) -> Result<PickCycleReport, SmtError> {
+        pick_cycle::plan(self.document()?, heads)
     }
 
     /// Writes the neutral machine program and reads it back for verification.

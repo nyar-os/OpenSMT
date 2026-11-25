@@ -43,6 +43,7 @@ import type {
     PanelRequest,
     PasteOptions,
     PasteReport,
+    PickCycleReport,
     PlacementReport,
     ReflowProfileRequest,
     ReflowReport,
@@ -310,6 +311,17 @@ export class SmtDocument {
     async taktHeatmap(): Promise<TaktHeatmapReport> {
         this.assertOpen();
         return service.taktHeatmap(this.state.path);
+    }
+
+    /**
+     * Returns the read-only parallel pick-cycle grouping of the placement
+     * program.
+     *
+     * An omitted `heads` keeps the default of four heads.
+     */
+    async pickCycle(heads = 4): Promise<PickCycleReport> {
+        this.assertOpen();
+        return service.pickCycle(this.state.path, heads);
     }
 
     /**

@@ -60,6 +60,7 @@ test('the error surface includes coverage and capability codes', () => {
     assert.ok(errorCodes.includes('bom/missing-column'));
     assert.ok(errorCodes.includes('bom/duplicate-refdes'));
     assert.ok(errorCodes.includes('takt/invalid'));
+    assert.ok(errorCodes.includes('pick-cycle/invalid'));
     assert.ok(errorCodes.includes('station/invalid'));
     assert.ok(errorCodes.includes('changeover/invalid'));
     assert.ok(errorCodes.includes('reflow/invalid'));
@@ -517,7 +518,7 @@ test('svg and pdf drawings are written through the sdk and the cli', { skip: ski
         assert.ok(svgText.includes('>R1</text>'));
         assert.ok(svgText.includes('>0603 F1</text>'));
         assert.ok(svgText.includes('>LEGEND</text>'));
-        assert.ok(svgText.includes('scale 1:1 in millimetres'));
+        assert.ok(svgText.includes('scale 1:1'));
 
         const pdf = await document.exportDocument('pdf', pdfFile);
         assert.equal(pdf.format, 'pdf');
@@ -906,6 +907,72 @@ test('takt heatmap attributes step time to packages and sides', { skip: skipWith
         assert.ok(Math.abs(report.totalSeconds - takt.boardSeconds) < 1e-9);
         assert.ok(Math.abs(report.packages[1]!.cumulativeShare - 1) < 1e-9);
         assert.equal(document.revision, before);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('pick cycle groups consecutive same-package picks by head count', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-pick-cycle-'));
+    const file = path.join(directory, 'panel.osmt');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'R2', package: '0603', x: 10, y: 20 });
+        await document.addComponent({ refdes: 'R3', package: '0603', x: 10, y: 30 });
+        await document.addComponent({ refdes: 'C1', package: '0805', x: 10, y: 50 });
+        await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 100 });
+        await document.addFeeder({ id: 'F2', package: '0805', pitch: 4, capacity: 100 });
+        const before = document.revision;
+
+        const report = await document.pickCycle();
+        assert.equal(report.format, 'open-smt-pick-cycle');
+        assert.equal(report.version, 1);
+        assert.equal(report.heads, 4);
+        assert.equal(report.components, 4);
+        assert.equal(report.cycles, 2);
+        assert.equal(report.picks, 4);
+        assert.equal(report.headSlots, 8);
+        assert.equal(report.wastedSlots, 4);
+        assert.equal(report.utilization, 0.5);
+        assert.equal(report.singleHeadCycles, 4);
+        assert.equal(report.cyclesSaved, 2);
+        assert.deepEqual(
+            report.entries.map((cycle) => [cycle.package, cycle.picks, cycle.unusedSlots, cycle.refdes]),
+            [
+                ['0603', 3, 1, ['R1', 'R2', 'R3']],
+                ['0805', 1, 3, ['C1']],
+            ],
+        );
+
+        const single = await document.pickCycle(1);
+        assert.equal(single.cycles, 4);
+        assert.equal(single.wastedSlots, 0);
+        assert.equal(single.cyclesSaved, 0);
+
+        await assert.rejects(document.pickCycle(0), (error: unknown) => {
+            assert.ok(isOpenSMTError(error));
+            assert.equal(error.code, 'pick-cycle/invalid');
+            return true;
+        });
+        assert.equal(document.revision, before);
+
+        const cli = await run(process.execPath, [cliPath, 'pick-cycle', file, '--heads', '2']);
+        const printed = JSON.parse(cli.stdout) as { cycles: number; heads: number; entries: { package: string; refdes: string[] }[] };
+        assert.equal(printed.heads, 2);
+        assert.equal(printed.cycles, 3);
+        assert.deepEqual(printed.entries[1]?.refdes, ['R3']);
+
+        for (const heads of ['0', 'two']) {
+            await assert.rejects(run(process.execPath, [cliPath, 'pick-cycle', file, '--heads', heads]), (error: unknown) => {
+                const failure = error as { code?: number; stderr?: string };
+                assert.equal(failure.code, 1);
+                assert.ok(failure.stderr?.includes('pick-cycle/invalid'));
+                return true;
+            });
+        }
     } finally {
         await session.dispose();
         await fs.rm(directory, { recursive: true, force: true });

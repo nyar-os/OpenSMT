@@ -44,6 +44,7 @@
             "reflow-window": "Compare the reflow profile with process-window limits",
             "takt": "Estimate cycle time and throughput",
             "takt-heatmap": "Report takt time shares by step, package and side",
+            "pick-cycle": "Group the placement program into parallel pick cycles by head count",
             "machine": "Export and verify a neutral machine program",
             "machine-export": "Write the machine program and verify the readback",
             "machine-verify": "Check a machine program file against the document",
@@ -110,7 +111,8 @@
             "min-gap": "Minimum acceptable body-to-body gap in millimetres",
             "max-height": "Maximum acceptable component height in millimetres",
             "nozzles": "Nozzle ids per package as \"package=nozzle;...\"",
-            "program": "Machine program CSV path"
+            "program": "Machine program CSV path",
+            "heads": "Number of placement heads, 1 to 64; default 4"
         },
         "error": {
             "missingArgument": "missing argument; usage: open-smt {usage}",
@@ -122,6 +124,7 @@
             "invalidBoards": "board count `{count}` must be a positive integer",
             "invalidScheduleBoards": "board count `{count}` must be a positive integer",
             "invalidNozzles": "nozzle map entry `{entry}` must be `package=nozzle`",
+            "invalidHeads": "head count `{count}` must be an integer from 1 to 64",
             "scrapRequired": "at least one of --leader-waste, --trailer-waste or --scrap is required"
         }
     }

@@ -41,6 +41,7 @@ import type {
     PanelRequest,
     PasteOptions,
     PasteReport,
+    PickCycleReport,
     PlacementReport,
     ReflowProfileRequest,
     ReflowReport,
@@ -330,6 +331,15 @@ export function takt(path: string, options: TaktOptions = {}): TaktReport {
 /** Returns the read-only takt bottleneck heat map. */
 export function taktHeatmap(path: string): TaktHeatmapReport {
     return decode<TaktHeatmapReport>(() => binding('takt heatmap').takt_heatmap(path));
+}
+
+/**
+ * Returns the read-only parallel pick-cycle grouping of the placement program.
+ *
+ * An omitted `heads` keeps the default of four heads.
+ */
+export function pickCycle(path: string, heads = 4): PickCycleReport {
+    return decode<PickCycleReport>(() => binding('pick cycle').pick_cycle(path, heads));
 }
 
 /**

@@ -48,6 +48,7 @@ export const errorCodes = [
     'schedule/invalid-lanes',
     'schedule/invalid',
     'takt/invalid',
+    'pick-cycle/invalid',
     'station/invalid',
     'changeover/invalid',
     'clearance/invalid',

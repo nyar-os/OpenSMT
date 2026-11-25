@@ -34,6 +34,8 @@
 //!   board side;
 //! * a read-only component height and clearance check;
 //! * a neutral machine program interchange with a readback check;
+//! * a read-only parallel pick-cycle grouping of the placement program by
+//!   nozzle and head count;
 //! * CSV program and feeder sheets, plus JSON and Markdown reports.
 //!
 //! Vendor machine programs are **not** implemented. See [`CAPABILITIES_JSON`].
@@ -63,6 +65,7 @@ mod packages;
 mod panel_fit;
 mod panel_map;
 mod paste;
+mod pick_cycle;
 mod place;
 mod reflow;
 mod reflow_window;
@@ -119,6 +122,10 @@ pub use crate::{
         map as panel_map, render_svg as render_panel_map_svg,
     },
     paste::{DEFAULT_FOIL_THICKNESS_MM, PasteOptions, PastePackage, PasteReport, csv as paste_csv, report as paste_report},
+    pick_cycle::{
+        DEFAULT_HEADS as DEFAULT_PICK_CYCLE_HEADS, MAX_HEADS as MAX_PICK_CYCLE_HEADS, PickCycle, PickCycleReport,
+        plan as pick_cycle_plan,
+    },
     place::{
         FeederReport, FeederUsage, HEAD_SPEED, PLACE_SECONDS, PackageUsage, PlacementEntry, PlacementReport,
         allocate as allocate_feeders, sequence as sequence_placement, sequence_with as sequence_placement_with,
@@ -164,6 +171,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "placementProgram": "supported",
     "pasteAperture": "supported",
     "machineProgram": "supported",
+    "pickCycle": "supported",
     "lineBalance": "supported",
     "dualLane": "supported",
     "multiLane": "supported",
@@ -227,6 +235,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "taktHeatmap": "attributes the analytical step time of the default machine model to each step, package and side; it models no acceleration, tape advance, vision or nozzle physics",
     "clearanceCheck": "body outlines come from the fixed package rules table, not footprint data; same-side bodies are compared as rotated bounding boxes, findings are warnings only and height checks apply only to components that store a height",
     "machineProgram": "neutral CSV interchange of the placement program with a readback check; it is not a Fuji, Yamaha, Juki or ASM dialect and takes nozzle ids only from a caller-supplied package map",
+    "pickCycle": "groups consecutive same-package picks of the nearest-neighbour program into cycles of at most the requested head count; the package stands in for the nozzle, a board-side change starts a new cycle, and no acceleration, vision, tape advance or nozzle physics is modelled",
     "svg": "one millimetre placement sheet at 8 px/mm; component bodies come from the package rules table with a 2.0 x 1.2 mm generic fallback, labels are ASCII-only, collision-free and drawn on board 1 only",
     "pdf": "one A4 landscape page fitted and centred from the same millimetre layout with Helvetica; the same rules-table body sizing, ASCII-only collision-free labels and board-1 labels apply",
     "feederSvg": "the feeder setup drawing is an SVG tape-bank sheet with one slot per lane in feeder id order, a load bar for the loaded share of the capacity and the assigned reference designators; it reads the same allocation as the feeders report and models no machine slot, tape direction or pitch constraint",

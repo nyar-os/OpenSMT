@@ -108,6 +108,23 @@ function scheduleBoardCount(options: ParsedOptions, ctx: CommandContext): number
     return boards;
 }
 
+/** Parses `--heads` and rejects zero, an out-of-range count or a non-number with `pick-cycle/invalid`. */
+function pickCycleHeads(options: ParsedOptions, ctx: CommandContext): number {
+    const raw = optionText(options, 'heads');
+    if (raw === undefined) {
+        return 4;
+    }
+    const trimmed = raw.trim();
+    if (!/^\d+$/.test(trimmed)) {
+        throw failure(ctx, 'pick-cycle/invalid', 'invalidHeads', { count: trimmed });
+    }
+    const heads = Number(trimmed);
+    if (heads < 1 || heads > 64) {
+        throw failure(ctx, 'pick-cycle/invalid', 'invalidHeads', { count: trimmed });
+    }
+    return heads;
+}
+
 function exportFormat(value: string, ctx: CommandContext): ExportFormat {
     if (value === 'program' || value === 'csv') {
         return 'program';
@@ -926,6 +943,17 @@ taktCommand
         guard(ctx, async () => {
             await editDocument(options, ctx, 'takt heatmap <file>', async (document) => {
                 print(await document.taktHeatmap());
+            });
+        }),
+    );
+
+cli
+    .command('pick-cycle', 'cli.cmd.pick-cycle')
+    .option('--heads <n>', 'cli.opt.heads')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'pick-cycle <file> [--heads <n>]', async (document) => {
+                print(await document.pickCycle(pickCycleHeads(options, ctx)));
             });
         }),
     );

@@ -44,6 +44,7 @@
             "reflow-window": "将回流焊曲线与工艺窗口限值对比",
             "takt": "估算节拍时间与产能",
             "takt-heatmap": "按工序、封装与贴装面报告节拍耗时占比",
+            "pick-cycle": "按贴片头数将贴装程序分组为并行拾放循环",
             "machine": "导出并校验机台可读的贴装程序",
             "machine-export": "写出贴装程序并回读校验",
             "machine-verify": "将贴装程序文件与文档逐字段核对",
@@ -110,7 +111,8 @@
             "min-gap": "可接受的最小体间间距（毫米）",
             "max-height": "可接受的最大元件高度（毫米）",
             "nozzles": "按封装指定吸嘴，格式 \"封装=吸嘴;...\"",
-            "program": "机台程序 CSV 路径"
+            "program": "机台程序 CSV 路径",
+            "heads": "贴片头数量，1 到 64，默认 4"
         },
         "error": {
             "missingArgument": "缺少参数；用法：open-smt {usage}",
@@ -122,6 +124,7 @@
             "invalidBoards": "板数 `{count}` 必须是正整数",
             "invalidScheduleBoards": "板数 `{count}` 必须是正整数",
             "invalidNozzles": "吸嘴映射项 `{entry}` 必须写成 `封装=吸嘴`",
+            "invalidHeads": "贴片头数 `{count}` 必须是 1 到 64 之间的整数",
             "scrapRequired": "至少需要指定 --leader-waste、--trailer-waste 或 --scrap 之一"
         }
     }

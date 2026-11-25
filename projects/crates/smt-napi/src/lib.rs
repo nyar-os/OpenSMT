@@ -17,9 +17,9 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 use serde_json::Value;
 use smt_model::{
-    Board, ClearanceLimits, Component, ComponentUpdate, DEFAULT_FEEDER_CHANGE_SECONDS, DEFAULT_SLOT_PITCH, DualLaneStrategy,
-    ExportFormat, Feeder, FeederUpdate, OpenSmt, Panel, PasteOptions, ReflowProfile, ReflowWindowLimits, Side, SmtError,
-    Splice, TaktOptions, Zone,
+    Board, ClearanceLimits, Component, ComponentUpdate, DEFAULT_FEEDER_CHANGE_SECONDS, DEFAULT_PICK_CYCLE_HEADS,
+    DEFAULT_SLOT_PITCH, DualLaneStrategy, ExportFormat, Feeder, FeederUpdate, OpenSmt, Panel, PasteOptions, ReflowProfile,
+    ReflowWindowLimits, Side, SmtError, Splice, TaktOptions, Zone,
 };
 use wae::{CallContext, Error, JsValue, Result, function, register_module};
 
@@ -705,6 +705,23 @@ fn takt_heatmap(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the read-only parallel pick-cycle grouping.
+///
+/// An optional second argument is the head count; an omitted count uses the
+/// default of four heads.
+#[function]
+fn pick_cycle(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let heads = match ctx.args().get(1) {
+        Some(_) => u32::try_from(argument(&ctx, 1)?.as_i64()?).unwrap_or(0),
+        None => DEFAULT_PICK_CYCLE_HEADS,
+    };
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.pick_cycle(heads).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Writes the neutral machine program and verifies the readback.
 ///
 /// The first path is the document and the second the target CSV; an optional
@@ -838,6 +855,7 @@ register_module![
     feeder_schedule,
     takt,
     takt_heatmap,
+    pick_cycle,
     machine_export,
     machine_verify,
     feeder_optimize,

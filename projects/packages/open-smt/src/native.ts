@@ -52,6 +52,7 @@ export interface NativeBinding {
     feeder_schedule(path: string, requestJson: string): string;
     takt(path: string, requestJson?: string): string;
     takt_heatmap(path: string): string;
+    pick_cycle(path: string, heads?: number): string;
     machine_export(path: string, target: string, requestJson?: string): string;
     machine_verify(path: string, source: string, requestJson?: string): string;
     feeder_optimize(path: string, requestJson?: string): string;

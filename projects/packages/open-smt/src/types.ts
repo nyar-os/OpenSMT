@@ -754,6 +754,49 @@ export interface TaktHeatmapReport {
     readonly steps: readonly HeatStep[];
 }
 
+/** One pick-and-place cycle of the grouped placement program. */
+export interface PickCycleEntry {
+    /** One-based cycle number in program order. */
+    readonly cycle: number;
+    /** Package the cycle picks; the package is the nozzle identity. */
+    readonly package: string;
+    /** Board side of every pick in the cycle. */
+    readonly side: Side;
+    /** Picks the cycle carries, never above the requested head count. */
+    readonly picks: number;
+    /** Reference designators in program order. */
+    readonly refdes: readonly string[];
+    /** Head slots the cycle leaves unused, `heads - picks`. */
+    readonly unusedSlots: number;
+}
+
+/** Read-only parallel pick-cycle report of one board. */
+export interface PickCycleReport {
+    readonly format: 'open-smt-pick-cycle';
+    readonly version: number;
+    readonly units: string;
+    /** Head count the grouping used. */
+    readonly heads: number;
+    /** Number of placement points on one board. */
+    readonly components: number;
+    /** Number of pick-and-place cycles the head count needs. */
+    readonly cycles: number;
+    /** Total picks; equal to `components`. */
+    readonly picks: number;
+    /** Head slots available across every cycle, `cycles × heads`. */
+    readonly headSlots: number;
+    /** `picks / headSlots`; zero for an empty document. */
+    readonly utilization: number;
+    /** Head slots no pick fills, `headSlots - picks`. */
+    readonly wastedSlots: number;
+    /** Cycles a single-head program needs; equal to `components`. */
+    readonly singleHeadCycles: number;
+    /** Cycles saved against a single-head program. */
+    readonly cyclesSaved: number;
+    /** Cycles in program order. */
+    readonly entries: readonly PickCycleEntry[];
+}
+
 /** Nozzle ids keyed by package for a machine program export. */
 export type NozzleMap = Readonly<Record<string, string>>;
 
