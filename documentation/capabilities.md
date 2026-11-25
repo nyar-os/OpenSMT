@@ -51,6 +51,8 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | panel coordinate map (single board to every panel instance) | ✅ supported |
 | first-article inspection sheet (JSON and CSV) | ✅ supported |
 | takt bottleneck heat map (step, package and side shares) | ✅ supported |
+| line-balance bar chart (SVG, bottleneck and target line) | ✅ supported (three-machine line; export formats carry no options; no changeover or staffing) |
+| nozzle and feeder setup table (SVG and paginated PDF) | ✅ supported (nozzle class and tape width derived from the package rules; no machine slot, tape direction or pitch limit) |
 | KiCad PCB (`.kicad_pcb`) import | ✅ supported |
 | CSV placement (`.csv`) import | ✅ supported |
 | Altium / ODB import | ❌ not implemented |
@@ -609,6 +611,49 @@ The machine-readable version is printed by `open-smt capabilities` and by
     ```shell
     open-smt export panel.osmt --format heatmap-svg --out heatmap.svg
     ```
+
+34. **Line-balance bar chart.** `export --format balance-svg` (also accepted as
+    `line-balance-svg`) plots the per-station cycle time of the `balance` report:
+    one bar per machine, the slowest station in the accent colour, its value
+    above the bar, a dashed average target line and a y axis in seconds with
+    tick labels. The chart always balances across three machines because export
+    formats carry no options; the title block states that assumption. It fails
+    with the same `board/invalid` code as the report. Text is ASCII-only and
+    dropped characters are reported as `balance/non-ascii-text` in the export
+    `losses`. The render is deterministic and byte-identical on repeat and never
+    changes the document.
+
+    ```shell
+    open-smt export line.osmt --format balance-svg --out balance.svg
+    ```
+
+35. **Nozzle and feeder setup table.** `export --format setup-svg` (also
+    accepted as `setup-sheet-svg`) and `setup-pdf` (`setup-sheet-pdf`) render the
+    allocation as a table: slot, lane, part number, nozzle, tape width in mm,
+    loaded/capacity quantity, assigned count and reference designators. The
+    document has no nozzle or tape-width field, so the nozzle class is derived
+    from the package family and body length and the tape width from the family;
+    the page header says so. Columns share fixed left edges and rows alternate a
+    light fill. Long tables continue on further pages with a repeated header and
+    `page N of M`; the SVG stacks framed pages, the PDF emits one A4 landscape
+    page per chunk. It fails with `feeder/missing` or `feeder/capacity` like the
+    feeders report. Text is ASCII-only and dropped characters are reported as
+    `setup/non-ascii-text` in the export `losses`. The render is deterministic
+    and never changes the document.
+
+    ```shell
+    open-smt export panel.osmt --format setup-svg --out setup.svg
+    open-smt export panel.osmt --format setup-pdf --out setup.pdf
+    ```
+
+## Sheet conventions
+
+Every generated sheet has a drawing frame, a title block with the drawing name,
+drawing number, work order (the document id), units, scale and face, and margins
+of at least 8 % of the sheet width. Bottom-side geometry is mirrored about the X
+axis and the face is stated in the title block. Labels are placed so that they
+avoid pads, bodies and the other labels, and legends only list styles the sheet
+actually draws.
 
 ## KiCad PCB import
 

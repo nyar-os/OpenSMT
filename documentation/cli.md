@@ -704,7 +704,7 @@ Neither document is modified.
 ## export
 
 ```shell
-open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|stencil-svg|stencil-pdf|feeder-svg|sequence-svg|sequence-pdf|reflow-svg|panel-svg|heatmap-svg --out <path>
+open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|stencil-svg|stencil-pdf|feeder-svg|sequence-svg|sequence-pdf|reflow-svg|panel-svg|heatmap-svg|balance-svg|setup-svg|setup-pdf --out <path>
 ```
 
 | Format | Content |
@@ -725,6 +725,9 @@ open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|sten
 | `reflow-svg` | reflow time-temperature drawing as SVG: the linear-ramp profile polyline over a time axis, ambient/liquidus/peak reference lines, dashed zone boundaries with zone names and seconds, a peak marker and a title block |
 | `panel-svg` | panel map drawing as SVG: the panel outline, every board instance numbered row-major, each component as a side-coloured dot in panel coordinates and an origin cross |
 | `heatmap-svg` | takt bottleneck heat map drawing as SVG: one step dot per placement on the board outline, coloured and sized by its share of the board time, plus a Pareto column ranking the packages |
+| `balance-svg` | line-balance bar chart as SVG: one cycle-time bar per station, the bottleneck highlighted, a dashed average target line and a seconds axis (always three machines) |
+| `setup-svg` | nozzle and feeder setup table as paginated SVG: slot, lane, part number, nozzle, tape width, quantity, assigned count and reference designators |
+| `setup-pdf` | the same setup table as a paginated A4 landscape PDF with a repeated header and `page N of M` |
 
 The `svg` and `pdf` sheets use a millimetre `viewBox`; the SVG opens at 8 px/mm
 and the PDF maps 1 mm to 2.834646 pt before fitting. Component bodies take their
@@ -760,6 +763,16 @@ sheet runs the same allocation and sequence as the `takt heatmap` report, so
 it fails with `feeder/missing` or `feeder/capacity` the same way; its
 non-ASCII losses are reported as `heatmap/non-ascii-text`. All three are
 byte-identical on repeat and the `drawing` summary field is absent.
+
+The `balance-svg` sheet (also accepted as `line-balance-svg`) plots the same
+three-machine balance report and fails with `board/invalid` the same way; its
+non-ASCII losses are reported as `balance/non-ascii-text`. The `setup-svg` and
+`setup-pdf` sheets (also accepted as `setup-sheet-svg` and `setup-sheet-pdf`)
+read the same allocation as the `feeders` report, derive the nozzle class and
+tape width from the package rules and report losses as `setup/non-ascii-text`.
+Both are byte-identical on repeat. Every sheet has a drawing frame, a title
+block with name, drawing number, work order, units, scale and face, and margins
+of at least 8 % of the width; bottom-side geometry is mirrored about the X axis.
 
 These are export formats. `kicad`, `altium` and `odb` are still declared but
 unimplemented and exit with code `2`. The separate `import` command reads a
