@@ -296,8 +296,6 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<PanelMapDrawing, S
     let scale = (plot_w / report.panel_width).min(130.0 / report.panel_depth);
     let draw_w = report.panel_width * scale;
     let draw_h = report.panel_depth * scale;
-    let width = plot_x + plot_w + drawing::DRAW_MARGIN_MM;
-    let content_bottom = plot_y + draw_h + 6.0;
     let px = |x: f64| plot_x + x * scale;
     let py = |y: f64| plot_y + y * scale;
 
@@ -385,7 +383,11 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<PanelMapDrawing, S
         drawing::hex(drawing::MUTED)
     ));
 
-    let text = drawing::render_sheet((0.0, 0.0, width, content_bottom), &svg, &title_text(document, &report, &id, &units));
+    let text = drawing::render_sheet(
+        (7.5, 7.5, plot_x + draw_w, plot_y + draw_h + 0.5),
+        &svg,
+        &title_text(document, &report, &id, &units),
+    );
     let summary = PanelMapDrawingSummary {
         units,
         rows: report.rows,

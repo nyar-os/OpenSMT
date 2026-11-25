@@ -69,7 +69,6 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
     let plot_y = 26.0;
     let plot_w = 170.0;
     let plot_h = 100.0;
-    let width = plot_x + plot_w + 12.0;
     let content_bottom = plot_y + plot_h + 24.0;
 
     let target = report.total_seconds / MACHINES as f64;
@@ -227,7 +226,11 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
         drawing::hex(drawing::INK)
     ));
 
-    let text = drawing::render_sheet((0.0, 0.0, width, content_bottom), &svg, &title_text(document, &report, &id, &units));
+    let text = drawing::render_sheet(
+        (12.0, 12.0, plot_x + plot_w + 2.0, content_bottom - 8.0),
+        &svg,
+        &title_text(document, &report, &id, &units),
+    );
 
     let summary = LineBalanceSummary {
         units,

@@ -100,7 +100,8 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<FeederDrawing, Smt
     push_svg_header(&mut body, &plan, &layout);
     push_svg_lanes(&mut body, &plan, &layout);
     push_svg_notes(&mut body, &plan, &layout);
-    let content = (0.0, 0.0, layout.width, layout.content_bottom);
+    let content =
+        (drawing::DRAW_MARGIN_MM, drawing::DRAW_MARGIN_MM, drawing::DRAW_MARGIN_MM + CONTENT_MM, layout.content_bottom);
     let text = drawing::render_sheet(content, &body, &title_text(&plan, "A4 landscape"));
     Ok(FeederDrawing { text, summary: plan.summary })
 }
@@ -155,7 +156,6 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
 }
 
 struct Layout {
-    width: f64,
     rows_y: f64,
     notes_y: f64,
     content_bottom: f64,
@@ -166,12 +166,11 @@ impl Layout {
         let rows_y = drawing::DRAW_MARGIN_MM + 22.0;
         let rows_height = plan.lanes.iter().map(|lane| ROW_MM + wrapped_lines(&lane.refdes) as f64 * LINE_MM).sum::<f64>();
         let notes_y = if plan.lanes.is_empty() { rows_y + 8.0 } else { rows_y + rows_height + 6.0 };
-        let width = 2.0 * drawing::DRAW_MARGIN_MM + CONTENT_MM;
         // The notes band sits directly under the table; the content ends with
         // the last unassigned reference line instead of trailing white space.
         let unassigned_lines = if plan.unassigned.is_empty() { 1 } else { wrap(&plan.unassigned).len() };
         let content_bottom = notes_y + 8.0 + unassigned_lines as f64 * 3.2;
-        Self { width, rows_y, notes_y, content_bottom }
+        Self { rows_y, notes_y, content_bottom }
     }
 }
 

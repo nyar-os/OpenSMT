@@ -108,7 +108,11 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ConsumptionDrawing
     push_timeline(&mut svg, &report, MARGIN, timeline_top, LABEL_W + CHART_W);
     push_legend(&mut svg, MARGIN, timeline_top + timeline_h + 2.0);
     svg.push_str("  </g>\n");
-    let text = drawing::render_sheet((0.0, 0.0, width, content_bottom), &svg, &title_text(&report, id, "A4 landscape"));
+    let text = drawing::render_sheet(
+        (MARGIN, MARGIN, width - MARGIN + 2.0, content_bottom - 8.0),
+        &svg,
+        &title_text(&report, id, "A4 landscape"),
+    );
     Ok(ConsumptionDrawing { text, summary })
 }
 

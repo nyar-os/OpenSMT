@@ -230,7 +230,8 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<StencilDrawing, Sm
     push_svg_board(&mut body, &plan);
     push_svg_legend(&mut body, &layout);
     push_svg_rules(&mut body, &plan, &layout);
-    let content = (0.0, 0.0, layout.width, layout.content_bottom);
+    let content =
+        (drawing::DRAW_MARGIN_MM, drawing::DRAW_MARGIN_MM, layout.width - drawing::DRAW_MARGIN_MM, layout.content_bottom);
     let text = drawing::render_sheet(content, &body, &title_text(&plan, "A4 landscape"));
     Ok(StencilDrawing { text, summary: plan.summary })
 }

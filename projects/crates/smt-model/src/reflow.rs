@@ -202,7 +202,6 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
     let plot_y = drawing::DRAW_MARGIN_MM + 18.0;
     let plot_w = 175.0;
     let plot_h = 110.0;
-    let width = plot_x + plot_w + drawing::DRAW_MARGIN_MM;
     let content_bottom = plot_y + plot_h + 22.0;
 
     let total = report.total_seconds.max(1e-9);
@@ -363,7 +362,11 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
         drawing::hex(drawing::BOTTOM_EDGE)
     ));
 
-    let text = drawing::render_sheet((0.0, 0.0, width, content_bottom), &svg, &title_text(document, &report, &id, &units));
+    let text = drawing::render_sheet(
+        (6.0, 6.0, plot_x + plot_w + 2.0, content_bottom - 3.0),
+        &svg,
+        &title_text(document, &report, &id, &units),
+    );
     let summary = ReflowDrawingSummary {
         units,
         temperature_unit: report.temperature_unit.clone(),

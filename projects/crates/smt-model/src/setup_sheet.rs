@@ -35,6 +35,10 @@ const FOOTER_HEIGHT_MM: f64 = 22.0;
 const TITLE_BAR_MM: f64 = 30.0;
 /// Height of the table header row, in millimetres.
 const TABLE_HEAD_MM: f64 = 6.0;
+/// Body font size of the SVG table, in millimetres.
+const SETUP_FONT_MM: f64 = 3.3;
+/// Header font size of the SVG table, in millimetres.
+const SETUP_HEAD_FONT_MM: f64 = 2.8;
 
 /// Counts of a rendered setup sheet.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -267,22 +271,6 @@ fn push_page(svg: &mut String, plan: &Plan, page: usize, offset_y: f64) {
         drawing::number(title_top + TITLE_BAR_MM - inner),
         drawing::hex(drawing::PANEL_EDGE)
     ));
-    out.push_str(&format!(
-        "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"4.6\" font-weight=\"bold\" fill=\"#{}\">SMT SETUP SHEET</text>\n",
-        drawing::number(inner + 4.0),
-        drawing::number(inner + 8.0),
-        drawing::hex(drawing::INK)
-    ));
-    out.push_str(&format!(
-        "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" fill=\"#{}\">nozzle and feeder schedule | nozzle class and tape width derived from the package rules</text>\n",
-        drawing::number(inner + 4.0),
-        drawing::number(inner + 13.2),
-        drawing::hex(drawing::MUTED)
-    ));
-    // The table sits right under the header; its rows grow with the free page
-    // height so a short schedule does not leave a band of white space between
-    // the heading and the first row.
-    let table_top = inner + 17.0;
     let rows: Vec<Vec<String>> = rows_of(plan, page)
         .iter()
         .enumerate()
@@ -299,9 +287,30 @@ fn push_page(svg: &mut String, plan: &Plan, page: usize, offset_y: f64) {
             ]
         })
         .collect();
+    // The header and the table form one block. It grows with the free page
+    // height (rows are capped so a four-row schedule stays a table, not four
+    // banners) and is centred vertically so the top and bottom margins match.
     let row_count = rows.len().max(1) as f64;
-    let available = title_top - 4.0 - table_top - TABLE_HEAD_MM;
-    let row_height = (available / row_count).clamp(ROW_HEIGHT_MM, 20.0);
+    let area_bottom = title_top - 4.0;
+    let available = area_bottom - (inner + 17.0) - TABLE_HEAD_MM;
+    let row_height = (available / row_count).clamp(ROW_HEIGHT_MM, 26.0);
+    let table_height = TABLE_HEAD_MM + row_count * row_height;
+    let block_height = 17.0 + table_height;
+    let offset = ((area_bottom - inner - block_height) / 2.0).max(0.0);
+    let header_y = inner + offset;
+    let table_top = header_y + 17.0;
+    out.push_str(&format!(
+        "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"4.6\" font-weight=\"bold\" fill=\"#{}\">SMT SETUP SHEET</text>\n",
+        drawing::number(inner + 4.0),
+        drawing::number(header_y + 8.0),
+        drawing::hex(drawing::INK)
+    ));
+    out.push_str(&format!(
+        "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.8\" fill=\"#{}\">nozzle and feeder schedule | nozzle class and tape width derived from the package rules</text>\n",
+        drawing::number(inner + 4.0),
+        drawing::number(header_y + 13.2),
+        drawing::hex(drawing::MUTED)
+    ));
     let table = drawing::Table::new(
         &[
             ("SLOT", drawing::Align::Right),
@@ -314,9 +323,10 @@ fn push_page(svg: &mut String, plan: &Plan, page: usize, offset_y: f64) {
             ("REFERENCE DESIGNATORS", drawing::Align::Left),
         ],
         rows,
-        drawing::FONT_TABLE,
+        SETUP_FONT_MM,
         4.0,
     )
+    .with_head_size(SETUP_HEAD_FONT_MM)
     .with_head(TABLE_HEAD_MM)
     .with_row(row_height)
     .fill_last(content_w - 8.0);
@@ -325,7 +335,7 @@ fn push_page(svg: &mut String, plan: &Plan, page: usize, offset_y: f64) {
         out.push_str(&format!(
             "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.9\" fill=\"#{}\">no feeder lanes declared</text>\n",
             drawing::number(inner + 4.0),
-            drawing::number(table_top + 10.0),
+            drawing::number(table_top + 12.0),
             drawing::hex(drawing::MUTED)
         ));
     }

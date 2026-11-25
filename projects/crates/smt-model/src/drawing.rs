@@ -76,7 +76,7 @@ pub(crate) const LINE_ADVANCE: f64 = 1.38;
 
 /// Largest uniform enlargement applied when a drawing is smaller than the
 /// sheet, so a sparse document never blows its text up to poster size.
-const SHEET_MAX_SCALE: f64 = 1.25;
+const SHEET_MAX_SCALE: f64 = 1.35;
 
 /// Composes one fixed A4 landscape sheet around a body drawn in the body's own
 /// millimetre coordinates.
@@ -526,6 +526,8 @@ pub(crate) struct Table {
     pub(crate) row: f64,
     /// Height of the header row in millimetres.
     pub(crate) head: f64,
+    /// Header font size in millimetres.
+    pub(crate) head_size: f64,
 }
 
 impl Table {
@@ -547,7 +549,7 @@ impl Table {
             columns.push(((*header).to_string(), *align));
             widths.push(width);
         }
-        Self { columns, widths, rows, size, gap, row: size * 1.55, head: FONT_TABLE_HEAD * 2.4 }
+        Self { columns, widths, rows, size, gap, row: size * 1.55, head: FONT_TABLE_HEAD * 2.4, head_size: FONT_TABLE_HEAD }
     }
 
     /// Sets the row height in millimetres.
@@ -558,7 +560,27 @@ impl Table {
 
     /// Sets the header row height independently of the data rows.
     pub(crate) fn with_head(mut self, head: f64) -> Self {
-        self.head = head.max(FONT_TABLE_HEAD * 1.8);
+        self.head = head.max(self.head_size * 1.8);
+        self
+    }
+
+    /// Sets the header font size and re-measures the columns, so the headers
+    /// keep their own width when the body text grows.
+    pub(crate) fn with_head_size(mut self, size: f64) -> Self {
+        self.head_size = size;
+        self.head = self.head.max(size * 1.8);
+        self.widths = self
+            .columns
+            .iter()
+            .enumerate()
+            .map(|(index, (header, _))| {
+                self.rows
+                    .iter()
+                    .filter_map(|row| row.get(index))
+                    .map(|value| text_width(value, self.size))
+                    .fold(text_width(header, size), f64::max)
+            })
+            .collect();
         self
     }
 
@@ -626,8 +648,8 @@ impl Table {
             svg.push_str(&format!(
                 "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" fill=\"#{}\">{}</text>\n",
                 number(offset),
-                number(head / 2.0 + FONT_TABLE_HEAD * 0.35),
-                number(FONT_TABLE_HEAD),
+                number(head / 2.0 + self.head_size * 0.35),
+                number(self.head_size),
                 hex(MUTED),
                 escape_xml(header)
             ));
@@ -676,7 +698,7 @@ impl Table {
         let head = self.head;
         let mut offset = 0.0;
         for (index, (header, _)) in self.columns.iter().enumerate() {
-            pdf.text(x + offset, y + head / 2.0 + FONT_TABLE_HEAD * 0.35, FONT_TABLE_HEAD, MUTED, header);
+            pdf.text(x + offset, y + head / 2.0 + self.head_size * 0.35, self.head_size, MUTED, header);
             offset += self.widths[index] + self.gap;
         }
         for (row_index, row) in self.rows.iter().enumerate() {
