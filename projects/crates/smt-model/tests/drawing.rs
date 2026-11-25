@@ -77,10 +77,10 @@ fn every_svg_fill_and_stroke_is_a_valid_hex_color() {
         assert!(digits.chars().all(|character| character.is_ascii_hexdigit()), "invalid color `{color}`");
     }
     // The component bodies must carry the legend colours, not decimal triples.
-    assert!(colors.contains(&"#dbebff".to_string()), "top fill missing from {colors:?}");
-    assert!(colors.contains(&"#1c4fd9".to_string()), "top edge missing from {colors:?}");
-    assert!(colors.contains(&"#ffeddb".to_string()), "bottom fill missing from {colors:?}");
-    assert!(colors.contains(&"#c2400d".to_string()), "bottom edge missing from {colors:?}");
+    assert!(colors.iter().any(|color| color == "#dbebff"), "top fill missing from {colors:?}");
+    assert!(colors.iter().any(|color| color == "#1c4fd9"), "top edge missing from {colors:?}");
+    assert!(colors.iter().any(|color| color == "#ffeddb"), "bottom fill missing from {colors:?}");
+    assert!(colors.iter().any(|color| color == "#c2400d"), "bottom edge missing from {colors:?}");
 }
 
 #[test]
