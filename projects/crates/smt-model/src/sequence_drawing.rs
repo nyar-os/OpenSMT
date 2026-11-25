@@ -79,13 +79,22 @@ struct Step {
     side: Side,
 }
 
+struct StepLabel {
+    index: u32,
+    refdes: String,
+    x: f64,
+    y: f64,
+}
+
 struct Plan {
     id: String,
     units: String,
     revision: u32,
     board_width: f64,
     board_depth: f64,
+    boards: u32,
     steps: Vec<Step>,
+    labels: Vec<StepLabel>,
     summary: SequenceDrawingSummary,
 }
 
@@ -121,7 +130,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<SequenceDrawing, S
         number(layout.width),
         number(layout.height)
     ));
-    push_svg_header(&mut svg);
+    push_svg_header(&mut svg, &plan);
     push_svg_frame(&mut svg, &plan, &layout);
     push_svg_routes(&mut svg, &plan, &layout);
     push_svg_side(&mut svg, &plan, &layout);
@@ -142,7 +151,7 @@ pub fn render_pdf(document: &SmtDocument, id: &str) -> Result<SequenceDrawing, S
     let origin_y = (PDF_PAGE_HEIGHT - layout.height * scale) / 2.0;
     let mut pdf = Pdf { content: String::new(), height: layout.height, scale, origin_x, origin_y };
     pdf.text(DRAW_MARGIN_MM, DRAW_MARGIN_MM + 4.0, 3.2, INK, "PICK AND PLACE SEQUENCE");
-    pdf.text(DRAW_MARGIN_MM, DRAW_MARGIN_MM + 8.6, 2.0, MUTED, "nozzle routes in program order, one route per side");
+    pdf.text(DRAW_MARGIN_MM, DRAW_MARGIN_MM + 8.6, 2.0, MUTED, &subtitle(&plan));
     push_pdf_frame(&mut pdf, &plan, &layout);
     push_pdf_routes(&mut pdf, &plan, &layout);
     push_pdf_side(&mut pdf, &plan, &layout);
@@ -166,6 +175,10 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
     }
     let top_steps = steps.iter().filter(|step| step.side == Side::Top).count() as u32;
     let bottom_steps = steps.iter().filter(|step| step.side == Side::Bottom).count() as u32;
+    // Step labels are placed once, in sheet coordinates, with collision
+    // avoidance so that dense routes never overlap each other, a marker or the
+    // origin note. A label that finds no free slot is dropped.
+    let labels = place_labels(&steps);
     let summary = SequenceDrawingSummary {
         units: units.clone(),
         board_width: document.board.width,
@@ -182,9 +195,55 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
         revision: document.revision,
         board_width: document.board.width,
         board_depth: document.board.depth,
+        boards: program.board_count,
         steps,
+        labels,
         summary,
     })
+}
+
+/// Places one step label per marker, in sheet coordinates, skipping a label
+/// whose candidate boxes all collide with a marker, the origin note or an
+/// already accepted label. Candidate offsets are tried in a fixed order so the
+/// result is deterministic.
+fn place_labels(steps: &[Step]) -> Vec<StepLabel> {
+    let frame_x = DRAW_MARGIN_MM;
+    let frame_y = DRAW_MARGIN_MM + HEADER_HEIGHT_MM;
+    let centre = |step: &Step| (frame_x + step.x, frame_y + step.y);
+    let mut occupied: Vec<drawing::Box4> = steps
+        .iter()
+        .map(|step| {
+            let (x, y) = centre(step);
+            (x - STEP_RADIUS_MM, y - STEP_RADIUS_MM, x + STEP_RADIUS_MM, y + STEP_RADIUS_MM)
+        })
+        .collect();
+    let origin_width = drawing::text_width("ORIGIN (0,0)", 1.8);
+    occupied.push((frame_x + 2.0, frame_y + 1.8, frame_x + 2.0 + origin_width, frame_y + 3.6));
+    let mut labels = Vec::with_capacity(steps.len());
+    for step in steps {
+        let (x, y) = centre(step);
+        let text = format!("{} {}", step.index, step.refdes);
+        let width = drawing::text_width(&text, 1.7);
+        let candidates: [(f64, f64); 8] = [
+            (x + 1.6, y - 1.4),
+            (x + 1.6, y + 2.6),
+            (x - 1.6 - width, y - 1.4),
+            (x - 1.6 - width, y + 2.6),
+            (x + 1.6, y - 3.6),
+            (x + 1.6, y + 4.8),
+            (x - 1.6 - width, y - 3.6),
+            (x - 1.6 - width, y + 4.8),
+        ];
+        for (lx, ly) in candidates {
+            let box_ = (lx, ly - 1.7, lx + width, ly);
+            if !drawing::collides(&box_, &occupied) {
+                occupied.push(box_);
+                labels.push(StepLabel { index: step.index, refdes: step.refdes.clone(), x: lx, y: ly });
+                break;
+            }
+        }
+    }
+    labels
 }
 
 impl Layout {
@@ -210,7 +269,17 @@ const SIDE_HEIGHT_MM: f64 = 46.0;
 /// Height of the sheet header above the board frame, in millimetres.
 const HEADER_HEIGHT_MM: f64 = 12.0;
 
-fn push_svg_header(svg: &mut String) {
+/// Sheet subtitle: the routes are per board, scaled by the panel count.
+fn subtitle(plan: &Plan) -> String {
+    if plan.boards > 1 {
+        format!("routes in program order, one route per side; per board (x{} on the panel)", plan.boards)
+    }
+    else {
+        "routes in program order, one route per side".to_string()
+    }
+}
+
+fn push_svg_header(svg: &mut String, plan: &Plan) {
     svg.push_str(&format!(
         "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.2\" font-weight=\"bold\" fill=\"#{}\">PICK AND PLACE SEQUENCE</text>\n",
         number(DRAW_MARGIN_MM),
@@ -218,10 +287,11 @@ fn push_svg_header(svg: &mut String) {
         hex(INK)
     ));
     svg.push_str(&format!(
-        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">nozzle routes in program order, one route per side</text>\n",
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">{}</text>\n",
         number(DRAW_MARGIN_MM),
         number(DRAW_MARGIN_MM + 8.6),
-        hex(MUTED)
+        hex(MUTED),
+        drawing::escape_xml(&subtitle(plan))
     ));
 }
 
@@ -275,15 +345,17 @@ fn push_svg_routes(svg: &mut String, plan: &Plan, layout: &Layout) {
                 hex(fill),
                 hex(edge)
             ));
-            svg.push_str(&format!(
-                "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.7\" fill=\"#{}\">{} {}</text>\n",
-                number(x + 1.6),
-                number(y - 1.4),
-                hex(INK),
-                step.index,
-                drawing::escape_xml(&step.refdes)
-            ));
         }
+    }
+    for label in &plan.labels {
+        svg.push_str(&format!(
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.7\" fill=\"#{}\">{} {}</text>\n",
+            number(label.x),
+            number(label.y),
+            hex(INK),
+            label.index,
+            drawing::escape_xml(&label.refdes)
+        ));
     }
     svg.push_str(&format!(
         "  <path d=\"M {} {} l 2.4 2.4 M {} {} l 2.4 -2.4\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
@@ -384,15 +456,16 @@ fn push_svg_side(svg: &mut String, plan: &Plan, layout: &Layout) {
 }
 
 fn title_lines(plan: &Plan, scale_note: &str) -> Vec<String> {
+    let steps_line = format!(
+        "{} step(s) | top {} | bottom {} | travel {} mm",
+        plan.summary.steps,
+        plan.summary.top_steps,
+        plan.summary.bottom_steps,
+        number(plan.summary.travel_length)
+    );
     vec![
         format!("OpenSMT pick-and-place sequence drawing | {} | revision {} | units {}", plan.id, plan.revision, plan.units),
-        format!(
-            "{} step(s) | top {} | bottom {} | travel {} mm",
-            plan.summary.steps,
-            plan.summary.top_steps,
-            plan.summary.bottom_steps,
-            number(plan.summary.travel_length)
-        ),
+        if plan.boards > 1 { format!("{steps_line} | per board (x{} on the panel)", plan.boards) } else { steps_line },
         "routes follow the default nearest-neighbour program; each side starts at the machine origin".to_string(),
         scale_note.to_string(),
     ]
@@ -444,9 +517,14 @@ fn push_pdf_routes(pdf: &mut Pdf, plan: &Plan, layout: &Layout) {
             let x = layout.frame_x + step.x;
             let y = layout.frame_y + step.y;
             pdf.marker(x, y, STEP_RADIUS_MM, fill, edge);
-            pdf.text(x + 1.6, y - 1.4, 1.7, INK, &format!("{} {}", step.index, step.refdes));
         }
     }
+    for label in &plan.labels {
+        pdf.text(label.x, label.y, 1.7, INK, &format!("{} {}", label.index, label.refdes));
+    }
+    // The same ORIGIN cross the SVG sheet draws at the machine origin.
+    pdf.line(layout.frame_x - 1.2, layout.frame_y - 1.2, layout.frame_x + 1.2, layout.frame_y + 1.2, INK, 0.3);
+    pdf.line(layout.frame_x - 1.2, layout.frame_y + 1.2, layout.frame_x + 1.2, layout.frame_y - 1.2, INK, 0.3);
     pdf.text(layout.frame_x + 2.0, layout.frame_y + 3.6, 1.8, MUTED, "ORIGIN (0,0)");
 }
 

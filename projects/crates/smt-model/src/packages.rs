@@ -211,7 +211,9 @@ pub(crate) fn terminals(geometry: &Geometry) -> Vec<Terminal> {
         Family::Soic => {
             let rows = (geometry.pins / 2).max(1);
             let mut out = Vec::with_capacity(rows as usize * 2);
-            for side in [-1.55, 1.55] {
+            // JEDEC SO-8 (150 mil body): the gull-wing pad centres sit on a
+            // 5.4 mm span, so the apertures clear the 3.7 mm body outline.
+            for side in [-2.7, 2.7] {
                 for row in 0..rows {
                     out.push(rect(side, (row as f64 - (rows - 1) as f64 / 2.0) * geometry.pitch, false));
                 }

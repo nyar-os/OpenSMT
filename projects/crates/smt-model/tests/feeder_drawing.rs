@@ -112,6 +112,21 @@ fn non_ascii_text_is_dropped_and_counted() {
 }
 
 #[test]
+fn the_title_drops_the_scale_note_and_annotates_the_panel_multiplier() {
+    let single = render_feeder_svg(&document(), "setup").expect("rendered").text;
+    // The millimetre scale note is gone.
+    assert!(!single.contains("scale 1:1"));
+    // A single board carries no multiplier note.
+    assert!(!single.contains("on the panel"));
+
+    // A 2x3 panel annotates the per-board allocation with its multiplier.
+    let mut panelled = document();
+    panelled.panel = smt_model::Panel::new(2, 3, 4.0, 4.0);
+    let panel = render_feeder_svg(&panelled, "setup").expect("rendered").text;
+    assert!(panel.contains("per board (x6 on the panel)"), "panel multiplier must be annotated");
+}
+
+#[test]
 fn the_export_format_accepts_feeder_svg() {
     assert_eq!("feeder-svg".parse::<ExportFormat>().expect("feeder-svg"), ExportFormat::FeederSvg);
     assert_eq!(ExportFormat::FeederSvg.as_str(), "feeder-svg");

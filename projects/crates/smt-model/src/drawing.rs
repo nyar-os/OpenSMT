@@ -220,8 +220,9 @@ pub(crate) struct SheetLabel {
 pub(crate) type Box4 = (f64, f64, f64, f64);
 
 /// Label font size in millimetres for a body of the given smaller side.
+/// The lower bound keeps the reference readable in print (≥ 1.6 mm ≈ 4.5 pt).
 pub(crate) fn label_font(min_body: f64) -> f64 {
-    (min_body * 0.75).clamp(0.8, 2.2)
+    (min_body * 0.75).clamp(1.6, 2.2)
 }
 
 /// Estimated text width of one centred label in millimetres.

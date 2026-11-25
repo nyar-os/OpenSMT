@@ -87,18 +87,37 @@ fn lead_families_generate_one_aperture_per_terminal() {
     assert_eq!(
         soic,
         vec![
-            (18.45, 18.095),
-            (18.45, 19.365),
-            (18.45, 20.635),
-            (18.45, 21.905),
-            (21.55, 18.095),
-            (21.55, 19.365),
-            (21.55, 20.635),
-            (21.55, 21.905)
+            (17.3, 18.095),
+            (17.3, 19.365),
+            (17.3, 20.635),
+            (17.3, 21.905),
+            (22.7, 18.095),
+            (22.7, 19.365),
+            (22.7, 20.635),
+            (22.7, 21.905)
         ]
     );
     let soic_rule = report.rules.iter().find(|rule| rule.package == "SOIC-8").expect("SOIC rule");
     assert_eq!((soic_rule.aperture_width, soic_rule.aperture_height), (0.553, 0.645));
+}
+
+#[test]
+fn soic_apertures_clear_the_body_outline() {
+    let mut document = board_document();
+    add(&mut document, "U1", "SOIC-8", 50.0, 40.0, 0.0);
+
+    let report = stencil_report(&document);
+    let xs: Vec<f64> = report.entries.iter().map(|entry| entry.x).collect();
+    let left = xs.iter().cloned().fold(f64::INFINITY, f64::min);
+    let right = xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let rule = &report.rules[0];
+    // JEDEC SO-8 pad span: 5.4 mm centre distance, wider than the 3.7 mm body.
+    assert_eq!((left, right), (47.3, 52.7));
+    assert!((right - left - 5.4).abs() < 1e-6);
+    // The inner aperture edge sits outside the body outline on both rows
+    // (the SOIC-8 body is 3.7 mm across the lead rows, a 1.85 mm half).
+    let inner_edge = 2.7 - rule.aperture_width / 2.0;
+    assert!(inner_edge > 1.85, "inner edge {inner_edge} must exceed the body half-width 1.85");
 }
 
 #[test]
@@ -190,6 +209,30 @@ fn stencil_labels_clear_the_apertures_in_dense_rows() {
     assert!(svg.text.contains("y=\"9.350\""));
     // The SOT-23 label clears the leads that reach past the body outline.
     assert!(svg.text.contains(">U1</text>"));
+}
+
+#[test]
+fn the_bottom_sheet_mirrors_the_single_board_view() {
+    let mut bottom = board_document();
+    let mut component = Component::new("R1", "0603", 30.0, 40.0);
+    component.side = Side::Bottom;
+    bottom.components.push(component);
+
+    // The report keeps the absolute single-board coordinates unchanged.
+    let report = stencil_report(&bottom);
+    assert_eq!(report.entries.iter().map(|entry| entry.x).collect::<Vec<_>>(), vec![29.525, 30.475]);
+
+    // The sheet is the bottom stencil seen through the board, so the view is
+    // mirrored about the board centre line: the label sits at 100 - 30 = 70.
+    let bottom_svg = render_stencil_svg(&bottom, "panel").expect("rendered").text;
+    assert!(bottom_svg.contains("x=\"70.000\""), "bottom label must be mirrored");
+    assert!(!bottom_svg.contains("x=\"30.000\""), "bottom label must not keep the single-board x");
+
+    // A top sheet keeps the unmirrored coordinate for the same placement.
+    let mut top = board_document();
+    top.components.push(Component::new("R1", "0603", 30.0, 40.0));
+    let top_svg = render_stencil_svg(&top, "panel").expect("rendered").text;
+    assert!(top_svg.contains("x=\"30.000\""), "top label keeps the single-board x");
 }
 
 #[test]

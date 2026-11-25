@@ -151,18 +151,34 @@ fn component_bodies_take_their_size_from_the_package_rules_table() {
 }
 
 #[test]
-fn dense_rows_keep_refdes_labels_and_drop_colliding_package_labels() {
+fn dense_rows_drop_colliding_labels_at_the_printable_minimum_size() {
     let mut doc = SmtDocument::new(Board::new(50.0, 40.0, 1.6));
     doc.feeders.push(Feeder::new("F1", "0402", 2.0, 5000));
     for (index, refdes) in ["R1", "R2", "R3", "R4", "R5"].iter().enumerate() {
         doc.components.push(Component::new(*refdes, "0402", 10.0 + index as f64 * 1.6, 10.0));
     }
     let drawing = render_svg(&doc, "panel").expect("rendered");
-    // Every reference designator stays readable at the dense 1.6 mm pitch.
-    assert_eq!(drawing.text.matches("text-anchor=\"middle\" fill=\"#0f1729\">R").count(), 5);
+    // The 1.6 mm minimum font cannot fit every reference at the dense 1.6 mm
+    // pitch, so colliding labels are dropped instead of printed unreadably.
+    let kept = drawing.text.matches("text-anchor=\"middle\" fill=\"#0f1729\">R").count();
+    assert!(kept > 0 && kept < 5, "expected partial label coverage, kept {kept}");
     // The wide package and lane line is omitted wherever it would overlap.
     assert!(drawing.text.matches(">0402 F1</text>").count() < 5);
     assert_eq!(drawing.summary.default_size_components, 0);
+}
+
+#[test]
+fn refdes_labels_never_fall_below_the_printable_minimum_font() {
+    let mut doc = SmtDocument::new(Board::new(50.0, 40.0, 1.6));
+    doc.components.push(Component::new("R1", "0201", 10.0, 10.0));
+    doc.components.push(Component::new("R2", "0402", 30.0, 10.0));
+    let drawing = render_svg(&doc, "panel").expect("rendered");
+    // Tiny bodies still print their reference at the 1.6 mm floor.
+    assert_eq!(drawing.text.matches("font-size=\"1.600\" text-anchor=\"middle\"").count(), 2);
+    assert!(!drawing.text.contains("font-size=\"0.800\""));
+    let pdf = render_pdf(&doc, "panel").expect("pdf rendered");
+    // 1.6 mm at the A4 fit stays above the 3 pt PDF clamp.
+    assert!(pdf.text.contains("(R1) Tj"));
 }
 
 #[test]

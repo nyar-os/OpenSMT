@@ -150,6 +150,37 @@ fn non_ascii_text_is_dropped_and_counted() {
 }
 
 #[test]
+fn the_pdf_draws_the_origin_cross_like_the_svg() {
+    let drawing = render_sequence_pdf(&document(), "seq").expect("rendered");
+    let pdf = &drawing.text;
+    assert!(pdf.contains("(ORIGIN \\(0,0\\)) Tj"));
+    // The content stream carries exactly three INK-coloured strokes: the two
+    // ORIGIN cross segments plus the title-block frame. The SVG cross is a
+    // path; the PDF now matches it with two line operators.
+    assert_eq!(pdf.matches("0.06 0.09 0.16 RG ").count(), 3);
+    let svg = render_sequence_svg(&document(), "seq").expect("rendered").text;
+    assert!(svg.contains("ORIGIN"));
+}
+
+#[test]
+fn a_panel_document_marks_the_routes_as_per_board() {
+    let mut panel_document = document();
+    panel_document.panel = smt_model::Panel::new(2, 2, 5.0, 5.0);
+    let drawing = render_sequence_svg(&panel_document, "seq").expect("rendered");
+    assert!(drawing.text.contains("per board (x4 on the panel)"));
+    assert!(drawing.text.contains("4 step(s) | top 3 | bottom 1"));
+
+    let pdf = render_sequence_pdf(&panel_document, "seq").expect("rendered");
+    assert!(pdf.text.contains("per board \\(x4 on the panel\\)"));
+
+    // A single-board sheet carries no multiplier.
+    let single = render_sequence_svg(&document(), "seq").expect("rendered");
+    assert!(!single.text.contains("per board"));
+    assert!(single.text.contains("routes in program order, one route per side"));
+    assert!(!single.text.contains("nozzle"));
+}
+
+#[test]
 fn the_export_formats_accept_the_sequence_sheets() {
     assert_eq!("sequence-svg".parse::<ExportFormat>().expect("sequence-svg"), ExportFormat::SequenceSvg);
     assert_eq!("sequence-pdf".parse::<ExportFormat>().expect("sequence-pdf"), ExportFormat::SequencePdf);
@@ -174,4 +205,44 @@ fn the_session_writes_the_sequence_sheet_through_the_export_format() {
     assert!(text.contains("data-step=\"2\""));
     assert!(report.losses.is_empty());
     let _ = fs::remove_dir_all(&directory);
+}
+
+/// Collects the `(x, y)` anchors of the small step labels (`font-size` 1.7).
+fn label_anchors(svg: &str) -> Vec<(String, String)> {
+    let mut anchors = Vec::new();
+    let mut rest = svg;
+    while let Some(position) = rest.find("<text x=\"") {
+        let after = &rest[position + "<text x=\"".len()..];
+        let x = &after[..after.find('"').expect("x quote")];
+        let y_after = after.split_once("y=\"").expect("y attribute").1;
+        let y = &y_after[..y_after.find('"').expect("y quote")];
+        let element = &after[..after.find("</text>").unwrap_or(after.len())];
+        if element.contains("font-size=\"1.7\"") {
+            anchors.push((x.to_string(), y.to_string()));
+        }
+        rest = &after[x.len()..];
+    }
+    anchors
+}
+
+#[test]
+fn dense_step_labels_are_moved_apart_instead_of_overlapping() {
+    let mut document = SmtDocument::new(Board::new(100.0, 80.0, 1.6));
+    document.components = vec![
+        Component::new("R1", "0603", 30.0, 40.0),
+        Component::new("R2", "0603", 30.4, 40.0),
+        Component::new("R3", "0603", 30.8, 40.0),
+    ];
+    document.feeders = vec![Feeder::new("F1", "0603", 4.0, 100)];
+    let svg = render_sequence_svg(&document, "panel").expect("rendered").text;
+
+    // Every marker is still drawn.
+    assert_eq!(svg.matches("data-step=").count(), 3);
+    // The labels are placed at distinct anchors, so they cannot overlap each
+    // other the way the fixed offset did.
+    let anchors = label_anchors(&svg);
+    assert!(anchors.len() >= 2, "dense labels are still drawn");
+    let distinct: std::collections::HashSet<(String, String)> = anchors.iter().cloned().collect();
+    assert_eq!(distinct.len(), anchors.len(), "no two step labels share an anchor");
+    assert!(anchors.iter().any(|(_, y)| y != "58.600"), "a colliding label is moved off the default row");
 }

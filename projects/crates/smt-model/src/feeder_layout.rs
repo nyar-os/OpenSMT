@@ -81,6 +81,7 @@ struct Plan {
     id: String,
     units: String,
     revision: u32,
+    boards: u32,
     lanes: Vec<Lane>,
     unassigned: Vec<String>,
     summary: FeederDrawingSummary,
@@ -162,7 +163,7 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
         unassigned_components: unassigned.len() as u32,
         dropped_characters: dropped as u32,
     };
-    Ok(Plan { id, units, revision: document.revision, lanes, unassigned, summary })
+    Ok(Plan { id, units, revision: document.revision, boards: document.panel.board_count(), lanes, unassigned, summary })
 }
 
 struct Layout {
@@ -376,14 +377,16 @@ fn push_svg_title(svg: &mut String, plan: &Plan, layout: &Layout) {
         drawing::number(TITLE_HEIGHT_MM),
         drawing::hex(drawing::PANEL_EDGE)
     ));
+    // The allocation is for a single board, so a multi-board panel is annotated
+    // with its multiplier instead of a millimetre scale note.
+    let multiplier = if plan.boards > 1 { format!(" | per board (x{} on the panel)", plan.boards) } else { String::new() };
     let lines = [
         format!("OpenSMT feeder setup drawing | {} | revision {} | units {}", plan.id, plan.revision, plan.units),
         format!(
-            "{} lane(s) | {} component(s) mapped | {} unassigned",
-            plan.summary.lanes, plan.summary.mapped_components, plan.summary.unassigned_components
+            "{} lane(s) | {} component(s) mapped | {} unassigned{}",
+            plan.summary.lanes, plan.summary.mapped_components, plan.summary.unassigned_components, multiplier
         ),
         "lane order = feeder id order; the allocation caps every lane at its loaded quantity".to_string(),
-        format!("scale 1:1 in millimetres; 1 mm = {} px", SVG_PX_PER_MM),
     ];
     for (index, line) in lines.iter().enumerate() {
         svg.push_str(&format!(

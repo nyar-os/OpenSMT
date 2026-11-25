@@ -338,16 +338,23 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
     let (units, count) = drawing::ascii(&document.units);
     dropped += count;
 
+    // A bottom stencil is viewed through the board from below, so its sheet
+    // view mirrors the single-board report about the board centre line:
+    // `x' = board_width - x` and `rotation' = -rotation`. The report itself
+    // keeps the absolute single-board coordinates.
+    let board_width = document.board.width;
+    let mirrored_x = |side: Side, value: f64| if side == Side::Bottom { round3(board_width - value) } else { value };
+    let mirrored_rotation = |side: Side, value: f64| if side == Side::Bottom { -value } else { value };
     let apertures = report
         .entries
         .iter()
         .map(|entry| Aperture {
             side: entry.side,
-            x: entry.x,
+            x: mirrored_x(entry.side, entry.x),
             y: entry.y,
             width: entry.width,
             height: entry.height,
-            rotation: entry.rotation,
+            rotation: mirrored_rotation(entry.side, entry.rotation),
             circle: entry.shape == "circle",
         })
         .collect::<Vec<_>>();
@@ -356,25 +363,27 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
     let mut occupied: Vec<drawing::Box4> = report
         .entries
         .iter()
-        .map(|entry| drawing::rotated_box(entry.x, entry.y, entry.rotation, entry.width, entry.height))
+        .map(|entry| drawing::rotated_box(mirrored_x(entry.side, entry.x), entry.y, entry.rotation, entry.width, entry.height))
         .collect();
     let mut labels = Vec::with_capacity(document.components.len());
     for component in &document.components {
         let (refdes, count) = drawing::ascii(&component.refdes);
         dropped += count;
         let geometry = packages::geometry(&component.package);
-        let mut body =
-            drawing::rotated_box(component.x, component.y, component.rotation, geometry.body_length, geometry.body_width);
+        let centre_x = mirrored_x(component.side, component.x);
+        let rotation = mirrored_rotation(component.side, component.rotation);
+        let mut body = drawing::rotated_box(centre_x, component.y, rotation, geometry.body_length, geometry.body_width);
         // Leads reach past the body outline, so the label clears the whole
         // aperture cluster of this component.
         for entry in report.entries.iter().filter(|entry| entry.refdes == component.refdes) {
-            let box_ = drawing::rotated_box(entry.x, entry.y, entry.rotation, entry.width, entry.height);
+            let box_ =
+                drawing::rotated_box(mirrored_x(entry.side, entry.x), entry.y, entry.rotation, entry.width, entry.height);
             body = (body.0.min(box_.0), body.1.min(box_.1), body.2.max(box_.2), body.3.max(box_.3));
         }
         let font = drawing::label_font(geometry.body_length.min(geometry.body_width));
         let half = drawing::text_width(&refdes, font) / 2.0;
-        let above: drawing::Box4 = (component.x - half, body.1 - 0.4 - font, component.x + half, body.1 - 0.4);
-        let below: drawing::Box4 = (component.x - half, body.3 + 0.4, component.x + half, body.3 + 0.4 + font);
+        let above: drawing::Box4 = (centre_x - half, body.1 - 0.4 - font, centre_x + half, body.1 - 0.4);
+        let below: drawing::Box4 = (centre_x - half, body.3 + 0.4, centre_x + half, body.3 + 0.4 + font);
         let placed = if drawing::collides(&above, &occupied) {
             if drawing::collides(&below, &occupied) { None } else { Some(below) }
         }
@@ -384,7 +393,7 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
         if let Some(placed) = placed {
             occupied.push(placed);
             labels.push(drawing::SheetLabel {
-                x: round3(component.x),
+                x: round3(centre_x),
                 y: round3(placed.3),
                 size: font,
                 text: refdes,
