@@ -506,7 +506,7 @@ test('svg and pdf drawings are written through the sdk and the cli', { skip: ski
         assert.equal(svg.drawing?.boards, 2);
         assert.equal(svg.drawing?.components, 2);
         assert.equal(svg.drawing?.placements, 4);
-        assert.equal(svg.drawing?.defaultSizeComponents, 2);
+        assert.equal(svg.drawing?.defaultSizeComponents, 0);
         assert.equal(svg.drawing?.droppedCharacters, 0);
         assert.deepEqual(svg.losses ?? [], []);
         const svgText = await fs.readFile(svgFile, 'utf8');

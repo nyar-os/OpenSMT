@@ -1,10 +1,11 @@
 //! Deterministic placement drawings.
 //!
 //! The model stores geometry, not artwork, so both drawings are built from the
-//! stored board, panel, component and feeder fields only. A component rectangle
-//! uses a fixed default footprint of [`DEFAULT_COMPONENT_WIDTH_MM`] by
-//! [`DEFAULT_COMPONENT_HEIGHT_MM`] because [`crate::model::Component`] carries
-//! no body size. The SVG viewBox counts millimetres and opens at
+//! stored board, panel, component and feeder fields only. A component body
+//! takes its length and width from the shared package rules table
+//! ([`crate::packages::geometry`]); an unrecognised package falls back to the
+//! default footprint of [`DEFAULT_COMPONENT_WIDTH_MM`] by
+//! [`DEFAULT_COMPONENT_HEIGHT_MM`]. The SVG viewBox counts millimetres and opens at
 //! [`SVG_PX_PER_MM`] pixels per millimetre; the PDF is one A4 landscape page
 //! fitted and centred from the same millimetre layout using Helvetica.
 //!
@@ -20,16 +21,16 @@ use serde::Serialize;
 use crate::{
     SmtError,
     model::{Side, SmtDocument},
-    panel_map, place,
+    packages, panel_map, place,
 };
 
 /// Pixels per millimetre used for the SVG canvas size.
 pub const SVG_PX_PER_MM: f64 = 8.0;
 /// PostScript points per millimetre used for PDF coordinates.
 pub const PT_PER_MM: f64 = 2.834_646;
-/// Width of the default component footprint in millimetres.
+/// Width of the generic fallback footprint in millimetres.
 pub const DEFAULT_COMPONENT_WIDTH_MM: f64 = 2.0;
-/// Height of the default component footprint in millimetres.
+/// Height of the generic fallback footprint in millimetres.
 pub const DEFAULT_COMPONENT_HEIGHT_MM: f64 = 1.2;
 
 pub(crate) const DRAW_MARGIN_MM: f64 = 8.0;
@@ -81,7 +82,7 @@ pub struct DrawingSummary {
     pub components: u32,
     /// Number of component rectangles drawn over every board.
     pub placements: u32,
-    /// Number of component rectangles that used the default footprint.
+    /// Number of component rectangles that fell back to the default footprint.
     pub default_size_components: u32,
     /// Number of declared feeder lanes listed beside the drawing.
     pub feeder_lanes: u32,
@@ -200,8 +201,39 @@ struct Part {
     package: String,
     side: Side,
     rotation: f64,
+    body_length: f64,
+    body_width: f64,
     feeder: Option<String>,
     instances: Vec<(u32, f64, f64)>,
+}
+
+/// One placed sheet label: centred on `x` with its baseline at `y`.
+pub(crate) struct SheetLabel {
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) size: f64,
+    pub(crate) text: String,
+    pub(crate) muted: bool,
+}
+
+/// Axis-aligned box `(left, top, right, bottom)` in sheet millimetres.
+pub(crate) type Box4 = (f64, f64, f64, f64);
+
+/// Label font size in millimetres for a body of the given smaller side.
+pub(crate) fn label_font(min_body: f64) -> f64 {
+    (min_body * 0.75).clamp(0.8, 2.2)
+}
+
+/// Estimated text width of one centred label in millimetres.
+pub(crate) fn text_width(text: &str, size: f64) -> f64 {
+    text.chars().count() as f64 * size * 0.62
+}
+
+/// True when two boxes overlap by more than the 0.05 mm label clearance.
+pub(crate) fn collides(candidate: &Box4, occupied: &[Box4]) -> bool {
+    occupied.iter().any(|box_| {
+        candidate.0 < box_.2 - 0.05 && box_.0 < candidate.2 - 0.05 && candidate.1 < box_.3 - 0.05 && box_.1 < candidate.3 - 0.05
+    })
 }
 
 struct FeederLine {
@@ -222,6 +254,7 @@ struct Plan {
     panel_depth: f64,
     boards: Vec<panel_map::PanelInstance>,
     parts: Vec<Part>,
+    labels: Vec<SheetLabel>,
     feeders: Vec<FeederLine>,
     summary: DrawingSummary,
 }
@@ -273,6 +306,7 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
     }
 
     let mut parts = Vec::with_capacity(map.components.len());
+    let mut default_size_components = 0;
     for mapped in &map.components {
         let feeder = lane_of.get(&mapped.refdes).cloned().or_else(|| {
             document.feeders.iter().find(|feeder| feeder.package == mapped.package).map(|feeder| feeder.id.clone())
@@ -281,6 +315,10 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
         dropped += count;
         let (package, count) = ascii(&mapped.package);
         dropped += count;
+        let geometry = packages::geometry(&mapped.package);
+        if geometry.family == packages::Family::Generic {
+            default_size_components += 1;
+        }
         let feeder = match feeder {
             Some(value) => {
                 let (text, count) = ascii(&value);
@@ -294,6 +332,8 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
             package,
             side: mapped.side,
             rotation: mapped.rotation,
+            body_length: geometry.body_length,
+            body_width: geometry.body_width,
             feeder,
             instances: mapped.instances.iter().map(|placement| (placement.board, placement.x, placement.y)).collect(),
         });
@@ -316,10 +356,11 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
         boards: map.board_count,
         components: parts.len() as u32,
         placements: placements as u32,
-        default_size_components: parts.len() as u32,
+        default_size_components,
         feeder_lanes: feeders.len() as u32,
         dropped_characters: dropped as u32,
     };
+    let labels = build_labels(&parts);
     Ok(Plan {
         id,
         units,
@@ -330,9 +371,72 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
         panel_depth: map.panel_depth,
         boards: map.instances,
         parts,
+        labels,
         feeders,
         summary,
     })
+}
+
+/// Axis-aligned box of a `length × width` rectangle rotated clockwise about
+/// `(x, y)`, in sheet millimetres.
+pub(crate) fn rotated_box(x: f64, y: f64, rotation: f64, length: f64, width: f64) -> Box4 {
+    let corners = corners(x, y, rotation, length, width);
+    let xs: Vec<f64> = corners.iter().map(|(px, _)| *px).collect();
+    let ys: Vec<f64> = corners.iter().map(|(_, py)| *py).collect();
+    (
+        xs.iter().cloned().fold(f64::INFINITY, f64::min),
+        ys.iter().cloned().fold(f64::INFINITY, f64::min),
+        xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+        ys.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+    )
+}
+
+/// Axis-aligned body box of one part at the given board coordinates.
+fn body_box(part: &Part, x: f64, y: f64) -> Box4 {
+    rotated_box(x, y, part.rotation, part.body_length, part.body_width)
+}
+
+/// Places the board-1 labels greedily: the reference designator sits above
+/// its body (or below when the body above is taken) and the package and lane
+/// line below, each skipped when it would collide with a body or an
+/// accepted label. The pass is deterministic in document order.
+fn build_labels(parts: &[Part]) -> Vec<SheetLabel> {
+    let mut occupied: Vec<Box4> = Vec::with_capacity(parts.len());
+    let mut centres: Vec<(f64, f64, &Part)> = Vec::new();
+    for part in parts {
+        if let Some((_, x, y)) = part.instances.iter().find(|(board, ..)| *board == 1) {
+            occupied.push(body_box(part, *x, *y));
+            centres.push((*x, *y, part));
+        }
+    }
+    let mut labels = Vec::with_capacity(centres.len() * 2);
+    for (x, y, part) in &centres {
+        let box_ = body_box(part, *x, *y);
+        let font = label_font(part.body_length.min(part.body_width));
+        let text = part.refdes.clone();
+        let half = text_width(&text, font) / 2.0;
+        let above: Box4 = (x - half, box_.1 - 0.4 - font, x + half, box_.1 - 0.4);
+        let below: Box4 = (x - half, box_.3 + 0.4, x + half, box_.3 + 0.4 + font);
+        let placed = if collides(&above, &occupied) {
+            if collides(&below, &occupied) { None } else { Some(below) }
+        }
+        else {
+            Some(above)
+        };
+        if let Some(placed) = placed {
+            occupied.push(placed);
+            labels.push(SheetLabel { x: *x, y: placed.3, size: font, text: text.clone(), muted: false });
+        }
+        let size = font * 0.8;
+        let text = format!("{} {}", part.package, part.feeder.as_deref().unwrap_or("-"));
+        let half = text_width(&text, size) / 2.0;
+        let under: Box4 = (x - half, box_.3 + 0.4, x + half, box_.3 + 0.4 + size);
+        if !collides(&under, &occupied) {
+            occupied.push(under);
+            labels.push(SheetLabel { x: *x, y: under.3, size, text, muted: true });
+        }
+    }
+    labels
 }
 
 fn push_svg_panel(svg: &mut String, plan: &Plan, layout: &Layout) {
@@ -372,7 +476,7 @@ fn push_svg_panel(svg: &mut String, plan: &Plan, layout: &Layout) {
         for part in plan.parts.iter().filter(|part| part.side == side) {
             let (fill, edge) = colors(side);
             for (_, x, y) in &part.instances {
-                let corners = corners(*x, *y, part.rotation);
+                let corners = corners(*x, *y, part.rotation, part.body_length, part.body_width);
                 let points =
                     corners.iter().map(|(px, py)| format!("{},{}", number(*px), number(*py))).collect::<Vec<_>>().join(" ");
                 svg.push_str(&format!(
@@ -385,25 +489,15 @@ fn push_svg_panel(svg: &mut String, plan: &Plan, layout: &Layout) {
         svg.push_str("    </g>\n");
     }
     svg.push_str("    <g id=\"labels\">\n");
-    for part in &plan.parts {
-        if let Some((_, x, y)) = part.instances.iter().find(|(board, _, _)| *board == 1) {
-            let label = part.feeder.as_deref().unwrap_or("-");
-            svg.push_str(&format!(
-                "      <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.4\" text-anchor=\"middle\" fill=\"#{}\">{}</text>\n",
-                number(*x),
-                number(*y - DEFAULT_COMPONENT_HEIGHT_MM / 2.0 - 0.8),
-                hex(INK),
-                escape_xml(&part.refdes)
-            ));
-            svg.push_str(&format!(
-                "      <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" text-anchor=\"middle\" fill=\"#{}\">{} {}</text>\n",
-                number(*x),
-                number(*y + DEFAULT_COMPONENT_HEIGHT_MM / 2.0 + 2.1),
-                hex(MUTED),
-                escape_xml(&part.package),
-                escape_xml(label)
-            ));
-        }
+    for label in &plan.labels {
+        svg.push_str(&format!(
+            "      <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" text-anchor=\"middle\" fill=\"#{}\">{}</text>\n",
+            number(label.x),
+            number(label.y),
+            number(label.size),
+            hex(if label.muted { MUTED } else { INK }),
+            escape_xml(&label.text)
+        ));
     }
     svg.push_str("    </g>\n  </g>\n");
 }
@@ -434,8 +528,8 @@ fn push_svg_legend(svg: &mut String, plan: &Plan, layout: &Layout) {
         hex(BOTTOM_EDGE)
     ));
     svg.push_str(&legend_text(13.0, 21.7, 2.2, "bottom-side component"));
-    svg.push_str(&legend_text(0.0, 29.0, 2.0, "refdes above, package + lane below"));
-    svg.push_str(&legend_text(0.0, 34.0, 2.0, "default footprint 2.0 x 1.2 mm"));
+    svg.push_str(&legend_text(0.0, 29.0, 2.0, "labels above or below the body, collisions omitted"));
+    svg.push_str(&legend_text(0.0, 34.0, 2.0, "bodies from the package rules table"));
     svg.push_str(&legend_text(0.0, 39.0, 2.0, &labels_note(plan)));
     svg.push_str("  </g>\n");
 }
@@ -539,26 +633,15 @@ fn push_pdf_panel(pdf: &mut Pdf, plan: &Plan, layout: &Layout) {
         let (fill, edge) = colors(side);
         for part in plan.parts.iter().filter(|part| part.side == side) {
             for (_, cx, cy) in &part.instances {
-                let corners = corners(*cx, *cy, part.rotation);
+                let corners = corners(*cx, *cy, part.rotation, part.body_length, part.body_width);
                 let points: Vec<(f64, f64)> = corners.iter().map(|(px, py)| (x + px, y + py)).collect();
                 pdf.polygon(&points, Some(fill), Some(edge), 0.25);
             }
         }
     }
-    for part in &plan.parts {
-        let Some((_, cx, cy)) = part.instances.iter().find(|(board, _, _)| *board == 1)
-        else {
-            continue;
-        };
-        let label = part.feeder.as_deref().unwrap_or("-");
-        pdf.text_centered(x + cx, y + cy - DEFAULT_COMPONENT_HEIGHT_MM / 2.0 - 0.8, 2.4, INK, &part.refdes);
-        pdf.text_centered(
-            x + cx,
-            y + cy + DEFAULT_COMPONENT_HEIGHT_MM / 2.0 + 2.1,
-            2.0,
-            MUTED,
-            &format!("{} {label}", part.package),
-        );
+    for label in &plan.labels {
+        let color = if label.muted { MUTED } else { INK };
+        pdf.text_centered(x + label.x, y + label.y, label.size, color, &label.text);
     }
 }
 
@@ -572,8 +655,8 @@ fn push_pdf_legend(pdf: &mut Pdf, plan: &Plan, layout: &Layout) {
     pdf.text(x + 13.0, y + 15.7, 2.2, INK, "top-side component");
     pdf.rect(x, y + 19.0, 7.0, 3.4, Some(BOTTOM_FILL), Some((BOTTOM_EDGE, 0.3)));
     pdf.text(x + 13.0, y + 21.7, 2.2, INK, "bottom-side component");
-    pdf.text(x, y + 29.0, 2.0, INK, "refdes above, package + lane below");
-    pdf.text(x, y + 34.0, 2.0, INK, "default footprint 2.0 x 1.2 mm");
+    pdf.text(x, y + 29.0, 2.0, INK, "labels above or below the body, collisions omitted");
+    pdf.text(x, y + 34.0, 2.0, INK, "bodies from the package rules table");
     pdf.text(x, y + 39.0, 2.0, INK, &labels_note(plan));
 }
 
@@ -638,7 +721,7 @@ fn title_lines(plan: &Plan, scale_note: &str) -> Vec<TitleLine> {
             size: 2.2,
             emphasis: false,
             text: format!(
-                "default component footprint {} x {} mm (the model stores no body size); rotation clockwise",
+                "component bodies from the package rules table; unmatched packages use {:.1} x {:.1} mm; rotation clockwise",
                 DEFAULT_COMPONENT_WIDTH_MM, DEFAULT_COMPONENT_HEIGHT_MM
             ),
         },
@@ -653,7 +736,12 @@ fn title_lines(plan: &Plan, scale_note: &str) -> Vec<TitleLine> {
 }
 
 fn labels_note(plan: &Plan) -> String {
-    if plan.summary.boards > 1 { "labels on board 1 only".to_string() } else { "labels on the single board".to_string() }
+    if plan.summary.boards > 1 {
+        "labels on board 1 only, colliding labels omitted".to_string()
+    }
+    else {
+        "labels on the single board, colliding labels omitted".to_string()
+    }
 }
 
 pub(crate) fn colors(side: Side) -> (&'static str, &'static str) {
@@ -663,9 +751,9 @@ pub(crate) fn colors(side: Side) -> (&'static str, &'static str) {
     }
 }
 
-fn corners(x: f64, y: f64, rotation: f64) -> [(f64, f64); 4] {
-    let half_width = DEFAULT_COMPONENT_WIDTH_MM / 2.0;
-    let half_height = DEFAULT_COMPONENT_HEIGHT_MM / 2.0;
+fn corners(x: f64, y: f64, rotation: f64, body_length: f64, body_width: f64) -> [(f64, f64); 4] {
+    let half_width = body_length / 2.0;
+    let half_height = body_width / 2.0;
     let radians = rotation.to_radians();
     let cosine = radians.cos();
     let sine = radians.sin();

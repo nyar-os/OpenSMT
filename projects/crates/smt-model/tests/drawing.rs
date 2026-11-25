@@ -41,7 +41,7 @@ fn the_svg_draws_panel_boards_components_labels_legend_and_title() {
     assert_eq!(drawing.summary.boards, 4);
     assert_eq!(drawing.summary.components, 3);
     assert_eq!(drawing.summary.placements, 12);
-    assert_eq!(drawing.summary.default_size_components, 3);
+    assert_eq!(drawing.summary.default_size_components, 0);
     assert_eq!(drawing.summary.feeder_lanes, 2);
     assert_eq!(drawing.summary.dropped_characters, 0);
 }
@@ -99,13 +99,44 @@ fn an_empty_document_still_produces_a_framed_sheet() {
 }
 
 #[test]
+fn component_bodies_take_their_size_from_the_package_rules_table() {
+    let mut doc = SmtDocument::new(Board::new(50.0, 40.0, 1.6));
+    doc.components.push(Component::new("U3", "TQFP-44", 20.0, 20.0));
+    doc.components.push(Component::new("R1", "0402", 40.0, 10.0));
+    doc.components.push(Component::new("X1", "MYSTERY", 40.0, 30.0));
+    let drawing = render_svg(&doc, "panel").expect("rendered");
+    // QFP-44 draws its 6.9 x 6.9 mm body from the rules table.
+    assert!(drawing.text.contains("points=\"16.550,16.550 23.450,16.550 23.450,23.450 16.550,23.450\""));
+    // 0402 draws its 1.0 x 0.5 mm body instead of the old oversized default.
+    assert!(drawing.text.contains("points=\"39.500,9.750 40.500,9.750 40.500,10.250 39.500,10.250\""));
+    // Only the unmatched package falls back to the 2.0 x 1.2 mm default.
+    assert!(drawing.text.contains("points=\"39.000,29.400 41.000,29.400 41.000,30.600 39.000,30.600\""));
+    assert_eq!(drawing.summary.default_size_components, 1);
+}
+
+#[test]
+fn dense_rows_keep_refdes_labels_and_drop_colliding_package_labels() {
+    let mut doc = SmtDocument::new(Board::new(50.0, 40.0, 1.6));
+    doc.feeders.push(Feeder::new("F1", "0402", 2.0, 5000));
+    for (index, refdes) in ["R1", "R2", "R3", "R4", "R5"].iter().enumerate() {
+        doc.components.push(Component::new(*refdes, "0402", 10.0 + index as f64 * 1.6, 10.0));
+    }
+    let drawing = render_svg(&doc, "panel").expect("rendered");
+    // Every reference designator stays readable at the dense 1.6 mm pitch.
+    assert_eq!(drawing.text.matches("text-anchor=\"middle\" fill=\"#0f1729\">R").count(), 5);
+    // The wide package and lane line is omitted wherever it would overlap.
+    assert!(drawing.text.matches(">0402 F1</text>").count() < 5);
+    assert_eq!(drawing.summary.default_size_components, 0);
+}
+
+#[test]
 fn rotated_components_use_the_rotated_rectangle() {
     let mut document = SmtDocument::new(Board::new(100.0, 80.0, 1.6));
     let mut component = Component::new("R1", "0603", 50.0, 40.0);
     component.rotation = 90.0;
     document.components = vec![component];
     let svg = render_svg(&document, "rotated").expect("svg");
-    assert!(svg.text.contains("points=\"50.600,39.000 50.600,41.000 49.400,41.000 49.400,39.000\""));
+    assert!(svg.text.contains("points=\"50.400,39.200 50.400,40.800 49.600,40.800 49.600,39.200\""));
 }
 
 #[test]
