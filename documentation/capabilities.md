@@ -37,6 +37,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | PDF placement drawing (same sheet, A4 landscape) | ✅ supported (fit to page, Helvetica; same body sizing and ASCII-only labels) |
 | feeder setup drawing (SVG tape bank with slots, load bars and lane labels) | ✅ supported (same allocation as the feeders report; models no machine slot, tape direction or pitch constraint) |
 | pick-and-place sequence drawing (SVG and PDF, one numbered route per side) | ✅ supported (default nearest-neighbour program; models no acceleration, tape advance, vision or nozzle physics) |
+| solder paste volume report (JSON and CSV, per package and run) | ✅ supported (aperture area × foil thickness × boards + waste; models no squeegee transfer loss or reel waste) |
 | paste aperture / stencil generation | ✅ supported (fixed package rules table keyed by package name; one area reduction per family; CSV report plus SVG/PDF sheet) |
 | component height and clearance check | ✅ supported (rotated bounding boxes from the package rules table; warning findings; configurable minimum gap and maximum height) |
 | vendor machine programs (Fuji, Yamaha, Juki, ASM) | ❌ not implemented |
@@ -550,6 +551,22 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt export panel.osmt --format sequence-pdf --out sequence.pdf
     ```
 
+30. **Solder paste volume report.** `stencil paste --boards <n> [--foil <mm>]
+    [--waste <pct>]` estimates paste consumption from the generated stencil
+    apertures: each rect aperture contributes `width × height × foil` and each
+    circle `π × (diameter / 2)² × foil`, the per-board volume is scaled by the
+    board count and the waste percentage is added on top. The foil thickness
+    defaults to `0.12 mm`, the board count must be at least one and the waste
+    percentage must lie between 0 and 100; anything else fails with
+    `paste/invalid`. Volumes are rounded to three decimals at every reported
+    level, the report is deterministic and byte-identical on repeat, `--out`
+    writes the JSON, `--csv` a per-package sheet with a `TOTAL` row, and the
+    document is never modified.
+
+    ```shell
+    open-smt stencil paste panel.osmt --boards 24 --waste 5 --out paste.json --csv paste.csv
+    ```
+
 ## KiCad PCB import
 
 `open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
@@ -668,6 +685,7 @@ are skipped. Rows keep the order of the source.
 | `reflow/invalid` | a process-window limit is non-finite or negative, or a minimum exceeds its maximum |
 | `consumption/invalid` | a consumption plan requested fewer than one board |
 | `schedule/invalid` | a feeder replenishment schedule requested fewer than one board |
+| `paste/invalid` | a paste volume report requested a non-positive foil thickness, fewer than one board or a waste percentage outside 0–100 |
 | `program/invalid` | a machine program file is malformed, a nozzle map is invalid, or an export did not read back identically |
 
 Warnings do not make `ok` false: `component/none`, `feeder/none`,
@@ -705,7 +723,8 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/clearance.rs` | height, overlap and gap findings with exact messages and rounded gaps, rotated bounding boxes, default and custom limits, opposite sides never paired, `clearance/invalid`, non-finite coordinates skipped, determinism and unchanged document, session forwarding |
 | `tests/feeder_drawing.rs` | lane rows in feeder id order with slots, load bars and reference designators, valid hex fill and stroke attributes, `feeder/missing` propagation, empty setup framed sheet, byte-identical repeat renders, non-ASCII loss reporting, `feeder-svg` format parsing, session export path |
 | `tests/sequence_drawing.rs` | one numbered route per side with step markers, travel length matching the drawn segments, valid hex fill and stroke attributes, one-page A4 PDF with Helvetica and the routes, empty program framed sheet, `feeder/missing` propagation, byte-identical repeat renders, non-ASCII loss reporting, `sequence-svg`/`sequence-pdf` format parsing, session export path |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption, splice/scrap SDK edits, splice/scrap CLI commands, SVG/PDF placement drawing exports and feeder/sequence drawing exports through the SDK and CLI, and changeover smokes |
+| `tests/paste.rs` | empty document zero report, exact rect and circle aperture arithmetic against the rule table, board and waste scaling, custom foil thickness, `paste/invalid` for every bad input, per-package CSV sheet, byte-identical repeat reports, unchanged document, session `paste-csv` file write |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption, splice/scrap SDK edits, splice/scrap CLI commands, SVG/PDF placement drawing exports, feeder/sequence drawing exports and the stencil paste volume report through the SDK and CLI, and changeover smokes |
 
 ## Limitations
 

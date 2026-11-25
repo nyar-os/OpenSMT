@@ -434,6 +434,7 @@ field.
 
 ```shell
 open-smt stencil <file> [--out stencil.json]
+open-smt stencil paste <file> --boards <n> [--foil <mm>] [--waste <pct>] [--out paste.json] [--csv paste.csv]
 ```
 
 Prints the read-only stencil aperture report as JSON and optionally writes the
@@ -459,6 +460,23 @@ row per aperture in component order (`refdes`, `package`, `side`, one-based
 outline, apertures coloured by side, rule table, legend, title block) that
 reuses the placement-drawing infrastructure. A non-finite or non-positive board
 reports `board/invalid` and exits with code `1`.
+
+`stencil paste` prints the read-only solder paste volume report as JSON: each
+generated aperture contributes `aperture area × foil thickness` (rectangles use
+`width × height`, circles use the diameter), the per-board volume is scaled by
+`--boards` and `--waste` percent is added on top. `--foil` defaults to `0.12`,
+`--boards` is required and at least one, and `--waste` defaults to `0`; a
+non-positive or non-finite foil, a board count below one or a waste percentage
+outside 0–100 reports `paste/invalid` and exits with code `1`. The report
+contains `format` (`open-smt-paste-volume`), `version`, `units`, the resolved
+`foilThicknessMm`, `boards` and `wastePercent`, `aperturesPerBoard`,
+`volumePerBoardMm3`, `volumeRunMm3`, `wasteVolumeMm3`, `totalVolumeMm3`, the
+per-side `topVolumePerBoardMm3` and `bottomVolumePerBoardMm3`, and one
+`packages` entry in first-aperture order (`package`, `aperturesPerBoard`,
+`volumePerApertureMm3`, `volumePerBoardMm3`, `volumeRunMm3`). Volumes are
+rounded to three decimals at every level. `--out` writes the same JSON and
+`--csv` writes a deterministic per-package CSV sheet with a trailing `TOTAL`
+row. The document is never modified.
 
 ## clearance
 
@@ -778,6 +796,7 @@ open-smt quality first-article panel.osmt
 open-smt validate panel.osmt
 open-smt placement panel.osmt
 open-smt stencil panel.osmt --out stencil.json
+open-smt stencil paste panel.osmt --boards 24 --waste 5 --out paste.json --csv paste.csv
 open-smt clearance panel.osmt --min-gap 0.4 --max-height 10
 open-smt schedule dual panel.osmt
 open-smt schedule lanes panel.osmt --count 3 --strategy lpt --improve
