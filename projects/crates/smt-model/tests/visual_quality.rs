@@ -345,7 +345,7 @@ fn content_stays_inside_the_inner_frame() {
 }
 
 #[test]
-fn content_covers_at_least_fifty_five_percent_of_the_drawing_area() {
+fn content_fills_and_is_centred_in_the_drawing_area() {
     for (name, svg) in drawings() {
         let content = content_of(&svg);
         let area = (INNER, INNER, SHEET_WIDTH - INNER, content.title_top - 4.0);
@@ -367,9 +367,15 @@ fn content_covers_at_least_fifty_five_percent_of_the_drawing_area() {
         }
         let coverage = (max_x - min_x) * (max_y - min_y) / ((area.2 - area.0) * (area.3 - area.1));
         assert!(
-            coverage >= 0.55,
+            coverage >= 0.70,
             "{name}: content covers only {:.0}% of the drawing area (x {min_x:.1}..{max_x:.1}, y {min_y:.1}..{max_y:.1})",
             coverage * 100.0
+        );
+        let top_margin = min_y - INNER;
+        let bottom_margin = area.3 - max_y;
+        assert!(
+            (top_margin - bottom_margin).abs() <= SHEET_HEIGHT * 0.15,
+            "{name}: content is not vertically centred (top {top_margin:.1} mm, bottom {bottom_margin:.1} mm)"
         );
     }
 }
