@@ -736,7 +736,7 @@ fn changeover(ctx: CallContext) -> Result<JsValue> {
 }
 
 /// Exports a document as `program`, `feeders`, `fai`, `json`, `md`, `svg`, `pdf`,
-/// `stencil`, `stencil-svg` or `stencil-pdf`.
+/// `stencil`, `stencil-svg`, `stencil-pdf` or `feeder-svg`.
 #[function]
 fn export(ctx: CallContext) -> Result<JsValue> {
     let path = text(&ctx, 0)?;

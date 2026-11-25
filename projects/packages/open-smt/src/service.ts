@@ -360,7 +360,7 @@ export function changeover(path: string, nextPath: string, feederChangeSeconds?:
     );
 }
 
-/** Exports a document as `program`, `feeders`, `fai`, `json`, `md`, `svg`, `pdf`, `stencil`, `stencil-svg` or `stencil-pdf`. */
+/** Exports a document as `program`, `feeders`, `fai`, `json`, `md`, `svg`, `pdf`, `stencil`, `stencil-svg`, `stencil-pdf` or `feeder-svg`. */
 export function exportDocument(path: string, format: ExportFormat, target: string): ExportReport {
     return decode<ExportReport>(() => binding('export').export(path, format, target));
 }

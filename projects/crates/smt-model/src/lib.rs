@@ -26,6 +26,8 @@
 //!   and per-reel leader/trailer waste;
 //! * a read-only takt bottleneck heat map by step, package and side;
 //! * a read-only stencil aperture report and sheet from the package rules table;
+//! * a read-only feeder setup drawing with lane slots, load bars and the
+//!   component-to-lane mapping;
 //! * a read-only component height and clearance check;
 //! * a neutral machine program interchange with a readback check;
 //! * CSV program and feeder sheets, plus JSON and Markdown reports.
@@ -46,6 +48,7 @@ mod dual;
 mod error;
 mod export;
 mod feeder;
+mod feeder_layout;
 mod first_article;
 mod heatmap;
 mod import;
@@ -85,6 +88,7 @@ pub use crate::{
     error::{SmtError, not_implemented},
     export::{feeder_csv, first_article_csv, markdown, program_csv, write_atomic},
     feeder::{FeederLoadingReport, FeederSlot, report as feeder_loading_report},
+    feeder_layout::{FeederDrawing, FeederDrawingSummary, render_svg as render_feeder_svg},
     first_article::{
         FirstArticleLane, FirstArticleMaterial, FirstArticleReport, FirstArticleStep, sheet as first_article_sheet,
     },
@@ -156,6 +160,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "md": "supported",
     "svg": "supported",
     "pdf": "supported",
+    "feederSvg": "supported",
     "kicad": "unsupported",
     "altium": "unsupported",
     "odb": "unsupported"
@@ -185,6 +190,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "machineProgram": "neutral CSV interchange of the placement program with a readback check; it is not a Fuji, Yamaha, Juki or ASM dialect and takes nozzle ids only from a caller-supplied package map",
     "svg": "one millimetre placement sheet at 8 px/mm; component bodies come from the package rules table with a 2.0 x 1.2 mm generic fallback, labels are ASCII-only, collision-free and drawn on board 1 only",
     "pdf": "one A4 landscape page fitted and centred from the same millimetre layout with Helvetica; the same rules-table body sizing, ASCII-only collision-free labels and board-1 labels apply",
+    "feederSvg": "the feeder setup drawing is an SVG tape-bank sheet with one slot per lane in feeder id order, a load bar for the loaded share of the capacity and the assigned reference designators; it reads the same allocation as the feeders report and models no machine slot, tape direction or pitch constraint",
     "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }
 }"#;

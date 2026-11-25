@@ -23,7 +23,8 @@ export type ExportFormat =
     | 'pdf'
     | 'stencil'
     | 'stencil-svg'
-    | 'stencil-pdf';
+    | 'stencil-pdf'
+    | 'feeder-svg';
 
 /** Severity of a validation finding. */
 export type Severity = 'error' | 'warning' | 'notice';

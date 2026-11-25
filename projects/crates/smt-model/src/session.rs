@@ -25,6 +25,7 @@ use crate::{
     dual::{self, DualLaneReport, DualLaneStrategy, LanesReport},
     export::{feeder_csv, first_article_csv, markdown, program_csv, write_atomic},
     feeder::{self, FeederLoadingReport},
+    feeder_layout,
     first_article::{self, FirstArticleReport},
     heatmap::{self, HeatmapReport},
     import::ImportReport,
@@ -92,6 +93,8 @@ pub enum ExportFormat {
     StencilSvg,
     /// The stencil drawing as a one-page PDF.
     StencilPdf,
+    /// The feeder setup drawing as SVG.
+    FeederSvg,
 }
 
 impl ExportFormat {
@@ -108,6 +111,7 @@ impl ExportFormat {
             Self::Stencil => "stencil",
             Self::StencilSvg => "stencil-svg",
             Self::StencilPdf => "stencil-pdf",
+            Self::FeederSvg => "feeder-svg",
         }
     }
 }
@@ -127,11 +131,12 @@ impl FromStr for ExportFormat {
             "stencil" | "stencil-csv" => Ok(Self::Stencil),
             "stencil-svg" => Ok(Self::StencilSvg),
             "stencil-pdf" => Ok(Self::StencilPdf),
+            "feeder-svg" => Ok(Self::FeederSvg),
             "kicad" | "altium" | "odb" => Err(crate::not_implemented(&format!("`{value}` export"))),
             other => Err(SmtError::new(
                 "cli/unknown-format",
                 format!(
-                    "unknown export format `{other}`; only program, feeders, fai, json, md, svg or pdf, plus stencil, stencil-svg or stencil-pdf is supported"
+                    "unknown export format `{other}`; only program, feeders, fai, json, md, svg or pdf, plus stencil, stencil-svg, stencil-pdf or feeder-svg is supported"
                 ),
             )),
         }
@@ -881,6 +886,11 @@ impl OpenSmt {
             }
             ExportFormat::StencilPdf => {
                 let drawing = stencil::render_pdf(document, id)?;
+                losses = drawing.summary.losses();
+                drawing.text
+            }
+            ExportFormat::FeederSvg => {
+                let drawing = feeder_layout::render_svg(document, id)?;
                 losses = drawing.summary.losses();
                 drawing.text
             }
