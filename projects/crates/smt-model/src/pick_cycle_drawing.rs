@@ -59,8 +59,9 @@ pub struct PickCycleDrawing {
 
 const MARGIN: f64 = drawing::DRAW_MARGIN_MM;
 const ROW_LABEL_W: f64 = 16.0;
-const ROW_H: f64 = 12.0;
-const SLOT_H: f64 = 8.4;
+const ROW_H: f64 = 6.4;
+const SLOT_H: f64 = 4.8;
+const DETAIL_ROW_H: f64 = 4.6;
 const BAND_H: f64 = 22.0;
 const TARGET_W: f64 = 232.0;
 
@@ -80,26 +81,24 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<PickCycleDrawing, 
     let cell_w = ((TARGET_W - ROW_LABEL_W) / f64::from(report.heads.max(1))).clamp(24.0, 38.0);
     let matrix_w = ROW_LABEL_W + cell_w * f64::from(report.heads.max(1));
     let detail_x = MARGIN + matrix_w + drawing::COLUMN_GAP_MM;
+    let legend_note = "utilisation = picks / (cycles x heads); cycles merge consecutive same-package picks";
     let detail_w = report
         .entries
         .iter()
         .map(|cycle| drawing::text_width(&detail_line(cycle), 2.3))
         .fold(drawing::text_width("CYCLE DETAIL", 2.4), f64::max)
+        .max(drawing::text_width(legend_note, 2.3))
         .clamp(58.0, 150.0);
     let width = detail_x + detail_w + MARGIN;
-    let matrix_y = MARGIN + 18.0 + BAND_H + 10.0;
+    let matrix_y = MARGIN + 18.0 + BAND_H + 6.0;
     let matrix_h = f64::from(report.cycles.max(1)) * ROW_H;
-    let detail_h = f64::from(report.cycles.max(1)) * 5.2 + 6.0;
-    let legend_y = matrix_y + matrix_h + 9.0;
-    let content_bottom = (matrix_y + matrix_h).max(matrix_y + detail_h).max(legend_y + 38.0);
-    let title_lines = title_text(&report, id, "1 mm = 8 px");
-    let laid = drawing::lay_out(&title_lines, width - 2.0 * MARGIN - 5.0);
-    let title_h = drawing::block_height(&laid) + 6.0;
-    let title_y = content_bottom + drawing::COLUMN_GAP_MM;
-    let height = title_y + title_h + MARGIN;
+    let detail_h = f64::from(report.cycles.max(1)) * DETAIL_ROW_H + 6.0;
+    // The legend sits under the detail list, so a tall matrix is not pushed up
+    // by a full-width legend band.
+    let legend_y = matrix_y + detail_h + 4.0;
+    let content_bottom = (matrix_y + matrix_h).max(legend_y + 34.0);
 
     let mut svg = String::new();
-    drawing::svg_begin(&mut svg, width, height);
     svg.push_str("  <g id=\"pick-cycle\">\n");
     svg.push_str(&format!(
         "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" font-weight=\"bold\" fill=\"#{}\">PICK CYCLE MATRIX</text>\n",
@@ -119,11 +118,10 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<PickCycleDrawing, 
     ));
     push_band(&mut svg, &report, MARGIN, MARGIN + 15.0, width - 2.0 * MARGIN);
     push_matrix(&mut svg, &report, MARGIN, matrix_y, cell_w, detail_x, detail_w);
-    push_legend(&mut svg, MARGIN, legend_y);
-    push_title(&mut svg, width, title_y, title_h, &laid);
+    push_legend(&mut svg, detail_x, legend_y, detail_w);
     svg.push_str("  </g>\n");
-    drawing::svg_end(&mut svg);
-    Ok(PickCycleDrawing { text: svg, summary })
+    let text = drawing::render_sheet((0.0, 0.0, width, content_bottom), &svg, &title_text(&report, id, "A4 landscape"));
+    Ok(PickCycleDrawing { text, summary })
 }
 
 fn push_band(svg: &mut String, report: &PickCycleReport, x: f64, y: f64, width: f64) {
@@ -203,7 +201,7 @@ fn push_matrix(svg: &mut String, report: &PickCycleReport, x: f64, y: f64, cell_
         svg.push_str(&format!(
             "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" font-weight=\"bold\" fill=\"#{}\">C{}</text>\n",
             drawing::number(x),
-            drawing::number(top + 6.0),
+            drawing::number(top + 4.2),
             drawing::hex(drawing::INK),
             cycle.cycle
         ));
@@ -234,7 +232,7 @@ fn push_matrix(svg: &mut String, report: &PickCycleReport, x: f64, y: f64, cell_
                 svg.push_str(&format!(
                     "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.1\" fill=\"#{}\">{}</text>\n",
                     drawing::number(left + 1.6),
-                    drawing::number(top + 5.6),
+                    drawing::number(top + 4.1),
                     drawing::hex(drawing::INK),
                     drawing::escape_xml(&text)
                 ));
@@ -250,7 +248,7 @@ fn push_matrix(svg: &mut String, report: &PickCycleReport, x: f64, y: f64, cell_
         drawing::hex(drawing::MUTED)
     ));
     for (index, cycle) in report.entries.iter().enumerate() {
-        let row = detail_y + index as f64 * 5.2;
+        let row = detail_y + index as f64 * DETAIL_ROW_H;
         svg.push_str(&format!(
             "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.3\" fill=\"#{}\">{}</text>\n",
             drawing::number(side_x),
@@ -276,7 +274,7 @@ fn detail_line(cycle: &pick_cycle::PickCycle) -> String {
     )
 }
 
-fn push_legend(svg: &mut String, x: f64, y: f64) {
+fn push_legend(svg: &mut String, x: f64, y: f64, detail_width: f64) {
     svg.push_str(&format!("  <g id=\"legend\" transform=\"translate({} {})\">\n", drawing::number(x), drawing::number(y)));
     svg.push_str(&format!(
         "    <text x=\"0\" y=\"0\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" font-weight=\"bold\" fill=\"#{}\">LEGEND</text>\n",
@@ -304,22 +302,14 @@ fn push_legend(svg: &mut String, x: f64, y: f64) {
         ));
     }
     svg.push_str(&format!(
-        "    <text x=\"0\" y=\"31\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.3\" fill=\"#{}\">utilisation = picks / (cycles x heads); cycles merge consecutive same-package picks</text>\n",
-        drawing::hex(drawing::MUTED)
+        "    <text x=\"0\" y=\"31\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.3\" fill=\"#{}\">{}</text>\n",
+        drawing::hex(drawing::MUTED),
+        drawing::escape_xml(&shrink_to_fit(
+            "utilisation = picks / (cycles x heads); cycles merge consecutive same-package picks",
+            detail_width,
+            2.3
+        ))
     ));
-    svg.push_str("  </g>\n");
-}
-
-fn push_title(svg: &mut String, width: f64, y: f64, height: f64, laid: &[drawing::LaidLine]) {
-    svg.push_str(&format!(
-        "  <g id=\"title-block\" transform=\"translate({} {})\">\n    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
-        drawing::number(MARGIN),
-        drawing::number(y),
-        drawing::number(width - 2.0 * MARGIN),
-        drawing::number(height),
-        drawing::hex(drawing::PANEL_EDGE)
-    ));
-    drawing::push_block_svg(svg, 2.5, 3.0, laid);
     svg.push_str("  </g>\n");
 }
 

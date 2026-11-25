@@ -96,13 +96,13 @@ struct Plan {
 pub fn render_svg(document: &SmtDocument, id: &str) -> Result<FeederDrawing, SmtError> {
     let plan = build_plan(document, id)?;
     let layout = Layout::new(&plan);
-    let mut svg = String::new();
-    drawing::svg_begin(&mut svg, layout.width, layout.height);
-    push_svg_header(&mut svg, &plan, &layout);
-    push_svg_lanes(&mut svg, &plan, &layout);
-    push_svg_title(&mut svg, &plan, &layout);
-    drawing::svg_end(&mut svg);
-    Ok(FeederDrawing { text: svg, summary: plan.summary })
+    let mut body = String::new();
+    push_svg_header(&mut body, &plan, &layout);
+    push_svg_lanes(&mut body, &plan, &layout);
+    push_svg_notes(&mut body, &plan, &layout);
+    let content = (0.0, 0.0, layout.width, layout.content_bottom);
+    let text = drawing::render_sheet(content, &body, &title_text(&plan, "A4 landscape"));
+    Ok(FeederDrawing { text, summary: plan.summary })
 }
 
 fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
@@ -156,10 +156,9 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
 
 struct Layout {
     width: f64,
-    height: f64,
     rows_y: f64,
-    title_y: f64,
-    title_h: f64,
+    notes_y: f64,
+    content_bottom: f64,
 }
 
 impl Layout {
@@ -168,10 +167,11 @@ impl Layout {
         let rows_height = plan.lanes.iter().map(|lane| ROW_MM + wrapped_lines(&lane.refdes) as f64 * LINE_MM).sum::<f64>();
         let notes_y = if plan.lanes.is_empty() { rows_y + 8.0 } else { rows_y + rows_height + 6.0 };
         let width = 2.0 * drawing::DRAW_MARGIN_MM + CONTENT_MM;
-        let laid = drawing::lay_out(&title_text(plan, "1 mm = 8 px"), CONTENT_MM - 5.0);
-        let title_h = drawing::block_height(&laid) + 6.0;
-        let title_y = notes_y + 10.0;
-        Self { width, height: title_y + title_h + drawing::DRAW_MARGIN_MM, rows_y, title_y, title_h }
+        // The notes band sits directly under the table; the content ends with
+        // the last unassigned reference line instead of trailing white space.
+        let unassigned_lines = if plan.unassigned.is_empty() { 1 } else { wrap(&plan.unassigned).len() };
+        let content_bottom = notes_y + 8.0 + unassigned_lines as f64 * 3.2;
+        Self { width, rows_y, notes_y, content_bottom }
     }
 }
 
@@ -339,14 +339,10 @@ fn push_svg_lanes(svg: &mut String, plan: &Plan, layout: &Layout) {
     svg.push_str("  </g>\n");
 }
 
-fn push_svg_title(svg: &mut String, plan: &Plan, layout: &Layout) {
+fn push_svg_notes(svg: &mut String, plan: &Plan, layout: &Layout) {
     let x = drawing::DRAW_MARGIN_MM;
-    let y = layout.title_y;
-    svg.push_str(&format!(
-        "  <g id=\"notes\" transform=\"translate({} {})\">\n",
-        drawing::number(x),
-        drawing::number(y - 10.0)
-    ));
+    let y = layout.notes_y;
+    svg.push_str(&format!("  <g id=\"notes\" transform=\"translate({} {})\">\n", drawing::number(x), drawing::number(y)));
     svg.push_str(&format!(
         "    <text x=\"0\" y=\"2.8\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" fill=\"#{}\">load bar = loaded / capacity; mapping lines list the assigned reference designators</text>\n",
         drawing::hex(drawing::MUTED)
@@ -360,16 +356,6 @@ fn push_svg_title(svg: &mut String, plan: &Plan, layout: &Layout) {
             drawing::escape_xml(line)
         ));
     }
-    svg.push_str("  </g>\n");
-    svg.push_str(&format!("  <g id=\"title-block\" transform=\"translate({} {})\">\n", drawing::number(x), drawing::number(y)));
-    svg.push_str(&format!(
-        "    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
-        drawing::number(CONTENT_MM),
-        drawing::number(layout.title_h),
-        drawing::hex(drawing::PANEL_EDGE)
-    ));
-    let laid = drawing::lay_out(&title_text(plan, "1 mm = 8 px"), CONTENT_MM - 5.0);
-    drawing::push_block_svg(svg, 2.5, 3.0, &laid);
     svg.push_str("  </g>\n");
 }
 

@@ -182,7 +182,7 @@ fn title_text(document: &SmtDocument, report: &ReflowReport, id: &str, units: &s
             drawing::number(tmax)
         )),
         body("the curve enters each zone at the previous set-point and ramps to its own".to_string()),
-        body("millimetres; 1 mm = 8 px".to_string()),
+        body("millimetres; A4 landscape".to_string()),
     ]
 }
 
@@ -203,10 +203,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
     let plot_w = 175.0;
     let plot_h = 110.0;
     let width = plot_x + plot_w + drawing::DRAW_MARGIN_MM;
-    let title_y = plot_y + plot_h + 22.0;
-    let laid_title = drawing::lay_out(&title_text(document, &report, &id, &units), width - 2.0 * drawing::DRAW_MARGIN_MM - 5.0);
-    let title_h = drawing::block_height(&laid_title) + 6.0;
-    let height = title_y + title_h + drawing::DRAW_MARGIN_MM;
+    let content_bottom = plot_y + plot_h + 22.0;
 
     let total = report.total_seconds.max(1e-9);
     let tmin = AMBIENT;
@@ -215,7 +212,6 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
     let ty = |temperature: f64| plot_y + plot_h - (temperature - tmin) / (tmax - tmin) * plot_h;
 
     let mut svg = String::new();
-    drawing::svg_begin(&mut svg, width, height);
 
     svg.push_str(&format!(
         "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"4.2\" font-weight=\"bold\" fill=\"#{}\">REFLOW TIME-TEMPERATURE PROFILE</text>\n",
@@ -367,19 +363,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
         drawing::hex(drawing::BOTTOM_EDGE)
     ));
 
-    // Title block.
-    svg.push_str(&format!(
-        "  <g id=\"title-block\" transform=\"translate({} {})\">\n    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
-        drawing::number(drawing::DRAW_MARGIN_MM),
-        drawing::number(title_y),
-        drawing::number(width - 2.0 * drawing::DRAW_MARGIN_MM),
-        drawing::number(title_h),
-        drawing::hex(drawing::PANEL_EDGE)
-    ));
-    drawing::push_block_svg(&mut svg, 2.5, 3.0, &laid_title);
-    svg.push_str("  </g>\n");
-
-    drawing::svg_end(&mut svg);
+    let text = drawing::render_sheet((0.0, 0.0, width, content_bottom), &svg, &title_text(document, &report, &id, &units));
     let summary = ReflowDrawingSummary {
         units,
         temperature_unit: report.temperature_unit.clone(),
@@ -390,5 +374,5 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
         time_above_liquidus: report.time_above_liquidus,
         dropped_characters: dropped as u32,
     };
-    Ok(ReflowDrawing { text: svg, summary })
+    Ok(ReflowDrawing { text, summary })
 }

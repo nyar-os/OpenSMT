@@ -226,14 +226,13 @@ pub fn csv(report: &StencilReport) -> String {
 pub fn render_svg(document: &SmtDocument, id: &str) -> Result<StencilDrawing, SmtError> {
     let plan = build_plan(document, id)?;
     let layout = StencilLayout::new(&plan);
-    let mut svg = String::new();
-    drawing::svg_begin(&mut svg, layout.width, layout.height);
-    push_svg_board(&mut svg, &plan);
-    push_svg_legend(&mut svg, &layout);
-    push_svg_rules(&mut svg, &plan, &layout);
-    push_svg_title(&mut svg, &plan, &layout, &format!("1 mm = {} px", drawing::SVG_PX_PER_MM));
-    drawing::svg_end(&mut svg);
-    Ok(StencilDrawing { text: svg, summary: plan.summary })
+    let mut body = String::new();
+    push_svg_board(&mut body, &plan);
+    push_svg_legend(&mut body, &layout);
+    push_svg_rules(&mut body, &plan, &layout);
+    let content = (0.0, 0.0, layout.width, layout.content_bottom);
+    let text = drawing::render_sheet(content, &body, &title_text(&plan, "A4 landscape"));
+    Ok(StencilDrawing { text, summary: plan.summary })
 }
 
 /// Renders the stencil sheet as a one-page A4 landscape PDF.
@@ -294,6 +293,7 @@ struct StencilLayout {
     height: f64,
     side_x: f64,
     rules_y: f64,
+    content_bottom: f64,
     title_y: f64,
     title_h: f64,
 }
@@ -301,7 +301,9 @@ struct StencilLayout {
 impl StencilLayout {
     fn new(plan: &Plan) -> Self {
         let side_x = drawing::DRAW_MARGIN_MM + plan.board_width + drawing::COLUMN_GAP_MM;
-        let rules_y = drawing::DRAW_MARGIN_MM + drawing::LEGEND_HEIGHT_MM + drawing::COLUMN_GAP_MM;
+        // The legend ends with its three notes; the rules table starts just
+        // below them instead of leaving a band of empty sheet.
+        let rules_y = drawing::DRAW_MARGIN_MM + drawing::LEGEND_HEIGHT_MM;
         let rules_height = 12.0 + plan.rules.len() as f64 * drawing::FEEDER_ROW_MM;
         let content_bottom = (drawing::DRAW_MARGIN_MM + plan.board_depth)
             .max(drawing::DRAW_MARGIN_MM + drawing::LEGEND_HEIGHT_MM)
@@ -310,7 +312,7 @@ impl StencilLayout {
         let laid = drawing::lay_out(&title_text(plan, "1 mm = 8 px"), width - 2.0 * drawing::DRAW_MARGIN_MM - 5.0);
         let title_h = drawing::block_height(&laid) + 6.0;
         let title_y = content_bottom + drawing::COLUMN_GAP_MM;
-        Self { width, height: title_y + title_h + drawing::DRAW_MARGIN_MM, side_x, rules_y, title_y, title_h }
+        Self { width, height: title_y + title_h + drawing::DRAW_MARGIN_MM, side_x, rules_y, content_bottom, title_y, title_h }
     }
 }
 
@@ -549,23 +551,6 @@ fn push_svg_rules(svg: &mut String, plan: &Plan, layout: &StencilLayout) {
     .with_row(5.4)
     .fit_width(drawing::SIDE_WIDTH_MM)
     .push_svg(svg, 0.0, 7.0, "stencil-rules");
-    svg.push_str("  </g>\n");
-}
-
-fn push_svg_title(svg: &mut String, plan: &Plan, layout: &StencilLayout, scale_note: &str) {
-    let x = drawing::DRAW_MARGIN_MM;
-    let y = layout.title_y;
-    let width = layout.width - 2.0 * drawing::DRAW_MARGIN_MM;
-    svg.push_str(&format!("  <g id=\"title-block\" transform=\"translate({} {})\">\n", drawing::number(x), drawing::number(y)));
-    svg.push_str(&format!(
-        "    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
-        drawing::number(width),
-        drawing::number(layout.title_h),
-        drawing::hex(drawing::PANEL_EDGE)
-    ));
-    let lines = title_text(plan, scale_note);
-    let laid = drawing::lay_out(&lines, width - 5.0);
-    drawing::push_block_svg(svg, 2.5, 3.0, &laid);
     svg.push_str("  </g>\n");
 }
 

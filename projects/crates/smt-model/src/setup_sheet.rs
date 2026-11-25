@@ -27,10 +27,14 @@ pub const PAGE_HEIGHT_MM: f64 = 210.0;
 /// Rows drawn on one page before the table continues on the next page.
 pub const ROWS_PER_PAGE: usize = 20;
 
-const PAGE_MARGIN_MM: f64 = 12.0;
+const PAGE_MARGIN_MM: f64 = 8.0;
 const HEADER_HEIGHT_MM: f64 = 28.0;
 const ROW_HEIGHT_MM: f64 = 6.0;
 const FOOTER_HEIGHT_MM: f64 = 22.0;
+/// Height of the bottom title block of one SVG page, in millimetres.
+const TITLE_BAR_MM: f64 = 30.0;
+/// Height of the table header row, in millimetres.
+const TABLE_HEAD_MM: f64 = 6.0;
 
 /// Counts of a rendered setup sheet.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -169,22 +173,37 @@ fn truncate(text: &str, limit: usize) -> String {
     shortened
 }
 
-/// Renders the setup table as a stacked, paginated SVG sheet.
+/// Renders the setup table as one fixed A4 landscape SVG page per chunk.
+///
+/// Every page is a complete 297 × 210 mm sheet with the shared outer frame,
+/// inner frame and a bottom title block. Several pages stack vertically with a
+/// gap, so each page of the file is still A4.
 pub fn render_svg(document: &SmtDocument, id: &str) -> Result<SetupSheet, SmtError> {
     let plan = build_plan(document, id)?;
     let pages = plan.pages();
     let gap = 8.0;
     let width = PAGE_WIDTH_MM;
-    // A table with a handful of rows must not leave half a page empty.
-    let rows_on_page = plan.rows.len().clamp(1, ROWS_PER_PAGE) as f64;
-    let page_height = HEADER_HEIGHT_MM + rows_on_page * ROW_HEIGHT_MM + 10.0 + FOOTER_HEIGHT_MM + 2.0 * PAGE_MARGIN_MM;
-    let height = pages as f64 * page_height + (pages.saturating_sub(1)) as f64 * gap;
+    let height = pages as f64 * PAGE_HEIGHT_MM + (pages.saturating_sub(1)) as f64 * gap;
     let mut svg = String::new();
-    drawing::svg_begin_framed(&mut svg, width, height, false);
+    svg.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    svg.push_str(&format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {} {}\" width=\"{:.0}\" height=\"{:.0}\">\n",
+        drawing::number(width),
+        drawing::number(height),
+        drawing::SHEET_PX_WIDTH,
+        (drawing::SHEET_PX_WIDTH * height / width).round()
+    ));
     for page in 0..pages {
-        push_page(&mut svg, &plan, page, page as f64 * (page_height + gap), page_height);
+        let top = page as f64 * (PAGE_HEIGHT_MM + gap);
+        svg.push_str(&format!(
+            "  <rect x=\"0\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#ffffff\"/>\n",
+            drawing::number(top),
+            drawing::number(width),
+            drawing::number(PAGE_HEIGHT_MM)
+        ));
+        push_page(&mut svg, &plan, page, top);
     }
-    drawing::svg_end(&mut svg);
+    svg.push_str("</svg>\n");
     Ok(SetupSheet { text: svg, summary: summary(plan) })
 }
 
@@ -226,32 +245,44 @@ fn rows_of(plan: &Plan, page: usize) -> &[Row] {
     &plan.rows[start..end]
 }
 
-fn push_page(svg: &mut String, plan: &Plan, page: usize, offset_y: f64, page_height: f64) {
-    let x = PAGE_MARGIN_MM;
-    let y = PAGE_MARGIN_MM + offset_y;
-    let content_w = PAGE_WIDTH_MM - 2.0 * PAGE_MARGIN_MM;
-    svg.push_str(&format!(
-        "  <g data-page=\"{}\" transform=\"translate({} {})\">\n",
-        page + 1,
-        drawing::number(x),
-        drawing::number(y)
-    ));
-    let frame_h = page_height - 2.0 * PAGE_MARGIN_MM;
-    svg.push_str(&format!(
-        "    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.6\"/>\n",
-        drawing::number(content_w),
-        drawing::number(frame_h),
+fn push_page(svg: &mut String, plan: &Plan, page: usize, offset_y: f64) {
+    let inner = PAGE_MARGIN_MM;
+    let content_w = PAGE_WIDTH_MM - 2.0 * inner;
+    let title_top = PAGE_HEIGHT_MM - inner - TITLE_BAR_MM;
+    let mut out = String::new();
+    out.push_str(&format!("  <g data-page=\"{}\" transform=\"translate(0 {})\">\n", page + 1, drawing::number(offset_y)));
+    out.push_str(&format!(
+        "    <rect id=\"frame\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"none\" stroke=\"#{}\" stroke-width=\"0.7\"/>\n",
+        drawing::number(5.0),
+        drawing::number(5.0),
+        drawing::number(PAGE_WIDTH_MM - 10.0),
+        drawing::number(PAGE_HEIGHT_MM - 10.0),
         drawing::hex(drawing::PANEL_EDGE)
     ));
-    svg.push_str(&format!(
-        "    <text x=\"4\" y=\"9\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"4.2\" font-weight=\"bold\" fill=\"#{}\">SMT SETUP SHEET</text>\n",
+    out.push_str(&format!(
+        "    <rect id=\"inner-frame\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"none\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
+        drawing::number(inner),
+        drawing::number(inner),
+        drawing::number(content_w),
+        drawing::number(title_top + TITLE_BAR_MM - inner),
+        drawing::hex(drawing::PANEL_EDGE)
+    ));
+    out.push_str(&format!(
+        "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"4.6\" font-weight=\"bold\" fill=\"#{}\">SMT SETUP SHEET</text>\n",
+        drawing::number(inner + 4.0),
+        drawing::number(inner + 8.0),
         drawing::hex(drawing::INK)
     ));
-    svg.push_str(&format!(
-        "    <text x=\"4\" y=\"14.4\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" fill=\"#{}\">nozzle and feeder schedule | nozzle class and tape width derived from the package rules</text>\n",
+    out.push_str(&format!(
+        "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" fill=\"#{}\">nozzle and feeder schedule | nozzle class and tape width derived from the package rules</text>\n",
+        drawing::number(inner + 4.0),
+        drawing::number(inner + 13.2),
         drawing::hex(drawing::MUTED)
     ));
-    let table_y = HEADER_HEIGHT_MM;
+    // The table sits right under the header; its rows grow with the free page
+    // height so a short schedule does not leave a band of white space between
+    // the heading and the first row.
+    let table_top = inner + 17.0;
     let rows: Vec<Vec<String>> = rows_of(plan, page)
         .iter()
         .enumerate()
@@ -268,7 +299,10 @@ fn push_page(svg: &mut String, plan: &Plan, page: usize, offset_y: f64, page_hei
             ]
         })
         .collect();
-    drawing::Table::new(
+    let row_count = rows.len().max(1) as f64;
+    let available = title_top - 4.0 - table_top - TABLE_HEAD_MM;
+    let row_height = (available / row_count).clamp(ROW_HEIGHT_MM, 20.0);
+    let table = drawing::Table::new(
         &[
             ("SLOT", drawing::Align::Right),
             ("LANE", drawing::Align::Left),
@@ -283,43 +317,49 @@ fn push_page(svg: &mut String, plan: &Plan, page: usize, offset_y: f64, page_hei
         drawing::FONT_TABLE,
         4.0,
     )
-    .with_row(ROW_HEIGHT_MM)
-    .fit_width(content_w - 8.0)
-    .push_svg(svg, 4.0, table_y + 2.0, "setup-table");
+    .with_head(TABLE_HEAD_MM)
+    .with_row(row_height)
+    .fill_last(content_w - 8.0);
+    table.push_svg(&mut out, inner + 4.0, table_top, "setup-table");
     if plan.rows.is_empty() {
-        svg.push_str(&format!(
-            "    <text x=\"4\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.9\" fill=\"#{}\">no feeder lanes declared</text>\n",
-            drawing::number(table_y + 12.0),
+        out.push_str(&format!(
+            "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.9\" fill=\"#{}\">no feeder lanes declared</text>\n",
+            drawing::number(inner + 4.0),
+            drawing::number(table_top + 10.0),
             drawing::hex(drawing::MUTED)
         ));
     }
-    let footer_y = frame_h - FOOTER_HEIGHT_MM;
-    svg.push_str(&format!(
-        "    <rect x=\"0\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
-        drawing::number(footer_y),
+    // Bottom title block, identical to every other sheet.
+    out.push_str(&format!(
+        "    <g id=\"title-block\" transform=\"translate({} {})\">\n",
+        drawing::number(inner),
+        drawing::number(title_top)
+    ));
+    out.push_str(&format!(
+        "      <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
         drawing::number(content_w),
-        drawing::number(FOOTER_HEIGHT_MM),
+        drawing::number(TITLE_BAR_MM),
         drawing::hex(drawing::PANEL_EDGE)
     ));
-    svg.push_str(&format!(
-        "    <text x=\"3\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.7\" font-weight=\"bold\" fill=\"#{}\">{}</text>\n",
-        drawing::number(footer_y + 6.0),
+    out.push_str(&format!(
+        "      <text x=\"3\" y=\"7\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.1\" font-weight=\"bold\" fill=\"#{}\">{}</text>\n",
         drawing::hex(drawing::INK),
         drawing::escape_xml(&title_line(plan, page))
     ));
-    svg.push_str(&format!(
-        "    <text x=\"3\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" fill=\"#{}\">{}</text>\n",
-        drawing::number(footer_y + 11.6),
+    out.push_str(&format!(
+        "      <text x=\"3\" y=\"13\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.7\" fill=\"#{}\">{}</text>\n",
         drawing::hex(drawing::MUTED),
         drawing::escape_xml(&stamp(plan))
     ));
-    svg.push_str(&format!(
-        "    <text x=\"3\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" fill=\"#{}\">unassigned components: {}</text>\n",
-        drawing::number(footer_y + 15.6),
+    out.push_str(&format!(
+        "      <text x=\"3\" y=\"18.6\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.7\" fill=\"#{}\">unassigned components: {} | {} row(s) on this page</text>\n",
         drawing::hex(drawing::MUTED),
-        plan.unassigned
+        plan.unassigned,
+        row_count as u32
     ));
-    svg.push_str("  </g>\n");
+    out.push_str("    </g>\n");
+    out.push_str("  </g>\n");
+    svg.push_str(&out);
 }
 
 fn push_page_pdf(pdf: &mut Pdf, plan: &Plan, page: usize) {

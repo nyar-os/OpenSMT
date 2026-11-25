@@ -333,19 +333,12 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<HeatmapDrawing, Sm
     let scale = (plot_w / board_width).min(plot_h / board_depth);
     let draw_w = board_width * scale;
     let draw_h = board_depth * scale;
-    let title_y = plot_y + draw_h + 12.0;
-    let laid_title = drawing::lay_out(
-        &title_text(document, &report, &id, &units, "fit to frame"),
-        width - 2.0 * drawing::DRAW_MARGIN_MM - 5.0,
-    );
-    let title_h = drawing::block_height(&laid_title) + 6.0;
-    let height = title_y + title_h + drawing::DRAW_MARGIN_MM;
+    let content_bottom = plot_y + draw_h + 12.0;
     let px = |x: f64| plot_x + x * scale;
     let py = |y: f64| plot_y + y * scale;
     let max_share = report.steps.iter().map(|step| step.share).fold(0.0, f64::max).max(1e-9);
 
     let mut svg = String::new();
-    drawing::svg_begin(&mut svg, width, height);
 
     svg.push_str(&format!(
         "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"4.2\" font-weight=\"bold\" fill=\"#{}\">TAKT BOTTLENECK HEAT MAP</text>\n",
@@ -458,19 +451,11 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<HeatmapDrawing, Sm
         }
     }
 
-    // Title block.
-    svg.push_str(&format!(
-        "  <g id=\"title-block\" transform=\"translate({} {})\">\n    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
-        drawing::number(drawing::DRAW_MARGIN_MM),
-        drawing::number(title_y),
-        drawing::number(width - 2.0 * drawing::DRAW_MARGIN_MM),
-        drawing::number(title_h),
-        drawing::hex(drawing::PANEL_EDGE)
-    ));
-    drawing::push_block_svg(&mut svg, 2.5, 3.0, &laid_title);
-    svg.push_str("  </g>\n");
-
-    drawing::svg_end(&mut svg);
+    let text = drawing::render_sheet(
+        (0.0, 0.0, width, content_bottom),
+        &svg,
+        &title_text(document, &report, &id, &units, "A4 landscape"),
+    );
     let summary = HeatmapDrawingSummary {
         units,
         components: report.components,
@@ -479,5 +464,5 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<HeatmapDrawing, Sm
         has_bottleneck: report.bottleneck.is_some(),
         dropped_characters: dropped as u32,
     };
-    Ok(HeatmapDrawing { text: svg, summary })
+    Ok(HeatmapDrawing { text, summary })
 }

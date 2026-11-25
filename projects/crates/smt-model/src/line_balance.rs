@@ -70,10 +70,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
     let plot_w = 170.0;
     let plot_h = 100.0;
     let width = plot_x + plot_w + 12.0;
-    let title_y = plot_y + plot_h + 24.0;
-    let laid_title = drawing::lay_out(&title_text(document, &report, &id, &units), width - 20.0 - 5.0);
-    let title_h = drawing::block_height(&laid_title) + 6.0;
-    let height = title_y + title_h + 10.0;
+    let content_bottom = plot_y + plot_h + 24.0;
 
     let target = report.total_seconds / MACHINES as f64;
     let raw_top = (report.max_seconds.max(target) * 1.18).max(1e-9);
@@ -86,7 +83,6 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
     let bottleneck = bottleneck(&report);
 
     let mut svg = String::new();
-    drawing::svg_begin(&mut svg, width, height);
 
     svg.push_str(&format!(
         "  <text x=\"12\" y=\"17\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"4.2\" font-weight=\"bold\" fill=\"#{}\">LINE BALANCE</text>\n",
@@ -231,8 +227,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
         drawing::hex(drawing::INK)
     ));
 
-    push_title(&mut svg, 10.0, title_y, width - 20.0, title_h, &laid_title);
-    drawing::svg_end(&mut svg);
+    let text = drawing::render_sheet((0.0, 0.0, width, content_bottom), &svg, &title_text(document, &report, &id, &units));
 
     let summary = LineBalanceSummary {
         units,
@@ -243,7 +238,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
         imbalance: report.imbalance,
         dropped_characters: dropped as u32,
     };
-    Ok(LineBalanceDrawing { text: svg, summary })
+    Ok(LineBalanceDrawing { text, summary })
 }
 
 /// Rounds an axis step up to a readable 1-2-5 value.
@@ -291,19 +286,6 @@ fn title_text(document: &SmtDocument, report: &BalanceReport, id: &str, units: &
             report.imbalance * 100.0
         )),
         body(format!("assumes a {MACHINES}-machine line; stations are balanced by smallest completion time")),
-        body("millimetres; 1 mm = 8 px".to_string()),
+        body("millimetres; A4 landscape".to_string()),
     ]
-}
-
-fn push_title(svg: &mut String, x: f64, y: f64, width: f64, height: f64, laid: &[drawing::LaidLine]) {
-    svg.push_str(&format!(
-        "  <g id=\"title-block\" transform=\"translate({} {})\">\n    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
-        drawing::number(x),
-        drawing::number(y),
-        drawing::number(width),
-        drawing::number(height),
-        drawing::hex(drawing::PANEL_EDGE)
-    ));
-    drawing::push_block_svg(svg, 2.5, 3.0, laid);
-    svg.push_str("  </g>\n");
 }

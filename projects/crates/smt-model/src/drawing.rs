@@ -28,6 +28,22 @@ use crate::{
 pub const SVG_PX_PER_MM: f64 = 8.0;
 /// PostScript points per millimetre used for PDF coordinates.
 pub const PT_PER_MM: f64 = 2.834_646;
+/// Width of the fixed A4 landscape page shared by every drawing, in
+/// millimetres.
+pub const SHEET_WIDTH_MM: f64 = 297.0;
+/// Height of the fixed A4 landscape page shared by every drawing, in
+/// millimetres.
+pub const SHEET_HEIGHT_MM: f64 = 210.0;
+/// Pixel width of the SVG root. The viewBox stays in millimetres; the root is
+/// sized so a 1600 × 1131 screenshot window shows the whole page without
+/// cropping.
+pub const SHEET_PX_WIDTH: f64 = 1600.0;
+/// Pixel height of the SVG root.
+pub const SHEET_PX_HEIGHT: f64 = 1131.0;
+/// Inset of the outer page frame from the sheet edge, in millimetres.
+pub(crate) const SHEET_BORDER_MM: f64 = 5.0;
+/// Inset of the inner frame that bounds the drawing area, in millimetres.
+pub(crate) const SHEET_INNER_MM: f64 = 8.0;
 /// Width of the generic fallback footprint in millimetres.
 pub const DEFAULT_COMPONENT_WIDTH_MM: f64 = 2.0;
 /// Height of the generic fallback footprint in millimetres.
@@ -36,7 +52,7 @@ pub const DEFAULT_COMPONENT_HEIGHT_MM: f64 = 1.2;
 pub(crate) const DRAW_MARGIN_MM: f64 = 8.0;
 pub(crate) const COLUMN_GAP_MM: f64 = 6.0;
 pub(crate) const SIDE_WIDTH_MM: f64 = 78.0;
-pub(crate) const LEGEND_HEIGHT_MM: f64 = 52.0;
+pub(crate) const LEGEND_HEIGHT_MM: f64 = 50.0;
 pub(crate) const TITLE_HEIGHT_MM: f64 = 42.0;
 pub(crate) const FEEDER_ROW_MM: f64 = 6.0;
 
@@ -58,49 +74,83 @@ pub(crate) const FONT_TABLE_HEAD: f64 = 2.2;
 /// Multiplier from font size to a comfortable line advance.
 pub(crate) const LINE_ADVANCE: f64 = 1.38;
 
-/// Opens a millimetre SVG sheet with a white background, a drawing frame and
-/// the content translated by the drawing margin. The caller closes it with
-/// [`svg_end`].
-pub(crate) fn svg_begin(svg: &mut String, width: f64, height: f64) -> f64 {
-    svg_begin_framed(svg, width, height, true)
-}
+/// Largest uniform enlargement applied when a drawing is smaller than the
+/// sheet, so a sparse document never blows its text up to poster size.
+const SHEET_MAX_SCALE: f64 = 1.25;
 
-/// Like [`svg_begin`] but lets a multi-page sheet draw its own page frames
-/// instead of one frame around the whole stack.
-pub(crate) fn svg_begin_framed(svg: &mut String, width: f64, height: f64, framed: bool) -> f64 {
-    let offset = 0.0;
-    let sheet_width = width + 2.0 * offset;
-    let sheet_height = height + 2.0 * offset;
+/// Composes one fixed A4 landscape sheet around a body drawn in the body's own
+/// millimetre coordinates.
+///
+/// The body is scaled uniformly to fit the area inside the inner frame above
+/// the title block and centred there, so nothing is cropped and no text is
+/// truncated. Every sheet therefore has the same 297 × 210 mm page, the same
+/// outer and inner frame and the same bottom title block. `content` is the
+/// body's own bounding box `(left, top, right, bottom)` in millimetres.
+pub(crate) fn render_sheet(content: Box4, body: &str, title: &[TextLine]) -> String {
+    let title_width = SHEET_WIDTH_MM - 2.0 * SHEET_INNER_MM - 6.0;
+    let laid = lay_out(title, title_width);
+    let title_h = (block_height(&laid) + 6.0).clamp(20.0, 42.0);
+    let inner_right = SHEET_WIDTH_MM - SHEET_INNER_MM;
+    let inner_bottom = SHEET_HEIGHT_MM - SHEET_INNER_MM;
+    let title_top = inner_bottom - title_h;
+    let area = (SHEET_INNER_MM, SHEET_INNER_MM, inner_right, title_top - 4.0);
+    let content_w = (content.2 - content.0).max(1e-6);
+    let content_h = (content.3 - content.1).max(1e-6);
+    let scale = ((area.2 - area.0) / content_w).min((area.3 - area.1) / content_h).min(SHEET_MAX_SCALE);
+    let offset_x = area.0 + ((area.2 - area.0) - content_w * scale) / 2.0 - content.0 * scale;
+    let offset_y = area.1 + ((area.3 - area.1) - content_h * scale) / 2.0 - content.1 * scale;
+    let mut svg = String::with_capacity(body.len() + 2048);
     svg.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     svg.push_str(&format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {} {}\" width=\"{:.0}\" height=\"{:.0}\">\n",
-        number(sheet_width),
-        number(sheet_height),
-        (sheet_width * SVG_PX_PER_MM).round(),
-        (sheet_height * SVG_PX_PER_MM).round()
+        number(SHEET_WIDTH_MM),
+        number(SHEET_HEIGHT_MM),
+        SHEET_PX_WIDTH,
+        SHEET_PX_HEIGHT
     ));
     svg.push_str(&format!(
         "  <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\"/>\n",
-        number(sheet_width),
-        number(sheet_height)
+        number(SHEET_WIDTH_MM),
+        number(SHEET_HEIGHT_MM)
     ));
-    if framed {
-        svg.push_str(&format!(
-            "  <rect id=\"frame\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"none\" stroke=\"#{}\" stroke-width=\"0.6\"/>\n",
-            number(1.0),
-            number(1.0),
-            number(sheet_width - 2.0),
-            number(sheet_height - 2.0),
-            hex(PANEL_EDGE)
-        ));
-    }
-    svg.push_str(&format!("  <g id=\"content\" transform=\"translate({} {})\">\n", number(offset), number(offset)));
-    offset
-}
-
-/// Closes the group and the SVG document opened by [`svg_begin`].
-pub(crate) fn svg_end(svg: &mut String) {
+    svg.push_str(&format!(
+        "  <rect id=\"frame\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"none\" stroke=\"#{}\" stroke-width=\"0.7\"/>\n",
+        number(SHEET_BORDER_MM),
+        number(SHEET_BORDER_MM),
+        number(SHEET_WIDTH_MM - 2.0 * SHEET_BORDER_MM),
+        number(SHEET_HEIGHT_MM - 2.0 * SHEET_BORDER_MM),
+        hex(PANEL_EDGE)
+    ));
+    svg.push_str(&format!(
+        "  <rect id=\"inner-frame\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"none\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
+        number(SHEET_INNER_MM),
+        number(SHEET_INNER_MM),
+        number(inner_right - SHEET_INNER_MM),
+        number(inner_bottom - SHEET_INNER_MM),
+        hex(PANEL_EDGE)
+    ));
+    svg.push_str(&format!(
+        "  <g id=\"content\" transform=\"translate({} {}) scale({})\">\n",
+        number(offset_x),
+        number(offset_y),
+        number(scale)
+    ));
+    svg.push_str(body);
+    svg.push_str("  </g>\n");
+    svg.push_str(&format!(
+        "  <g id=\"title-block\" transform=\"translate({} {})\">\n",
+        number(SHEET_INNER_MM),
+        number(title_top)
+    ));
+    svg.push_str(&format!(
+        "    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
+        number(inner_right - SHEET_INNER_MM),
+        number(title_h),
+        hex(PANEL_EDGE)
+    ));
+    push_block_svg(&mut svg, 2.5, 3.0, &laid);
     svg.push_str("  </g>\n</svg>\n");
+    svg
 }
 
 /// Title-block stamp shared by every sheet: name, drawing number, work order,
@@ -190,16 +240,15 @@ pub struct Drawing {
 pub fn render_svg(document: &SmtDocument, id: &str) -> Result<Drawing, SmtError> {
     let plan = build_plan(document, id)?;
     let layout = Layout::new(&plan);
-    let mut svg = String::new();
-    svg_begin(&mut svg, layout.width, layout.height);
-    push_svg_panel(&mut svg, &plan, &layout);
-    push_svg_legend(&mut svg, &plan, &layout);
-    push_svg_feeders(&mut svg, &plan, &layout);
-    push_svg_packages(&mut svg, &plan, &layout);
-    push_svg_notes(&mut svg, &plan, &layout);
-    push_svg_title(&mut svg, &plan, &layout, &format!("1 mm = {} px", SVG_PX_PER_MM));
-    svg_end(&mut svg);
-    Ok(Drawing { text: svg, summary: plan.summary })
+    let mut body = String::new();
+    push_svg_panel(&mut body, &plan, &layout);
+    push_svg_legend(&mut body, &plan, &layout);
+    push_svg_feeders(&mut body, &plan, &layout);
+    push_svg_packages(&mut body, &plan, &layout);
+    push_svg_notes(&mut body, &plan, &layout);
+    let content = (0.0, 0.0, layout.width, layout.content_bottom);
+    let text = render_sheet(content, &body, &drawing_text(&plan, "A4 landscape"));
+    Ok(Drawing { text, summary: plan.summary })
 }
 
 /// Renders the document as a one-page A4 landscape PDF.
@@ -475,6 +524,8 @@ pub(crate) struct Table {
     pub(crate) gap: f64,
     /// Height of one cell row in millimetres.
     pub(crate) row: f64,
+    /// Height of the header row in millimetres.
+    pub(crate) head: f64,
 }
 
 impl Table {
@@ -496,12 +547,18 @@ impl Table {
             columns.push(((*header).to_string(), *align));
             widths.push(width);
         }
-        Self { columns, widths, rows, size, gap, row: size * 1.55 }
+        Self { columns, widths, rows, size, gap, row: size * 1.55, head: FONT_TABLE_HEAD * 2.4 }
     }
 
     /// Sets the row height in millimetres.
     pub(crate) fn with_row(mut self, row: f64) -> Self {
         self.row = row.max(self.size * 1.2);
+        self
+    }
+
+    /// Sets the header row height independently of the data rows.
+    pub(crate) fn with_head(mut self, head: f64) -> Self {
+        self.head = head.max(FONT_TABLE_HEAD * 1.8);
         self
     }
 
@@ -519,6 +576,19 @@ impl Table {
         self
     }
 
+    /// Widens the last column by any space left over, so a left-aligned free
+    /// text column fills the page while measured numeric columns keep their
+    /// natural width.
+    pub(crate) fn fill_last(mut self, available: f64) -> Self {
+        let natural = self.width();
+        if natural < available {
+            if let Some(last) = self.widths.last_mut() {
+                *last += available - natural;
+            }
+        }
+        self
+    }
+
     /// Total width of the table in millimetres.
     pub(crate) fn width(&self) -> f64 {
         self.widths.iter().sum::<f64>() + self.gap * (self.widths.len().saturating_sub(1)) as f64
@@ -531,7 +601,7 @@ impl Table {
 
     /// Total height including the header row.
     pub(crate) fn height(&self) -> f64 {
-        (self.rows.len() as f64 + 1.0) * self.row_height()
+        self.head + self.rows.len() as f64 * self.row_height()
     }
 
     /// Writes the table as an SVG group at `(x, y)`, with zebra striping and a
@@ -542,12 +612,13 @@ impl Table {
         }
         let row_height = self.row_height();
         let width = self.width();
+        let head = self.head;
         svg.push_str(&format!("  <g id=\"{}\" transform=\"translate({} {})\">\n", escape_xml(id), number(x), number(y)));
         svg.push_str(&format!(
             "    <line x1=\"0\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#{}\" stroke-width=\"0.25\"/>\n",
-            number(row_height + self.size * 0.5),
+            number(head),
             number(width),
-            number(row_height + self.size * 0.5),
+            number(head),
             hex(RULE)
         ));
         let mut offset = 0.0;
@@ -555,7 +626,7 @@ impl Table {
             svg.push_str(&format!(
                 "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" fill=\"#{}\">{}</text>\n",
                 number(offset),
-                number(self.size),
+                number(head / 2.0 + FONT_TABLE_HEAD * 0.35),
                 number(FONT_TABLE_HEAD),
                 hex(MUTED),
                 escape_xml(header)
@@ -563,7 +634,7 @@ impl Table {
             offset += self.widths[index] + self.gap;
         }
         for (row_index, row) in self.rows.iter().enumerate() {
-            let top = row_height * (row_index as f64 + 1.0);
+            let top = head + row_height * row_index as f64;
             if row_index % 2 == 1 {
                 svg.push_str(&format!(
                     "    <rect x=\"0\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#{}\"/>\n",
@@ -573,7 +644,7 @@ impl Table {
                     hex(BOARD_FILL)
                 ));
             }
-            let baseline = top + self.size;
+            let baseline = top + row_height / 2.0 + self.size * 0.35;
             let mut offset = 0.0;
             for (index, (_, align)) in self.columns.iter().enumerate() {
                 let value = row.get(index).map(String::as_str).unwrap_or("");
@@ -602,13 +673,14 @@ impl Table {
             return 0.0;
         }
         let row_height = self.row_height();
+        let head = self.head;
         let mut offset = 0.0;
         for (index, (header, _)) in self.columns.iter().enumerate() {
-            pdf.text(x + offset, y + self.size, FONT_TABLE_HEAD, MUTED, header);
+            pdf.text(x + offset, y + head / 2.0 + FONT_TABLE_HEAD * 0.35, FONT_TABLE_HEAD, MUTED, header);
             offset += self.widths[index] + self.gap;
         }
         for (row_index, row) in self.rows.iter().enumerate() {
-            let baseline = y + row_height * (row_index as f64 + 1.0) + self.size;
+            let baseline = y + head + row_height * row_index as f64 + row_height / 2.0 + self.size * 0.35;
             let mut offset = 0.0;
             for (index, (_, align)) in self.columns.iter().enumerate() {
                 let value = row.get(index).map(String::as_str).unwrap_or("");
@@ -749,6 +821,7 @@ struct Layout {
     feeder_y: f64,
     packages_y: f64,
     notes_y: f64,
+    content_bottom: f64,
     title_y: f64,
     title_h: f64,
 }
@@ -781,6 +854,7 @@ impl Layout {
             feeder_y,
             packages_y,
             notes_y,
+            content_bottom,
             title_y,
             title_h,
         }
@@ -1141,22 +1215,6 @@ fn push_svg_packages(svg: &mut String, plan: &Plan, layout: &Layout) {
     .with_row(5.6)
     .fit_width(SIDE_WIDTH_MM);
     table.push_svg(svg, 0.0, 7.0, "package-table");
-    svg.push_str("  </g>\n");
-}
-
-fn push_svg_title(svg: &mut String, plan: &Plan, layout: &Layout, scale_note: &str) {
-    let x = DRAW_MARGIN_MM;
-    let y = layout.title_y;
-    let width = layout.width - 2.0 * DRAW_MARGIN_MM;
-    svg.push_str(&format!("  <g id=\"title-block\" transform=\"translate({} {})\">\n", number(x), number(y)));
-    svg.push_str(&format!(
-        "    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
-        number(width),
-        number(layout.title_h),
-        hex(PANEL_EDGE)
-    ));
-    let laid = lay_out(&drawing_text(plan, scale_note), width - 5.0);
-    push_block_svg(svg, 2.5, 3.0, &laid);
     svg.push_str("  </g>\n");
 }
 

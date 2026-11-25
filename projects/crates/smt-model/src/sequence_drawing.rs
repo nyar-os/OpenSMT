@@ -16,8 +16,8 @@ use crate::{
     SmtError,
     drawing::{
         self, BOARD_EDGE, BOARD_FILL, BOTTOM_EDGE, BOTTOM_FILL, DRAW_MARGIN_MM, DrawingLoss, INK, MUTED, PANEL_EDGE,
-        PDF_MARGIN, PDF_PAGE_HEIGHT, PDF_PAGE_WIDTH, PT_PER_MM, Pdf, RULE, SVG_PX_PER_MM, TITLE_HEIGHT_MM, TOP_EDGE, TOP_FILL,
-        hex, number, pdf_page,
+        PDF_MARGIN, PDF_PAGE_HEIGHT, PDF_PAGE_WIDTH, PT_PER_MM, Pdf, RULE, TITLE_HEIGHT_MM, TOP_EDGE, TOP_FILL, hex, number,
+        pdf_page,
     },
     model::{Side, SmtDocument},
     place,
@@ -104,8 +104,8 @@ struct Layout {
     frame_x: f64,
     frame_y: f64,
     side_x: f64,
+    content_bottom: f64,
     title_y: f64,
-    title_h: f64,
 }
 
 /// Renders the placement routes as a millimetre SVG sheet.
@@ -117,15 +117,14 @@ struct Layout {
 pub fn render_svg(document: &SmtDocument, id: &str) -> Result<SequenceDrawing, SmtError> {
     let plan = build_plan(document, id)?;
     let layout = Layout::new(&plan);
-    let mut svg = String::new();
-    drawing::svg_begin(&mut svg, layout.width, layout.height);
-    push_svg_header(&mut svg, &plan);
-    push_svg_frame(&mut svg, &plan, &layout);
-    push_svg_routes(&mut svg, &plan, &layout);
-    push_svg_side(&mut svg, &plan, &layout);
-    push_svg_title(&mut svg, &plan, &layout, &format!("1 mm = {SVG_PX_PER_MM} px"));
-    drawing::svg_end(&mut svg);
-    Ok(SequenceDrawing { text: svg, summary: plan.summary })
+    let mut body = String::new();
+    push_svg_header(&mut body, &plan);
+    push_svg_frame(&mut body, &plan, &layout);
+    push_svg_routes(&mut body, &plan, &layout);
+    push_svg_side(&mut body, &plan, &layout);
+    let content = (0.0, 0.0, layout.width, layout.content_bottom);
+    let text = drawing::render_sheet(content, &body, &title_text(&plan, "A4 landscape"));
+    Ok(SequenceDrawing { text, summary: plan.summary })
 }
 
 /// Renders the same routes as one A4 landscape PDF page.
@@ -263,7 +262,7 @@ impl Layout {
         let width = DRAW_MARGIN_MM * 2.0 + plan.board_width + drawing::COLUMN_GAP_MM + SIDE_WIDTH_MM;
         let laid = drawing::lay_out(&title_text(plan, "1 mm = 8 px"), width - 2.0 * DRAW_MARGIN_MM - 5.0);
         let title_h = drawing::block_height(&laid) + 6.0;
-        Self { width, height: title_y + title_h + DRAW_MARGIN_MM, frame_x, frame_y, side_x, title_y, title_h }
+        Self { width, height: title_y + title_h + DRAW_MARGIN_MM, frame_x, frame_y, side_x, content_bottom: title_y, title_y }
     }
 }
 
@@ -513,27 +512,6 @@ fn title_text(plan: &Plan, scale_note: &str) -> Vec<drawing::TextLine> {
         body("routes follow the default nearest-neighbour program; each side starts at the machine origin".to_string()),
         body(scale_note.to_string()),
     ]
-}
-
-fn push_svg_title(svg: &mut String, plan: &Plan, layout: &Layout, scale_note: &str) {
-    svg.push_str(&format!(
-        "  <g id=\"title-block\" transform=\"translate({} {})\">\n",
-        number(DRAW_MARGIN_MM),
-        number(layout.title_y)
-    ));
-    svg.push_str(&format!(
-        "    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
-        number(layout.width - 2.0 * DRAW_MARGIN_MM),
-        number(layout.title_h),
-        hex(drawing::PANEL_EDGE)
-    ));
-    drawing::push_block_svg(
-        svg,
-        2.5,
-        3.0,
-        &drawing::lay_out(&title_text(plan, scale_note), layout.width - 2.0 * DRAW_MARGIN_MM - 5.0),
-    );
-    svg.push_str("  </g>\n");
 }
 
 fn push_pdf_frame(pdf: &mut Pdf, plan: &Plan, layout: &Layout) {

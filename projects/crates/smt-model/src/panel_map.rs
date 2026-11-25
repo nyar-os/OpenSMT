@@ -274,7 +274,7 @@ fn title_text(document: &SmtDocument, report: &PanelMapReport, id: &str, units: 
             drawing::number(report.panel_depth)
         )),
         body("boards are numbered row-major from the panel origin".to_string()),
-        body("millimetres; 1 mm = 8 px".to_string()),
+        body("millimetres; A4 landscape".to_string()),
     ]
 }
 
@@ -297,15 +297,11 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<PanelMapDrawing, S
     let draw_w = report.panel_width * scale;
     let draw_h = report.panel_depth * scale;
     let width = plot_x + plot_w + drawing::DRAW_MARGIN_MM;
-    let title_y = plot_y + draw_h + 14.0;
-    let laid_title = drawing::lay_out(&title_text(document, &report, &id, &units), width - 2.0 * drawing::DRAW_MARGIN_MM - 5.0);
-    let title_h = drawing::block_height(&laid_title) + 6.0;
-    let height = title_y + title_h + drawing::DRAW_MARGIN_MM;
+    let content_bottom = plot_y + draw_h + 6.0;
     let px = |x: f64| plot_x + x * scale;
     let py = |y: f64| plot_y + y * scale;
 
     let mut svg = String::new();
-    drawing::svg_begin(&mut svg, width, height);
 
     svg.push_str(&format!(
         "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"4.2\" font-weight=\"bold\" fill=\"#{}\">PANEL MAP</text>\n",
@@ -389,19 +385,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<PanelMapDrawing, S
         drawing::hex(drawing::MUTED)
     ));
 
-    // Title block.
-    svg.push_str(&format!(
-        "  <g id=\"title-block\" transform=\"translate({} {})\">\n    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
-        drawing::number(drawing::DRAW_MARGIN_MM),
-        drawing::number(title_y),
-        drawing::number(width - 2.0 * drawing::DRAW_MARGIN_MM),
-        drawing::number(title_h),
-        drawing::hex(drawing::PANEL_EDGE)
-    ));
-    drawing::push_block_svg(&mut svg, 2.5, 3.0, &laid_title);
-    svg.push_str("  </g>\n");
-
-    drawing::svg_end(&mut svg);
+    let text = drawing::render_sheet((0.0, 0.0, width, content_bottom), &svg, &title_text(document, &report, &id, &units));
     let summary = PanelMapDrawingSummary {
         units,
         rows: report.rows,
@@ -413,5 +397,5 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<PanelMapDrawing, S
         outside_board: report.outside_board,
         dropped_characters: dropped as u32,
     };
-    Ok(PanelMapDrawing { text: svg, summary })
+    Ok(PanelMapDrawing { text, summary })
 }

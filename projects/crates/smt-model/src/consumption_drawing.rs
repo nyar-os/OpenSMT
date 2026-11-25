@@ -85,13 +85,8 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ConsumptionDrawing
     let timeline_top = chart_top + chart_h + 10.0;
     let timeline_h = rows as f64 * TIMELINE_H + 14.0;
     let content_bottom = timeline_top + timeline_h + 22.0;
-    let laid_title = drawing::lay_out(&title_text(&report, id, "1 mm = 8 px"), width - 2.0 * MARGIN - 5.0);
-    let title_h = drawing::block_height(&laid_title) + 6.0;
-    let title_y = content_bottom + drawing::COLUMN_GAP_MM;
-    let height = title_y + title_h + MARGIN;
 
     let mut svg = String::new();
-    drawing::svg_begin(&mut svg, width, height);
     svg.push_str("  <g id=\"consumption\">\n");
     svg.push_str(&format!(
         "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" font-weight=\"bold\" fill=\"#{}\">FEEDER CONSUMPTION</text>\n",
@@ -112,10 +107,9 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ConsumptionDrawing
     push_bars(&mut svg, &report, MARGIN, chart_top);
     push_timeline(&mut svg, &report, MARGIN, timeline_top, LABEL_W + CHART_W);
     push_legend(&mut svg, MARGIN, timeline_top + timeline_h + 2.0);
-    push_title(&mut svg, width, title_y, title_h, &laid_title);
     svg.push_str("  </g>\n");
-    drawing::svg_end(&mut svg);
-    Ok(ConsumptionDrawing { text: svg, summary })
+    let text = drawing::render_sheet((0.0, 0.0, width, content_bottom), &svg, &title_text(&report, id, "A4 landscape"));
+    Ok(ConsumptionDrawing { text, summary })
 }
 
 fn push_band(svg: &mut String, report: &ConsumptionReport, x: f64, y: f64, width: f64) {
@@ -387,19 +381,6 @@ fn push_legend(svg: &mut String, x: f64, y: f64) {
         "    <text x=\"0\" y=\"9.4\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.2\" fill=\"#{}\">timeline line = remaining parts on the loaded reel; the sawtooth resets on a reel change</text>\n",
         drawing::hex(drawing::MUTED)
     ));
-    svg.push_str("  </g>\n");
-}
-
-fn push_title(svg: &mut String, width: f64, y: f64, height: f64, laid: &[drawing::LaidLine]) {
-    svg.push_str(&format!(
-        "  <g id=\"title-block\" transform=\"translate({} {})\">\n    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
-        drawing::number(MARGIN),
-        drawing::number(y),
-        drawing::number(width - 2.0 * MARGIN),
-        drawing::number(height),
-        drawing::hex(drawing::PANEL_EDGE)
-    ));
-    drawing::push_block_svg(svg, 2.5, 3.0, laid);
     svg.push_str("  </g>\n");
 }
 
