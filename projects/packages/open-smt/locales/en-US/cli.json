@@ -33,6 +33,7 @@
             "validate": "Validate the document and report findings",
             "placement": "Allocate and sequence the placement program",
             "stencil": "Report the stencil apertures generated from the package rules table",
+            "stencil-paste": "Report solder paste volume usage for a build quantity",
             "clearance": "Report oversized, overlapping and too-close components",
             "feeders": "Report the feeder setup allocation",
             "balance": "Assign components across machines and report the balance",
@@ -54,6 +55,9 @@
         },
         "opt": {
             "out": "Output file path",
+            "csv": "Write the paste volume CSV to this file",
+            "foil": "Stencil foil thickness in millimetres; default 0.12",
+            "waste": "Paste waste percentage added over the run volume",
             "side": "Component side: top or bottom",
             "width": "Board width in millimetres",
             "depth": "Board depth in millimetres",

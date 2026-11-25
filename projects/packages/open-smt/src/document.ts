@@ -41,6 +41,8 @@ import type {
     PanelFitRequest,
     PanelMapReport,
     PanelRequest,
+    PasteOptions,
+    PasteReport,
     PlacementReport,
     ReflowProfileRequest,
     ReflowReport,
@@ -220,6 +222,18 @@ export class SmtDocument {
     async stencil(): Promise<StencilReport> {
         this.assertOpen();
         return service.stencil(this.state.path);
+    }
+
+    /** Returns the read-only solder paste volume report. */
+    async paste(options: PasteOptions = {}): Promise<PasteReport> {
+        this.assertOpen();
+        return service.pasteVolume(this.state.path, options);
+    }
+
+    /** Writes the paste volume CSV and returns the created file. */
+    async pasteCsv(options: PasteOptions, target: string): Promise<ExportReport> {
+        this.assertOpen();
+        return service.pasteCsv(this.state.path, options, target);
     }
 
     /** Returns the read-only height and clearance report. */

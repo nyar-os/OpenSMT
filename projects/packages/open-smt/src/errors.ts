@@ -53,6 +53,7 @@ export const errorCodes = [
     'clearance/invalid',
     'reflow/invalid',
     'consumption/invalid',
+    'paste/invalid',
     'program/invalid',
     'component/invalid',
     'component/duplicate-refdes',

@@ -616,6 +616,51 @@ test('feeder and sequence drawings are written through the sdk and the cli', { s
     }
 });
 
+test('the stencil paste report writes JSON and CSV through the sdk and the cli', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-paste-'));
+    const file = path.join(directory, 'panel.osmt');
+    const jsonFile = path.join(directory, 'paste.json');
+    const csvFile = path.join(directory, 'paste.csv');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'C1', package: '0805', x: 40, y: 20 });
+        const before = document.revision;
+        const report = await document.paste({ boards: 2, wastePercent: 5 });
+        assert.equal(report.format, 'open-smt-paste-volume');
+        assert.equal(report.aperturesPerBoard, 4);
+        assert.equal(report.boards, 2);
+        assert.equal(report.wastePercent, 5);
+        assert.ok(report.totalVolumeMm3 > report.volumeRunMm3);
+        const csv = await document.pasteCsv({ boards: 2, wastePercent: 5 }, csvFile);
+        assert.equal(csv.format, 'paste-csv');
+        assert.ok(csv.bytes > 0);
+        assert.equal(document.revision, before);
+        const csvText = await fs.readFile(csvFile, 'utf8');
+        assert.ok(csvText.startsWith('package,apertures_per_board,'));
+        assert.ok(csvText.includes('TOTAL,4,'));
+        await fs.cp(path.join(packageRoot, 'locales'), cliLocales, { recursive: true, force: true });
+        const cliRun = await run(process.execPath, [
+            cliPath,
+            'stencil',
+            'paste',
+            file,
+            '--boards',
+            '2',
+            '--waste',
+            '5',
+            '--out',
+            jsonFile,
+        ]);
+        assert.equal(JSON.parse(cliRun.stdout).format, 'open-smt-paste-volume');
+        assert.equal(JSON.parse(await fs.readFile(jsonFile, 'utf8')).packages.length, 2);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
 test('reflow window compares the profile with limits and leaves the document unchanged', {
     skip: skipWithoutNative,
 }, async () => {

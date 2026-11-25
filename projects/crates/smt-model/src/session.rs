@@ -33,6 +33,7 @@ use crate::{
     model::{Board, Component, Feeder, Panel, ReflowProfile, Side, SmtDocument, Splice, UNITS},
     panel_fit::{self, PanelFitReport},
     panel_map::{self, PanelMapReport},
+    paste::{self, PasteOptions, PasteReport},
     place::{self, FeederReport, PlacementReport},
     reflow::{self, ReflowReport},
     reflow_window::{self, ReflowWindowLimits, ReflowWindowReport},
@@ -614,6 +615,31 @@ impl OpenSmt {
     /// generic rule and are listed. The document is never modified.
     pub fn stencil(&self) -> Result<StencilReport, SmtError> {
         Ok(stencil::report(self.document()?))
+    }
+
+    /// Returns the read-only solder paste volume report of the open document.
+    ///
+    /// Volumes come from the generated stencil apertures multiplied by the
+    /// foil thickness, scaled by the board count and topped with the waste
+    /// percentage. Omitted options keep their defaults. Invalid options fail
+    /// with `paste/invalid`. The document is never modified.
+    pub fn paste(&self, options: &PasteOptions) -> Result<PasteReport, SmtError> {
+        paste::report(self.document()?, options)
+    }
+
+    /// Writes the paste volume CSV of the open document and returns the created file.
+    pub fn paste_csv(&self, options: &PasteOptions, target: &Path) -> Result<ExportReport, SmtError> {
+        let report = paste::report(self.document()?, options)?;
+        let text = paste::csv(&report);
+        write_atomic(target, &text)?;
+        Ok(ExportReport {
+            format: "paste-csv".to_string(),
+            path: target.display().to_string(),
+            files: vec![target.display().to_string()],
+            bytes: text.len(),
+            losses: Vec::new(),
+            drawing: None,
+        })
     }
 
     /// Returns the read-only height and clearance report of the open document.

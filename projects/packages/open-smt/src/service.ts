@@ -39,6 +39,8 @@ import type {
     PanelFitRequest,
     PanelMapReport,
     PanelRequest,
+    PasteOptions,
+    PasteReport,
     PlacementReport,
     ReflowProfileRequest,
     ReflowReport,
@@ -230,6 +232,20 @@ export function panelMap(path: string): PanelMapReport {
 /** Returns the read-only stencil aperture report. */
 export function stencil(path: string): StencilReport {
     return decode<StencilReport>(() => binding('stencil').stencil(path));
+}
+
+/**
+ * Returns the read-only solder paste volume report.
+ *
+ * Omitted option fields keep their defaults.
+ */
+export function pasteVolume(path: string, options: PasteOptions = {}): PasteReport {
+    return decode<PasteReport>(() => binding('paste volume').paste_volume(path, JSON.stringify(options)));
+}
+
+/** Writes the paste volume CSV for the open document and returns the created file. */
+export function pasteCsv(path: string, options: PasteOptions, target: string): ExportReport {
+    return decode<ExportReport>(() => binding('paste csv').paste_csv(path, target, JSON.stringify(options)));
 }
 
 /** Returns the read-only height and clearance report against the supplied limits. */

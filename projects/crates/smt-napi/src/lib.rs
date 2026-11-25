@@ -18,8 +18,8 @@ use serde::Serialize;
 use serde_json::Value;
 use smt_model::{
     Board, ClearanceLimits, Component, ComponentUpdate, DEFAULT_FEEDER_CHANGE_SECONDS, DEFAULT_SLOT_PITCH, DualLaneStrategy,
-    ExportFormat, Feeder, FeederUpdate, OpenSmt, Panel, ReflowProfile, ReflowWindowLimits, Side, SmtError, Splice, TaktOptions,
-    Zone,
+    ExportFormat, Feeder, FeederUpdate, OpenSmt, Panel, PasteOptions, ReflowProfile, ReflowWindowLimits, Side, SmtError,
+    Splice, TaktOptions, Zone,
 };
 use wae::{CallContext, Error, JsValue, Result, function, register_module};
 
@@ -467,6 +467,44 @@ fn stencil(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the read-only solder paste volume report.
+///
+/// The optional second argument is a JSON object with `foilThicknessMm`,
+/// `boards` and `wastePercent` fields; an omitted field keeps its default.
+#[function]
+fn paste_volume(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let options = match ctx.args().get(1) {
+        Some(_) => serde_json::from_value::<PasteOptions>(object(&ctx, 1)?)
+            .map_err(|error| argument_error(&format!("invalid paste options: {error}")))?,
+        None => PasteOptions::default(),
+    };
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.paste(&options).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
+/// Writes the solder paste volume CSV and returns the created file.
+///
+/// The first argument is the document path, the second the CSV target and the
+/// optional third a JSON object with `foilThicknessMm`, `boards` and
+/// `wastePercent` fields; an omitted field keeps its default.
+#[function]
+fn paste_csv(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let target = text(&ctx, 1)?;
+    let options = match ctx.args().get(2) {
+        Some(_) => serde_json::from_value::<PasteOptions>(object(&ctx, 2)?)
+            .map_err(|error| argument_error(&format!("invalid paste options: {error}")))?,
+        None => PasteOptions::default(),
+    };
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.paste_csv(&options, Path::new(&target)).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Returns the read-only component height and clearance report.
 ///
 /// The optional second argument is a JSON object with `minGap` and `maxHeight`
@@ -784,6 +822,8 @@ register_module![
     feeder_report,
     panel_map,
     stencil,
+    paste_volume,
+    paste_csv,
     clearance,
     first_article,
     panel_fit,

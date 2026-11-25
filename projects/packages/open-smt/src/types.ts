@@ -391,6 +391,64 @@ export interface StencilReport {
 }
 
 /**
+ * Request of the solder paste volume report.
+ *
+ * All fields are optional; an omitted field keeps its default.
+ */
+export interface PasteOptions {
+    /** Stencil foil thickness in millimetres; default `0.12`. */
+    readonly foilThicknessMm?: number;
+    /** Number of boards the run covers; default `1`. */
+    readonly boards?: number;
+    /** Paste waste percentage added over the run volume; default `0`. */
+    readonly wastePercent?: number;
+}
+
+/** Paste volume of one package, in first-aperture order. */
+export interface PastePackage {
+    /** The package identifier as written on the placement. */
+    readonly package: string;
+    /** Number of apertures this package contributes per board. */
+    readonly aperturesPerBoard: number;
+    /** Volume of a single aperture at the resolved foil thickness. */
+    readonly volumePerApertureMm3: number;
+    /** Sum of the package apertures for one board. */
+    readonly volumePerBoardMm3: number;
+    /** `volumePerBoardMm3` scaled by the board count, before waste. */
+    readonly volumeRunMm3: number;
+}
+
+/** Read-only solder paste volume report. */
+export interface PasteReport {
+    readonly format: 'open-smt-paste-volume';
+    readonly version: number;
+    /** Always `mm`; volumes are cubic millimetres. */
+    readonly units: string;
+    /** The resolved foil thickness in millimetres. */
+    readonly foilThicknessMm: number;
+    /** The resolved board count. */
+    readonly boards: number;
+    /** The resolved waste percentage. */
+    readonly wastePercent: number;
+    /** Total apertures per board across all packages. */
+    readonly aperturesPerBoard: number;
+    /** Paste volume deposited on one board. */
+    readonly volumePerBoardMm3: number;
+    /** `volumePerBoardMm3` scaled by the board count, before waste. */
+    readonly volumeRunMm3: number;
+    /** Paste volume lost to the waste percentage over the run. */
+    readonly wasteVolumeMm3: number;
+    /** `volumeRunMm3 + wasteVolumeMm3`. */
+    readonly totalVolumeMm3: number;
+    /** Top-side paste volume per board. */
+    readonly topVolumePerBoardMm3: number;
+    /** Bottom-side paste volume per board. */
+    readonly bottomVolumePerBoardMm3: number;
+    /** Per-package volumes in first-aperture order. */
+    readonly packages: readonly PastePackage[];
+}
+
+/**
  * Limits of the component height and clearance check.
  *
  * Both limits are optional; an omitted limit keeps its default.

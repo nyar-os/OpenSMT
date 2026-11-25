@@ -690,7 +690,7 @@ cli
         }),
     );
 
-cli
+const stencilCommand = cli
     .command('stencil', 'cli.cmd.stencil')
     .option('--out <stencil.json>', 'cli.opt.out')
     .actionCtx((options, _args, ctx) =>
@@ -703,6 +703,39 @@ cli
                 }
                 print(report);
             });
+        }),
+    );
+stencilCommand
+    .command('paste', 'cli.cmd.stencil-paste')
+    .option('--boards <n>', 'cli.opt.boards')
+    .option('--foil <mm>', 'cli.opt.foil')
+    .option('--waste <pct>', 'cli.opt.waste')
+    .option('--out <paste.json>', 'cli.opt.out')
+    .option('--csv <paste.csv>', 'cli.opt.csv')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(
+                options,
+                ctx,
+                'stencil paste <file> --boards <n> [--foil <mm>] [--waste <pct>] [--out <paste.json>] [--csv <paste.csv>]',
+                async (document) => {
+                    const pasteOptions = {
+                        boards: integerOption(options, ctx, 'boards'),
+                        foilThicknessMm: numberOption(options, ctx, 'foil'),
+                        wastePercent: numberOption(options, ctx, 'waste'),
+                    };
+                    const report = await document.paste(pasteOptions);
+                    const target = optionText(options, 'out');
+                    if (target !== undefined) {
+                        fs.writeFileSync(target, JSON.stringify(report, null, 2));
+                    }
+                    const csvTarget = optionText(options, 'csv');
+                    if (csvTarget !== undefined) {
+                        await document.pasteCsv(pasteOptions, csvTarget);
+                    }
+                    print(report);
+                },
+            );
         }),
     );
 

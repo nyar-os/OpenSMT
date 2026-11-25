@@ -37,6 +37,8 @@ export interface NativeBinding {
     feeder_report(path: string): string;
     panel_map(path: string): string;
     stencil(path: string): string;
+    paste_volume(path: string, requestJson?: string): string;
+    paste_csv(path: string, target: string, requestJson?: string): string;
     clearance(path: string, requestJson?: string): string;
     first_article(path: string): string;
     panel_fit(path: string, requestJson: string): string;

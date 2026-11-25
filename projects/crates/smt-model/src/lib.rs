@@ -26,6 +26,8 @@
 //!   and per-reel leader/trailer waste;
 //! * a read-only takt bottleneck heat map by step, package and side;
 //! * a read-only stencil aperture report and sheet from the package rules table;
+//! * a read-only solder paste volume report estimating run and waste usage from
+//!   the stencil apertures, the foil thickness and the build quantity;
 //! * a read-only feeder setup drawing with lane slots, load bars and the
 //!   component-to-lane mapping;
 //! * a read-only pick-and-place sequence drawing with one numbered route per
@@ -59,6 +61,7 @@ mod model;
 mod packages;
 mod panel_fit;
 mod panel_map;
+mod paste;
 mod place;
 mod reflow;
 mod reflow_window;
@@ -104,6 +107,7 @@ pub use crate::{
     model::{Board, Component, FORMAT, Feeder, Panel, ReflowProfile, Side, SmtDocument, Splice, UNITS, VERSION, Zone},
     panel_fit::{PanelFitReport, fit as panel_fit},
     panel_map::{MappedComponent, PanelInstance, PanelMapReport, PanelPlacement, map as panel_map},
+    paste::{DEFAULT_FOIL_THICKNESS_MM, PasteOptions, PastePackage, PasteReport, csv as paste_csv, report as paste_report},
     place::{
         FeederReport, FeederUsage, HEAD_SPEED, PLACE_SECONDS, PackageUsage, PlacementEntry, PlacementReport,
         allocate as allocate_feeders, sequence as sequence_placement, sequence_with as sequence_placement_with,
@@ -154,7 +158,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "panelMap": "supported",
     "firstArticle": "supported",
     "taktHeatmap": "supported",
-    "clearanceCheck": "supported"
+    "clearanceCheck": "supported",
+    "pasteVolume": "supported"
   },
   "io": {
     "osmt": "supported",
@@ -167,6 +172,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "svg": "supported",
     "pdf": "supported",
     "feederSvg": "supported",
+    "pasteCsv": "supported",
     "sequenceSvg": "supported",
     "sequencePdf": "supported",
     "kicad": "unsupported",
@@ -193,6 +199,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "panelMap": "row-major instances of the stored panel array; no board rotation, edge rail, fiducial, tooling area or panel outline is modelled",
     "firstArticle": "repeats the placement program with the allocated lane pitch and a fixed four-item checklist; it records no inspection result and models no component polarity",
     "pasteAperture": "apertures come from a fixed package rules table keyed by package name, not from footprint data; the reduction is one area factor per family, QFN thermal pads are not modelled and the sheet draws one board, not a panel",
+    "pasteVolume": "paste volumes come from the generated stencil apertures times the foil thickness; the sheet models no squeegee transfer loss, board-to-board variation or reel waste",
     "taktHeatmap": "attributes the analytical step time of the default machine model to each step, package and side; it models no acceleration, tape advance, vision or nozzle physics",
     "clearanceCheck": "body outlines come from the fixed package rules table, not footprint data; same-side bodies are compared as rotated bounding boxes, findings are warnings only and height checks apply only to components that store a height",
     "machineProgram": "neutral CSV interchange of the placement program with a readback check; it is not a Fuji, Yamaha, Juki or ASM dialect and takes nozzle ids only from a caller-supplied package map",
