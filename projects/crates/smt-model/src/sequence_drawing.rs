@@ -116,26 +116,14 @@ struct Layout {
 pub fn render_svg(document: &SmtDocument, id: &str) -> Result<SequenceDrawing, SmtError> {
     let plan = build_plan(document, id)?;
     let layout = Layout::new(&plan);
-    let width = (layout.width * SVG_PX_PER_MM).round();
-    let height = (layout.height * SVG_PX_PER_MM).round();
     let mut svg = String::new();
-    svg.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    svg.push_str(&format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {} {}\" width=\"{width:.0}\" height=\"{height:.0}\">\n",
-        number(layout.width),
-        number(layout.height)
-    ));
-    svg.push_str(&format!(
-        "  <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\"/>\n",
-        number(layout.width),
-        number(layout.height)
-    ));
+    drawing::svg_begin(&mut svg, layout.width, layout.height);
     push_svg_header(&mut svg, &plan);
     push_svg_frame(&mut svg, &plan, &layout);
     push_svg_routes(&mut svg, &plan, &layout);
     push_svg_side(&mut svg, &plan, &layout);
-    push_svg_title(&mut svg, &plan, &layout, &format!("scale 1:1 in millimetres; 1 mm = {SVG_PX_PER_MM} px"));
-    svg.push_str("</svg>\n");
+    push_svg_title(&mut svg, &plan, &layout, &format!("1 mm = {SVG_PX_PER_MM} px"));
+    drawing::svg_end(&mut svg);
     Ok(SequenceDrawing { text: svg, summary: plan.summary })
 }
 
@@ -218,7 +206,25 @@ fn place_labels(steps: &[Step]) -> Vec<StepLabel> {
         })
         .collect();
     let origin_width = drawing::text_width("ORIGIN (0,0)", 1.8);
-    occupied.push((frame_x + 2.0, frame_y + 1.8, frame_x + 2.0 + origin_width, frame_y + 3.6));
+    occupied.push((frame_x + 1.4, frame_y - 3.4, frame_x + 1.4 + origin_width, frame_y - 1.2));
+    // Route segments are obstacles too: a step label must not sit on the
+    // travelled path. The segment is sampled into small boxes so a diagonal
+    // route does not block its whole bounding rectangle.
+    for side in [Side::Top, Side::Bottom] {
+        let mut previous = (frame_x, frame_y);
+        for step in steps.iter().filter(|step| step.side == side) {
+            let (x, y) = centre(step);
+            let distance = ((x - previous.0).powi(2) + (y - previous.1).powi(2)).sqrt();
+            let samples = (distance / 2.0).ceil().max(1.0) as usize;
+            for sample in 0..=samples {
+                let ratio = sample as f64 / samples as f64;
+                let px = previous.0 + (x - previous.0) * ratio;
+                let py = previous.1 + (y - previous.1) * ratio;
+                occupied.push((px - 0.35, py - 0.35, px + 0.35, py + 0.35));
+            }
+            previous = (x, y);
+        }
+    }
     let mut labels = Vec::with_capacity(steps.len());
     for step in steps {
         let (x, y) = centre(step);
@@ -367,8 +373,8 @@ fn push_svg_routes(svg: &mut String, plan: &Plan, layout: &Layout) {
     ));
     svg.push_str(&format!(
         "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" fill=\"#{}\">ORIGIN (0,0)</text>\n",
-        number(layout.frame_x + 2.0),
-        number(layout.frame_y + 3.6),
+        number(layout.frame_x + 1.4),
+        number(layout.frame_y - 1.6),
         hex(MUTED)
     ));
 }
@@ -464,7 +470,8 @@ fn title_lines(plan: &Plan, scale_note: &str) -> Vec<String> {
         number(plan.summary.travel_length)
     );
     vec![
-        format!("OpenSMT pick-and-place sequence drawing | {} | revision {} | units {}", plan.id, plan.revision, plan.units),
+        format!("OpenSMT pick-and-place sequence drawing | drawing OSMT-SQ-01 | revision {}", plan.revision),
+        drawing::title_stamp("sequence", "OSMT-SQ-01", &plan.id, &plan.units, "1:1", "top and bottom"),
         if plan.boards > 1 { format!("{steps_line} | per board (x{} on the panel)", plan.boards) } else { steps_line },
         "routes follow the default nearest-neighbour program; each side starts at the machine origin".to_string(),
         scale_note.to_string(),
@@ -525,7 +532,7 @@ fn push_pdf_routes(pdf: &mut Pdf, plan: &Plan, layout: &Layout) {
     // The same ORIGIN cross the SVG sheet draws at the machine origin.
     pdf.line(layout.frame_x - 1.2, layout.frame_y - 1.2, layout.frame_x + 1.2, layout.frame_y + 1.2, INK, 0.3);
     pdf.line(layout.frame_x - 1.2, layout.frame_y + 1.2, layout.frame_x + 1.2, layout.frame_y - 1.2, INK, 0.3);
-    pdf.text(layout.frame_x + 2.0, layout.frame_y + 3.6, 1.8, MUTED, "ORIGIN (0,0)");
+    pdf.text(layout.frame_x + 1.4, layout.frame_y - 1.6, 1.8, MUTED, "ORIGIN (0,0)");
 }
 
 fn push_pdf_side(pdf: &mut Pdf, plan: &Plan, layout: &Layout) {

@@ -38,9 +38,11 @@ fn the_svg_plots_the_default_four_zone_profile() {
     assert_eq!(svg.matches("data-role=\"profile\"").count(), 1);
     assert_eq!(svg.matches("data-role=\"peak\"").count(), 1);
     // The liquidus is the only dashed temperature reference line.
-    assert!(svg.contains("LIQUIDUS 217.000C"));
-    assert!(svg.contains("PEAK 245.000C"));
-    assert!(svg.contains("AMBIENT 25.000C"));
+    assert!(svg.contains("LIQUIDUS 217 C"));
+    assert!(svg.contains("PEAK 245 C"));
+    assert!(svg.contains("AMBIENT 25 C"));
+    assert!(svg.contains(">temperature (C)</text>"));
+    assert!(svg.contains(">time (s)</text>"));
     for name in ["preheat", "soak", "reflow", "cool"] {
         assert!(svg.contains(&format!(">{name}</text>")), "missing zone name `{name}`");
     }

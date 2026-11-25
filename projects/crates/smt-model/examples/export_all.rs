@@ -20,9 +20,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     session.add_component(Component::new("R2", "0603", 20.0, 60.0))?;
     session.add_component(Component::new("C1", "0603", 70.0, 20.0))?;
     session.add_component(Component::new("D1", "0805", 90.0, 70.0))?;
+    let mut u2 = Component::new("U2", "TQFP-44", 95.0, 30.0);
+    u2.side = smt_model::Side::Bottom;
+    session.add_component(u2)?;
     session.add_feeder(Feeder::new("F1", "0603", 4.0, 5000))?;
     session.add_feeder(Feeder::new("F2", "SOIC-8", 4.0, 500))?;
     session.add_feeder(Feeder::new("F3", "0805", 4.0, 3000))?;
+    session.add_feeder(Feeder::new("F4", "TQFP-44", 8.0, 400))?;
 
     for format in [
         ExportFormat::Program,
@@ -32,6 +36,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ExportFormat::Md,
         ExportFormat::Svg,
         ExportFormat::Pdf,
+        ExportFormat::Stencil,
+        ExportFormat::StencilSvg,
+        ExportFormat::StencilPdf,
+        ExportFormat::FeederSvg,
+        ExportFormat::SequenceSvg,
+        ExportFormat::SequencePdf,
+        ExportFormat::ReflowSvg,
+        ExportFormat::PanelMapSvg,
+        ExportFormat::HeatmapSvg,
+        ExportFormat::BalanceSvg,
+        ExportFormat::SetupSvg,
+        ExportFormat::SetupPdf,
     ] {
         let target = out.join(format!("demo.{}", format.as_str()));
         match session.export(format, &target) {

@@ -133,12 +133,24 @@ function exportFormat(value: string, ctx: CommandContext): ExportFormat {
         value === 'sequence-pdf' ||
         value === 'reflow-svg' ||
         value === 'panel-svg' ||
-        value === 'heatmap-svg'
+        value === 'heatmap-svg' ||
+        value === 'balance-svg' ||
+        value === 'setup-svg' ||
+        value === 'setup-pdf'
     ) {
         return value;
     }
     if (value === 'panel-map-svg') {
         return 'panel-svg';
+    }
+    if (value === 'line-balance-svg') {
+        return 'balance-svg';
+    }
+    if (value === 'setup-sheet-svg') {
+        return 'setup-svg';
+    }
+    if (value === 'setup-sheet-pdf') {
+        return 'setup-pdf';
     }
     if (value === 'kicad' || value === 'altium' || value === 'odb') {
         throw new NotImplementedError(`${value} export`);

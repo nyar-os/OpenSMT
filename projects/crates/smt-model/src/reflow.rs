@@ -179,12 +179,12 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
     let (units, count) = drawing::ascii(&document.units);
     dropped += count;
 
-    let plot_x = drawing::DRAW_MARGIN_MM + 18.0;
+    let plot_x = drawing::DRAW_MARGIN_MM + 24.0;
     let plot_y = drawing::DRAW_MARGIN_MM + 18.0;
     let plot_w = 150.0;
     let plot_h = 90.0;
     let width = plot_x + plot_w + drawing::DRAW_MARGIN_MM;
-    let title_y = plot_y + plot_h + 12.0;
+    let title_y = plot_y + plot_h + 22.0;
     let height = title_y + drawing::TITLE_HEIGHT_MM + drawing::DRAW_MARGIN_MM;
 
     let total = report.total_seconds.max(1e-9);
@@ -194,19 +194,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
     let ty = |temperature: f64| plot_y + plot_h - (temperature - tmin) / (tmax - tmin) * plot_h;
 
     let mut svg = String::new();
-    svg.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    svg.push_str(&format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {} {}\" width=\"{:.0}\" height=\"{:.0}\">\n",
-        drawing::number(width),
-        drawing::number(height),
-        width * drawing::SVG_PX_PER_MM,
-        height * drawing::SVG_PX_PER_MM
-    ));
-    svg.push_str(&format!(
-        "  <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\"/>\n",
-        drawing::number(width),
-        drawing::number(height)
-    ));
+    drawing::svg_begin(&mut svg, width, height);
 
     svg.push_str(&format!(
         "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.2\" font-weight=\"bold\" fill=\"#{}\">REFLOW TIME-TEMPERATURE PROFILE</text>\n",
@@ -250,14 +238,49 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
             dashed
         ));
         svg.push_str(&format!(
-            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" text-anchor=\"end\" fill=\"#{}\">{} {}C</text>\n",
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" text-anchor=\"end\" fill=\"#{}\">{} {:.0} C</text>\n",
             drawing::number(plot_x - 1.6),
             drawing::number(y + 0.6),
             drawing::hex(drawing::MUTED),
             label,
-            drawing::number(temperature)
+            temperature
         ));
     }
+    // Vertical axis: unit and tick marks.
+    svg.push_str(&format!(
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" text-anchor=\"middle\" transform=\"rotate(-90 {} {})\" fill=\"#{}\">temperature (C)</text>\n",
+        drawing::number(plot_x - 21.0),
+        drawing::number(plot_y + plot_h / 2.0),
+        drawing::number(plot_x - 21.0),
+        drawing::number(plot_y + plot_h / 2.0),
+        drawing::hex(drawing::MUTED)
+    ));
+    // Horizontal axis: four evenly spaced second ticks with values and unit.
+    for tick in 0..=4 {
+        let time = total * tick as f64 / 4.0;
+        let x = tx(time);
+        svg.push_str(&format!(
+            "  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#{}\" stroke-width=\"0.25\"/>\n",
+            drawing::number(x),
+            drawing::number(plot_y + plot_h),
+            drawing::number(x),
+            drawing::number(plot_y + plot_h + 1.6),
+            drawing::hex(drawing::RULE)
+        ));
+        svg.push_str(&format!(
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.6\" text-anchor=\"middle\" fill=\"#{}\">{:.0} s</text>\n",
+            drawing::number(x),
+            drawing::number(plot_y + plot_h + 4.0),
+            drawing::hex(drawing::MUTED),
+            time
+        ));
+    }
+    svg.push_str(&format!(
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" text-anchor=\"middle\" fill=\"#{}\">time (s)</text>\n",
+        drawing::number(plot_x + plot_w / 2.0),
+        drawing::number(plot_y + plot_h + 19.0),
+        drawing::hex(drawing::MUTED)
+    ));
 
     // Zone boundaries and names along the time axis.
     let mut elapsed = 0.0;
@@ -279,14 +302,14 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
         svg.push_str(&format!(
             "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" text-anchor=\"middle\" fill=\"#{}\">{}</text>\n",
             drawing::number(tx((start + elapsed) / 2.0)),
-            drawing::number(plot_y + plot_h + 4.0),
+            drawing::number(plot_y + plot_h + 8.6),
             drawing::hex(drawing::MUTED),
             drawing::escape_xml(&name)
         ));
         svg.push_str(&format!(
             "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.6\" text-anchor=\"middle\" fill=\"#{}\">{} s</text>\n",
             drawing::number(tx((start + elapsed) / 2.0)),
-            drawing::number(plot_y + plot_h + 7.6),
+            drawing::number(plot_y + plot_h + 12.0),
             drawing::hex(drawing::MUTED),
             drawing::number(zone.seconds)
         ));
@@ -333,7 +356,8 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
         drawing::hex(drawing::PANEL_EDGE)
     ));
     let lines = [
-        format!("OpenSMT reflow profile drawing | {id} | revision {} | units {units}", document.revision),
+        format!("OpenSMT reflow profile drawing | drawing OSMT-RF-01 | revision {}", document.revision),
+        drawing::title_stamp("reflow profile", "OSMT-RF-01", &id, &units, "1:1 (time axis)", "n/a (process profile)"),
         format!(
             "linear-ramp model | total {} s | {} C to {} C",
             drawing::number(report.total_seconds),
@@ -353,7 +377,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
         ));
     }
 
-    svg.push_str("</svg>\n");
+    drawing::svg_end(&mut svg);
     let summary = ReflowDrawingSummary {
         units,
         temperature_unit: report.temperature_unit.clone(),

@@ -144,8 +144,10 @@ pub(crate) fn geometry(package: &str) -> Geometry {
             shape: Shape::Rect,
             pins,
             pitch: 1.27,
-            body_length: (rows - 1) as f64 * 1.27 + 1.0,
-            body_width: 3.7,
+            // The 150 mil body is 3.7 mm across the lead span; its length has
+            // to cover the whole row of 1.27 mm lead pitches.
+            body_length: 3.7,
+            body_width: (rows - 1) as f64 * 1.27 + 1.0,
             aperture_width: 0.60,
             aperture_height: 0.70,
             reduction: 0.85,

@@ -27,7 +27,8 @@ fn the_svg_draws_panel_boards_components_labels_legend_and_title() {
         assert!(svg.contains(&format!("data-board=\"{board}\"")), "board {board}");
     }
     assert!(svg.contains("data-rotation=\"90.000\""));
-    assert_eq!(svg.matches("<polygon").count(), 12);
+    assert_eq!(svg.matches("data-body=\"true\"").count(), 12);
+    assert!(svg.matches("data-lead=").count() >= 12);
     assert!(svg.contains(">R1</text>"));
     assert_eq!(svg.matches(">R1</text>").count(), 1);
     assert!(svg.contains(">0603 F1</text>"));

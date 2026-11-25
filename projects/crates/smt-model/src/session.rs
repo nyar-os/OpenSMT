@@ -29,6 +29,7 @@ use crate::{
     first_article::{self, FirstArticleReport},
     heatmap::{self, HeatmapReport},
     import::ImportReport,
+    line_balance,
     machine_program::{self, MachineProgramExport, MachineProgramVerify},
     model::{Board, Component, Feeder, Panel, ReflowProfile, Side, SmtDocument, Splice, UNITS},
     panel_fit::{self, PanelFitReport},
@@ -38,7 +39,7 @@ use crate::{
     reflow::{self, ReflowReport},
     reflow_window::{self, ReflowWindowLimits, ReflowWindowReport},
     schedule::{self, FeederScheduleReport},
-    sequence_drawing,
+    sequence_drawing, setup_sheet,
     station::{self, StationReport},
     stencil::{self, StencilReport},
     takt::{self, TaktOptions, TaktReport},
@@ -107,6 +108,12 @@ pub enum ExportFormat {
     PanelMapSvg,
     /// The takt bottleneck heat map drawing as SVG.
     HeatmapSvg,
+    /// The line-balance bar chart as SVG.
+    BalanceSvg,
+    /// The nozzle and feeder setup table as paginated SVG.
+    SetupSvg,
+    /// The nozzle and feeder setup table as a paginated PDF.
+    SetupPdf,
 }
 
 impl ExportFormat {
@@ -129,6 +136,9 @@ impl ExportFormat {
             Self::ReflowSvg => "reflow-svg",
             Self::PanelMapSvg => "panel-svg",
             Self::HeatmapSvg => "heatmap-svg",
+            Self::BalanceSvg => "balance-svg",
+            Self::SetupSvg => "setup-svg",
+            Self::SetupPdf => "setup-pdf",
         }
     }
 }
@@ -154,11 +164,14 @@ impl FromStr for ExportFormat {
             "reflow-svg" => Ok(Self::ReflowSvg),
             "panel-svg" | "panel-map-svg" => Ok(Self::PanelMapSvg),
             "heatmap-svg" => Ok(Self::HeatmapSvg),
+            "balance-svg" | "line-balance-svg" => Ok(Self::BalanceSvg),
+            "setup-svg" | "setup-sheet-svg" => Ok(Self::SetupSvg),
+            "setup-pdf" | "setup-sheet-pdf" => Ok(Self::SetupPdf),
             "kicad" | "altium" | "odb" => Err(crate::not_implemented(&format!("`{value}` export"))),
             other => Err(SmtError::new(
                 "cli/unknown-format",
                 format!(
-                    "unknown export format `{other}`; only program, feeders, fai, json, md, svg or pdf, plus stencil, stencil-svg, stencil-pdf, feeder-svg, sequence-svg, sequence-pdf, reflow-svg, panel-svg or heatmap-svg is supported"
+                    "unknown export format `{other}`; only program, feeders, fai, json, md, svg or pdf, plus stencil, stencil-svg, stencil-pdf, feeder-svg, sequence-svg, sequence-pdf, reflow-svg, panel-svg, heatmap-svg, balance-svg, setup-svg or setup-pdf is supported"
                 ),
             )),
         }
@@ -963,6 +976,21 @@ impl OpenSmt {
             }
             ExportFormat::HeatmapSvg => {
                 let drawing = heatmap::render_svg(document, id)?;
+                losses = drawing.summary.losses();
+                drawing.text
+            }
+            ExportFormat::BalanceSvg => {
+                let drawing = line_balance::render_svg(document, id)?;
+                losses = drawing.summary.losses();
+                drawing.text
+            }
+            ExportFormat::SetupSvg => {
+                let drawing = setup_sheet::render_svg(document, id)?;
+                losses = drawing.summary.losses();
+                drawing.text
+            }
+            ExportFormat::SetupPdf => {
+                let drawing = setup_sheet::render_pdf(document, id)?;
                 losses = drawing.summary.losses();
                 drawing.text
             }

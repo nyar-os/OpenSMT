@@ -56,6 +56,7 @@ mod feeder_layout;
 mod first_article;
 mod heatmap;
 mod import;
+mod line_balance;
 mod machine_program;
 mod model;
 mod packages;
@@ -68,6 +69,7 @@ mod reflow_window;
 mod schedule;
 mod sequence_drawing;
 mod session;
+mod setup_sheet;
 mod station;
 mod stencil;
 mod takt;
@@ -103,6 +105,9 @@ pub use crate::{
         render_svg as render_heatmap_svg,
     },
     import::{ImportLoss, ImportReport},
+    line_balance::{
+        LineBalanceDrawing, LineBalanceSummary, MACHINES as LINE_BALANCE_MACHINES, render_svg as render_line_balance_svg,
+    },
     machine_program::{
         MachineProgram, MachineProgramExport, MachineProgramVerify, ProgramMismatch, build as build_machine_program,
         parse as parse_machine_program, render as render_machine_program, verify as verify_machine_program,
@@ -131,6 +136,10 @@ pub use crate::{
         SequenceDrawing, SequenceDrawingSummary, render_pdf as render_sequence_pdf, render_svg as render_sequence_svg,
     },
     session::{ComponentUpdate, DEFAULT_BOARD, DocumentSummary, ExportFormat, ExportReport, FeederUpdate, OpenSmt, Report},
+    setup_sheet::{
+        PAGE_HEIGHT_MM as SETUP_PAGE_HEIGHT_MM, PAGE_WIDTH_MM as SETUP_PAGE_WIDTH_MM, ROWS_PER_PAGE as SETUP_ROWS_PER_PAGE,
+        SetupSheet, SetupSheetSummary, render_pdf as render_setup_pdf, render_svg as render_setup_svg,
+    },
     station::{DEFAULT_SLOT_PITCH, Station, StationReport, assign as assign_stations},
     stencil::{
         StencilAperture, StencilDrawing, StencilDrawingSummary, StencilReport, StencilRule, csv as stencil_csv,
@@ -187,6 +196,9 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "reflowSvg": "supported",
     "panelMapSvg": "supported",
     "heatmapSvg": "supported",
+    "balanceSvg": "supported",
+    "setupSheetSvg": "supported",
+    "setupSheetPdf": "supported",
     "kicad": "unsupported",
     "altium": "unsupported",
     "odb": "unsupported"
@@ -223,6 +235,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "reflowSvg": "the reflow drawing is a millimetre SVG time-temperature plot of the linear-ramp zone model with the liquidus and peak annotated; it plots set-points, not measured thermocouple data, and models no thermal mass or soak dynamics",
     "panelMapSvg": "the panel map drawing is a millimetre SVG of the stored row-major panel array with board numbers, side-coloured component dots and a panel origin cross; it models no board rotation, edge rail, fiducial or panel outline",
     "heatmapSvg": "the takt heat map drawing is a millimetre SVG of one board with a heat dot per program step plus a package Pareto column; it colours the analytical step time of the default machine model and models no acceleration, tape advance, vision or nozzle physics",
+    "balanceSvg": "the line balance drawing is a millimetre SVG bar chart of one station per machine with the slowest station highlighted and the average as a dashed target line; export formats carry no options, so the sheet always balances across three machines and it models no changeover, staffing or machine-specific accelerations",
+    "setupSheet": "the setup table lists slot, lane, part number, nozzle, tape width, quantity and assigned reference designators; the document has no nozzle or tape-width field, so both are derived from the fixed package rules (family and body length) and no tape direction, feeder pitch limit or machine slot is modelled; long tables continue on further pages",
     "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }
 }"#;

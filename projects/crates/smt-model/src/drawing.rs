@@ -37,9 +37,66 @@ pub(crate) const DRAW_MARGIN_MM: f64 = 8.0;
 pub(crate) const COLUMN_GAP_MM: f64 = 6.0;
 pub(crate) const SIDE_WIDTH_MM: f64 = 66.0;
 pub(crate) const LEGEND_HEIGHT_MM: f64 = 44.0;
-pub(crate) const TITLE_HEIGHT_MM: f64 = 32.0;
+pub(crate) const TITLE_HEIGHT_MM: f64 = 36.0;
 pub(crate) const FEEDER_ROW_MM: f64 = 4.6;
 const FEEDER_TOP_MM: f64 = DRAW_MARGIN_MM + LEGEND_HEIGHT_MM + COLUMN_GAP_MM;
+
+/// Extra inset that lifts the [`DRAW_MARGIN_MM`] margin to at least 8 % of the
+/// sheet width, so a wide drawing never hugs the page edge.
+pub(crate) fn sheet_offset(width: f64) -> f64 {
+    ((0.08 * width - DRAW_MARGIN_MM) / 0.84).max(0.0)
+}
+
+/// Opens a millimetre SVG sheet with a white background, a drawing frame and
+/// the content translated by the 8 % margin inset. The caller closes it with
+/// [`svg_end`].
+pub(crate) fn svg_begin(svg: &mut String, width: f64, height: f64) -> f64 {
+    svg_begin_framed(svg, width, height, true)
+}
+
+/// Like [`svg_begin`] but lets a multi-page sheet draw its own page frames
+/// instead of one frame around the whole stack.
+pub(crate) fn svg_begin_framed(svg: &mut String, width: f64, height: f64, framed: bool) -> f64 {
+    let offset = sheet_offset(width);
+    let sheet_width = width + 2.0 * offset;
+    let sheet_height = height + 2.0 * offset;
+    svg.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    svg.push_str(&format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {} {}\" width=\"{:.0}\" height=\"{:.0}\">\n",
+        number(sheet_width),
+        number(sheet_height),
+        (sheet_width * SVG_PX_PER_MM).round(),
+        (sheet_height * SVG_PX_PER_MM).round()
+    ));
+    svg.push_str(&format!(
+        "  <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\"/>\n",
+        number(sheet_width),
+        number(sheet_height)
+    ));
+    if framed {
+        svg.push_str(&format!(
+            "  <rect id=\"frame\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"none\" stroke=\"#{}\" stroke-width=\"0.6\"/>\n",
+            number(offset / 2.0),
+            number(offset / 2.0),
+            number(sheet_width - offset),
+            number(sheet_height - offset),
+            hex(PANEL_EDGE)
+        ));
+    }
+    svg.push_str(&format!("  <g id=\"content\" transform=\"translate({} {})\">\n", number(offset), number(offset)));
+    offset
+}
+
+/// Closes the group and the SVG document opened by [`svg_begin`].
+pub(crate) fn svg_end(svg: &mut String) {
+    svg.push_str("  </g>\n</svg>\n");
+}
+
+/// Title-block stamp shared by every sheet: name, drawing number, work order,
+/// units and face.
+pub(crate) fn title_stamp(name: &str, number: &str, document: &str, units: &str, scale: &str, face: &str) -> String {
+    format!("{name} | drawing {number} | work order {document} | units {units} | scale {scale} | face {face}")
+}
 
 pub(crate) const PDF_PAGE_WIDTH: f64 = 841.89;
 pub(crate) const PDF_PAGE_HEIGHT: f64 = 595.28;
@@ -120,25 +177,13 @@ pub struct Drawing {
 pub fn render_svg(document: &SmtDocument, id: &str) -> Result<Drawing, SmtError> {
     let plan = build_plan(document, id)?;
     let layout = Layout::new(&plan);
-    let width = (layout.width * SVG_PX_PER_MM).round();
-    let height = (layout.height * SVG_PX_PER_MM).round();
     let mut svg = String::new();
-    svg.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    svg.push_str(&format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {} {}\" width=\"{width:.0}\" height=\"{height:.0}\">\n",
-        number(layout.width),
-        number(layout.height)
-    ));
-    svg.push_str(&format!(
-        "  <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\"/>\n",
-        number(layout.width),
-        number(layout.height)
-    ));
+    svg_begin(&mut svg, layout.width, layout.height);
     push_svg_panel(&mut svg, &plan, &layout);
     push_svg_legend(&mut svg, &plan, &layout);
     push_svg_feeders(&mut svg, &plan, &layout);
-    push_svg_title(&mut svg, &plan, &layout, &format!("scale 1:1 in millimetres; 1 mm = {} px", SVG_PX_PER_MM));
-    svg.push_str("</svg>\n");
+    push_svg_title(&mut svg, &plan, &layout, &format!("1 mm = {} px", SVG_PX_PER_MM));
+    svg_end(&mut svg);
     Ok(Drawing { text: svg, summary: plan.summary })
 }
 
@@ -170,16 +215,36 @@ pub fn render_pdf(document: &SmtDocument, id: &str) -> Result<Drawing, SmtError>
 
 /// Assembles one A4 landscape page around a drawing content stream.
 pub(crate) fn pdf_page(content: String) -> String {
-    let objects = [
-        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
-        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
-        format!(
+    let frame = format!(
+        "{PANEL_EDGE} RG 0.8 w {:.2} {:.2} {:.2} {:.2} re S\n",
+        PDF_MARGIN / 2.0,
+        PDF_MARGIN / 2.0,
+        PDF_PAGE_WIDTH - PDF_MARGIN,
+        PDF_PAGE_HEIGHT - PDF_MARGIN
+    );
+    let content = format!("{frame}{content}");
+    pdf_pages(vec![content])
+}
+
+/// Assembles a multi-page A4 landscape PDF with one content stream per page.
+pub(crate) fn pdf_pages(contents: Vec<String>) -> String {
+    let pages = contents.len().max(1);
+    let font_object = 3 + pages;
+    let first_content = font_object + 1;
+    let kids = (0..pages).map(|index| format!("{} 0 R", 3 + index)).collect::<Vec<_>>().join(" ");
+    let mut objects =
+        vec!["<< /Type /Catalog /Pages 2 0 R >>".to_string(), format!("<< /Type /Pages /Kids [{kids}] /Count {pages} >>")];
+    for index in 0..pages {
+        objects.push(format!(
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {PDF_PAGE_WIDTH:.2} {PDF_PAGE_HEIGHT:.2}] \
-             /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"
-        ),
-        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
-        format!("<< /Length {} >>\nstream\n{}endstream", content.len(), content),
-    ];
+             /Resources << /Font << /F1 {font_object} 0 R >> >> /Contents {} 0 R >>",
+            first_content + index
+        ));
+    }
+    objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string());
+    for content in &contents {
+        objects.push(format!("<< /Length {} >>\nstream\n{}endstream", content.len(), content));
+    }
     let mut text = String::from("%PDF-1.4\n");
     let mut offsets = Vec::with_capacity(objects.len());
     for (index, object) in objects.iter().enumerate() {
@@ -203,6 +268,7 @@ struct Part {
     rotation: f64,
     body_length: f64,
     body_width: f64,
+    geometry: packages::Geometry,
     feeder: Option<String>,
     instances: Vec<(u32, f64, f64)>,
 }
@@ -335,6 +401,7 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
             rotation: mapped.rotation,
             body_length: geometry.body_length,
             body_width: geometry.body_width,
+            geometry,
             feeder,
             instances: mapped.instances.iter().map(|placement| (placement.board, placement.x, placement.y)).collect(),
         });
@@ -392,9 +459,20 @@ pub(crate) fn rotated_box(x: f64, y: f64, rotation: f64, length: f64, width: f64
     )
 }
 
-/// Axis-aligned body box of one part at the given board coordinates.
+/// Axis-aligned outline box of one part, body plus leads, at the given board
+/// coordinates.
 fn body_box(part: &Part, x: f64, y: f64) -> Box4 {
-    rotated_box(x, y, part.rotation, part.body_length, part.body_width)
+    let shape = package_shape(&part.geometry, x, y, part.rotation);
+    let mut points: Vec<(f64, f64)> = shape.body.to_vec();
+    for lead in &shape.leads {
+        points.extend_from_slice(lead);
+    }
+    (
+        points.iter().map(|(px, _)| *px).fold(f64::INFINITY, f64::min),
+        points.iter().map(|(_, py)| *py).fold(f64::INFINITY, f64::min),
+        points.iter().map(|(px, _)| *px).fold(f64::NEG_INFINITY, f64::max),
+        points.iter().map(|(_, py)| *py).fold(f64::NEG_INFINITY, f64::max),
+    )
 }
 
 /// Places the board-1 labels greedily: the reference designator sits above
@@ -478,14 +556,31 @@ fn push_svg_panel(svg: &mut String, plan: &Plan, layout: &Layout) {
             let (fill, edge) = colors(side);
             let (fill, edge) = (hex(fill), hex(edge));
             for (_, x, y) in &part.instances {
-                let corners = corners(*x, *y, part.rotation, part.body_length, part.body_width);
-                let points =
-                    corners.iter().map(|(px, py)| format!("{},{}", number(*px), number(*py))).collect::<Vec<_>>().join(" ");
+                let shape = package_shape(&part.geometry, *x, *y, part.rotation);
+                let points = |corners: &[(f64, f64); 4]| {
+                    corners.iter().map(|(px, py)| format!("{},{}", number(*px), number(*py))).collect::<Vec<_>>().join(" ")
+                };
+                for lead in &shape.leads {
+                    svg.push_str(&format!(
+                        "      <polygon data-lead=\"{}\" points=\"{}\" fill=\"#{edge}\" stroke=\"#{edge}\" stroke-width=\"0.1\"/>\n",
+                        escape_xml(&part.refdes),
+                        points(lead)
+                    ));
+                }
                 svg.push_str(&format!(
-                    "      <polygon data-refdes=\"{}\" data-rotation=\"{}\" points=\"{points}\" fill=\"#{fill}\" stroke=\"#{edge}\" stroke-width=\"0.25\"/>\n",
+                    "      <polygon data-body=\"true\" data-refdes=\"{}\" data-rotation=\"{}\" points=\"{}\" fill=\"#{fill}\" stroke=\"#{edge}\" stroke-width=\"0.25\"/>\n",
                     escape_xml(&part.refdes),
-                    number(part.rotation)
+                    number(part.rotation),
+                    points(&shape.body)
                 ));
+                if let Some((px, py)) = shape.polarity {
+                    svg.push_str(&format!(
+                        "      <circle data-pin1=\"{}\" cx=\"{}\" cy=\"{}\" r=\"0.22\" fill=\"#{edge}\"/>\n",
+                        escape_xml(&part.refdes),
+                        number(px),
+                        number(py)
+                    ));
+                }
             }
         }
         svg.push_str("    </g>\n");
@@ -635,9 +730,17 @@ fn push_pdf_panel(pdf: &mut Pdf, plan: &Plan, layout: &Layout) {
         let (fill, edge) = colors(side);
         for part in plan.parts.iter().filter(|part| part.side == side) {
             for (_, cx, cy) in &part.instances {
-                let corners = corners(*cx, *cy, part.rotation, part.body_length, part.body_width);
-                let points: Vec<(f64, f64)> = corners.iter().map(|(px, py)| (x + px, y + py)).collect();
-                pdf.polygon(&points, Some(fill), Some(edge), 0.25);
+                let shape = package_shape(&part.geometry, *cx, *cy, part.rotation);
+                let points = |corners: &[(f64, f64); 4]| -> Vec<(f64, f64)> {
+                    corners.iter().map(|(px, py)| (x + px, y + py)).collect()
+                };
+                for lead in &shape.leads {
+                    pdf.polygon(&points(lead), Some(edge), Some(edge), 0.1);
+                }
+                pdf.polygon(&points(&shape.body), Some(fill), Some(edge), 0.25);
+                if let Some((px, py)) = shape.polarity {
+                    pdf.marker(x + px, y + py, 0.22, edge, edge);
+                }
             }
         }
     }
@@ -707,10 +810,16 @@ fn title_lines(plan: &Plan, scale_note: &str) -> Vec<TitleLine> {
             y: 5.6,
             size: 2.9,
             emphasis: true,
-            text: format!("OpenSMT placement drawing | {} | revision {} | units {}", plan.id, plan.revision, plan.units),
+            text: format!("OpenSMT placement drawing | drawing OSMT-PL-01 | revision {}", plan.revision),
         },
         TitleLine {
             y: 11.2,
+            size: 2.2,
+            emphasis: false,
+            text: title_stamp("placement", "OSMT-PL-01", &plan.id, &plan.units, "1:1", "top and bottom"),
+        },
+        TitleLine {
+            y: 16.8,
             size: 2.2,
             emphasis: false,
             text: format!(
@@ -719,7 +828,7 @@ fn title_lines(plan: &Plan, scale_note: &str) -> Vec<TitleLine> {
             ),
         },
         TitleLine {
-            y: 16.8,
+            y: 22.4,
             size: 2.2,
             emphasis: false,
             text: format!(
@@ -728,12 +837,12 @@ fn title_lines(plan: &Plan, scale_note: &str) -> Vec<TitleLine> {
             ),
         },
         TitleLine {
-            y: 22.4,
+            y: 28.0,
             size: 2.2,
             emphasis: false,
             text: format!("{}; feeder tag = first matching lane in document order", labels_note(plan)),
         },
-        TitleLine { y: 28.0, size: 2.2, emphasis: false, text: scale_note.to_string() },
+        TitleLine { y: 33.6, size: 2.2, emphasis: false, text: format!("millimetres; {scale_note}") },
     ]
 }
 
@@ -761,6 +870,66 @@ fn corners(x: f64, y: f64, rotation: f64, body_length: f64, body_width: f64) -> 
     let sine = radians.sin();
     [(-half_width, -half_height), (half_width, -half_height), (half_width, half_height), (-half_width, half_height)]
         .map(|(px, py)| (x + px * cosine - py * sine, y + px * sine + py * cosine))
+}
+
+/// Real package outline used by the assembly drawing: the body rectangle, one
+/// lead per terminal and a pin-1 dot for polarised families.
+pub(crate) struct PackageShape {
+    pub(crate) body: [(f64, f64); 4],
+    pub(crate) leads: Vec<[(f64, f64); 4]>,
+    pub(crate) polarity: Option<(f64, f64)>,
+}
+
+/// Builds the body, lead and polarity geometry of one placed package.
+pub(crate) fn package_shape(geometry: &packages::Geometry, x: f64, y: f64, rotation: f64) -> PackageShape {
+    let radians = rotation.to_radians();
+    let (cosine, sine) = (radians.cos(), radians.sin());
+    let mut leads = Vec::new();
+    let gulled = matches!(geometry.family, packages::Family::Qfp | packages::Family::Qfn);
+    for terminal in packages::terminals(geometry) {
+        let mut dx = terminal.dx;
+        let mut dy = terminal.dy;
+        let mut width = terminal.width;
+        let mut height = terminal.height;
+        // QFP/QFN pads sit flush with the body, so grow them outwards to read
+        // as gull-wing leads instead of a dashed outline.
+        if gulled {
+            if terminal.dx.abs() >= terminal.dy.abs() {
+                dx += terminal.dx.signum() * 0.35;
+                width += 0.7;
+            }
+            else {
+                dy += terminal.dy.signum() * 0.35;
+                height += 0.7;
+            }
+        }
+        // Gull-wing pads sit clear of the body; bridge the gap so the lead
+        // reads as one piece instead of a floating pad.
+        if geometry.family == packages::Family::Soic {
+            let gap = terminal.dx.abs() - terminal.width / 2.0 - geometry.body_length / 2.0;
+            if gap > 0.0 {
+                dx -= terminal.dx.signum() * gap / 2.0;
+                width += gap;
+            }
+        }
+        let centre_x = x + dx * cosine - dy * sine;
+        let centre_y = y + dx * sine + dy * cosine;
+        leads.push(corners(centre_x, centre_y, rotation, width, height));
+    }
+    let polarised = matches!(
+        geometry.family,
+        packages::Family::Sot23
+            | packages::Family::Soic
+            | packages::Family::Qfp
+            | packages::Family::Qfn
+            | packages::Family::Lga
+    );
+    let polarity = polarised.then(|| {
+        let px = -geometry.body_length / 2.0 + 0.55;
+        let py = -geometry.body_width / 2.0 + 0.55;
+        (x + px * cosine - py * sine, y + px * sine + py * cosine)
+    });
+    PackageShape { body: corners(x, y, rotation, geometry.body_length, geometry.body_width), leads, polarity }
 }
 
 fn legend_text(x: f64, y: f64, size: f64, text: &str) -> String {

@@ -303,32 +303,20 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<HeatmapDrawing, Sm
     let side_x = plot_x + plot_w + drawing::COLUMN_GAP_MM;
     let side_w = 46.0;
     let width = side_x + side_w + drawing::DRAW_MARGIN_MM;
-    let title_y = plot_y + plot_h + 10.0;
-    let height = title_y + drawing::TITLE_HEIGHT_MM + drawing::DRAW_MARGIN_MM;
 
     let board_width = document.board.width.max(1e-9);
     let board_depth = document.board.depth.max(1e-9);
     let scale = (plot_w / board_width).min(plot_h / board_depth);
     let draw_w = board_width * scale;
     let draw_h = board_depth * scale;
+    let title_y = plot_y + draw_h + 12.0;
+    let height = title_y + drawing::TITLE_HEIGHT_MM + drawing::DRAW_MARGIN_MM;
     let px = |x: f64| plot_x + x * scale;
     let py = |y: f64| plot_y + y * scale;
     let max_share = report.steps.iter().map(|step| step.share).fold(0.0, f64::max).max(1e-9);
 
     let mut svg = String::new();
-    svg.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    svg.push_str(&format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {} {}\" width=\"{:.0}\" height=\"{:.0}\">\n",
-        drawing::number(width),
-        drawing::number(height),
-        width * drawing::SVG_PX_PER_MM,
-        height * drawing::SVG_PX_PER_MM
-    ));
-    svg.push_str(&format!(
-        "  <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\"/>\n",
-        drawing::number(width),
-        drawing::number(height)
-    ));
+    drawing::svg_begin(&mut svg, width, height);
 
     svg.push_str(&format!(
         "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.2\" font-weight=\"bold\" fill=\"#{}\">TAKT BOTTLENECK HEAT MAP</text>\n",
@@ -379,23 +367,24 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<HeatmapDrawing, Sm
         drawing::number(plot_y + 3.0),
         drawing::hex(drawing::INK)
     ));
-    let bar_area = side_w - 14.0;
+    let bar_area = side_w - 16.0;
     let top = report.packages.iter().take(8);
     for (index, package) in top.enumerate() {
         let (name, count) = drawing::ascii(&package.package);
         dropped += count;
         let row = plot_y + 8.0 + index as f64 * 6.4;
-        let bar_w = package.share * bar_area / report.packages.first().map_or(1.0, |first| first.share.max(1e-9));
+        let ratio = package.share / report.packages.first().map_or(1.0, |first| first.share.max(1e-9));
+        let bar_w = (package.share * bar_area / report.packages.first().map_or(1.0, |first| first.share.max(1e-9))).max(0.2);
         svg.push_str(&format!(
             "  <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"3.0\" fill=\"#{}\"/>\n",
             drawing::number(side_x),
             drawing::number(row),
-            drawing::number(bar_w.max(0.2)),
-            heat_color(package.share / report.packages.first().map_or(1.0, |first| first.share.max(1e-9)))
+            drawing::number(bar_w),
+            heat_color(ratio)
         ));
         svg.push_str(&format!(
             "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" fill=\"#{}\">{} {:.0}%</text>\n",
-            drawing::number(side_x + bar_area + 1.4),
+            drawing::number(side_x + bar_w + 1.4),
             drawing::number(row + 2.4),
             drawing::hex(drawing::MUTED),
             drawing::escape_xml(&name),
@@ -413,7 +402,8 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<HeatmapDrawing, Sm
         drawing::hex(drawing::PANEL_EDGE)
     ));
     let lines = [
-        format!("OpenSMT takt heat map drawing | {id} | revision {} | units {units}", document.revision),
+        format!("OpenSMT takt heat map drawing | drawing OSMT-HT-01 | revision {}", document.revision),
+        drawing::title_stamp("takt heat map", "OSMT-HT-01", &id, &units, "fit to frame", "top and bottom"),
         format!(
             "place {} s + travel {} s = {} s | {} package(s)",
             drawing::number(report.place_seconds),
@@ -434,7 +424,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<HeatmapDrawing, Sm
         ));
     }
 
-    svg.push_str("</svg>\n");
+    drawing::svg_end(&mut svg);
     let summary = HeatmapDrawingSummary {
         units,
         components: report.components,

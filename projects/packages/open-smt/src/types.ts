@@ -29,7 +29,10 @@ export type ExportFormat =
     | 'sequence-pdf'
     | 'reflow-svg'
     | 'panel-svg'
-    | 'heatmap-svg';
+    | 'heatmap-svg'
+    | 'balance-svg'
+    | 'setup-svg'
+    | 'setup-pdf';
 
 /** Severity of a validation finding. */
 export type Severity = 'error' | 'warning' | 'notice';

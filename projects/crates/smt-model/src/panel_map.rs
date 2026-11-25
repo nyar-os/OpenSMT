@@ -273,30 +273,17 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<PanelMapDrawing, S
     let plot_x = drawing::DRAW_MARGIN_MM + 18.0;
     let plot_y = drawing::DRAW_MARGIN_MM + 18.0;
     let plot_w = 150.0;
-    let plot_h = 110.0;
-    let scale = (plot_w / report.panel_width).min(plot_h / report.panel_depth);
+    let scale = (plot_w / report.panel_width).min(110.0 / report.panel_depth);
     let draw_w = report.panel_width * scale;
     let draw_h = report.panel_depth * scale;
     let width = plot_x + plot_w + drawing::DRAW_MARGIN_MM;
-    let title_y = plot_y + plot_h + 12.0;
+    let title_y = plot_y + draw_h + 14.0;
     let height = title_y + drawing::TITLE_HEIGHT_MM + drawing::DRAW_MARGIN_MM;
     let px = |x: f64| plot_x + x * scale;
     let py = |y: f64| plot_y + y * scale;
 
     let mut svg = String::new();
-    svg.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    svg.push_str(&format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {} {}\" width=\"{:.0}\" height=\"{:.0}\">\n",
-        drawing::number(width),
-        drawing::number(height),
-        width * drawing::SVG_PX_PER_MM,
-        height * drawing::SVG_PX_PER_MM
-    ));
-    svg.push_str(&format!(
-        "  <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\"/>\n",
-        drawing::number(width),
-        drawing::number(height)
-    ));
+    drawing::svg_begin(&mut svg, width, height);
 
     svg.push_str(&format!(
         "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.2\" font-weight=\"bold\" fill=\"#{}\">PANEL MAP</text>\n",
@@ -375,8 +362,8 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<PanelMapDrawing, S
     ));
     svg.push_str(&format!(
         "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" fill=\"#{}\">ORIGIN (0,0)</text>\n",
-        drawing::number(plot_x + 2.0),
-        drawing::number(plot_y + 3.6),
+        drawing::number(plot_x + 1.6),
+        drawing::number(plot_y - 1.4),
         drawing::hex(drawing::MUTED)
     ));
 
@@ -390,7 +377,8 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<PanelMapDrawing, S
         drawing::hex(drawing::PANEL_EDGE)
     ));
     let lines = [
-        format!("OpenSMT panel map drawing | {id} | revision {} | units {units}", document.revision),
+        format!("OpenSMT panel map drawing | drawing OSMT-PM-01 | revision {}", document.revision),
+        drawing::title_stamp("panel map", "OSMT-PM-01", &id, &units, "fit to frame", "top and bottom"),
         format!(
             "board {} x {} mm | gaps {} x {} mm | panel {} x {} mm",
             drawing::number(report.width),
@@ -413,7 +401,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<PanelMapDrawing, S
         ));
     }
 
-    svg.push_str("</svg>\n");
+    drawing::svg_end(&mut svg);
     let summary = PanelMapDrawingSummary {
         units,
         rows: report.rows,

@@ -154,10 +154,10 @@ fn the_pdf_draws_the_origin_cross_like_the_svg() {
     let drawing = render_sequence_pdf(&document(), "seq").expect("rendered");
     let pdf = &drawing.text;
     assert!(pdf.contains("(ORIGIN \\(0,0\\)) Tj"));
-    // The content stream carries exactly three INK-coloured strokes: the two
-    // ORIGIN cross segments plus the title-block frame. The SVG cross is a
-    // path; the PDF now matches it with two line operators.
-    assert_eq!(pdf.matches("0.06 0.09 0.16 RG ").count(), 3);
+    // Four INK-coloured strokes: the two ORIGIN cross segments, the sheet
+    // frame and the title-block frame. The SVG cross is a path; the PDF now
+    // matches it with two line operators.
+    assert_eq!(pdf.matches("0.06 0.09 0.16 RG ").count(), 4);
     let svg = render_sequence_svg(&document(), "seq").expect("rendered").text;
     assert!(svg.contains("ORIGIN"));
 }

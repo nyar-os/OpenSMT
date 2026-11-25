@@ -226,25 +226,13 @@ pub fn csv(report: &StencilReport) -> String {
 pub fn render_svg(document: &SmtDocument, id: &str) -> Result<StencilDrawing, SmtError> {
     let plan = build_plan(document, id)?;
     let layout = StencilLayout::new(&plan);
-    let width = (layout.width * drawing::SVG_PX_PER_MM).round();
-    let height = (layout.height * drawing::SVG_PX_PER_MM).round();
     let mut svg = String::new();
-    svg.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    svg.push_str(&format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {} {}\" width=\"{width:.0}\" height=\"{height:.0}\">\n",
-        drawing::number(layout.width),
-        drawing::number(layout.height)
-    ));
-    svg.push_str(&format!(
-        "  <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\"/>\n",
-        drawing::number(layout.width),
-        drawing::number(layout.height)
-    ));
+    drawing::svg_begin(&mut svg, layout.width, layout.height);
     push_svg_board(&mut svg, &plan);
     push_svg_legend(&mut svg, &layout);
     push_svg_rules(&mut svg, &plan, &layout);
-    push_svg_title(&mut svg, &plan, &layout, &format!("scale 1:1 in millimetres; 1 mm = {} px", drawing::SVG_PX_PER_MM));
-    svg.push_str("</svg>\n");
+    push_svg_title(&mut svg, &plan, &layout, &format!("1 mm = {} px", drawing::SVG_PX_PER_MM));
+    drawing::svg_end(&mut svg);
     Ok(StencilDrawing { text: svg, summary: plan.summary })
 }
 
@@ -701,7 +689,8 @@ fn push_pdf_title(pdf: &mut drawing::Pdf, plan: &Plan, layout: &StencilLayout, s
 
 fn title_lines(plan: &Plan, scale_note: &str) -> Vec<String> {
     vec![
-        format!("OpenSMT stencil drawing | {} | revision {} | units {}", plan.id, plan.revision, plan.units),
+        format!("OpenSMT stencil drawing | drawing OSMT-ST-01 | revision {}", plan.revision),
+        drawing::title_stamp("stencil", "OSMT-ST-01", &plan.id, &plan.units, "1:1", "top + bottom (bottom mirrored about X)"),
         format!(
             "{} component(s) | {} aperture(s) | {} package rule(s) | {} unmatched package(s)",
             plan.summary.components,

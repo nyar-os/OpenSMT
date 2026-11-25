@@ -112,10 +112,10 @@ fn non_ascii_text_is_dropped_and_counted() {
 }
 
 #[test]
-fn the_title_drops_the_scale_note_and_annotates_the_panel_multiplier() {
+fn the_title_has_one_scale_stamp_and_annotates_the_panel_multiplier() {
     let single = render_feeder_svg(&document(), "setup").expect("rendered").text;
-    // The millimetre scale note is gone.
-    assert!(!single.contains("scale 1:1"));
+    // The title block carries exactly one scale entry.
+    assert_eq!(single.matches("scale 1:1").count(), 1);
     // A single board carries no multiplier note.
     assert!(!single.contains("on the panel"));
 

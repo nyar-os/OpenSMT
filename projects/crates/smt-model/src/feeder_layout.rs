@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use crate::{
     SmtError,
-    drawing::{self, DrawingLoss, SVG_PX_PER_MM, TITLE_HEIGHT_MM},
+    drawing::{self, DrawingLoss, TITLE_HEIGHT_MM},
     model::SmtDocument,
     place,
 };
@@ -96,24 +96,12 @@ struct Plan {
 pub fn render_svg(document: &SmtDocument, id: &str) -> Result<FeederDrawing, SmtError> {
     let plan = build_plan(document, id)?;
     let layout = Layout::new(&plan);
-    let width = (layout.width * SVG_PX_PER_MM).round();
-    let height = (layout.height * SVG_PX_PER_MM).round();
     let mut svg = String::new();
-    svg.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    svg.push_str(&format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {} {}\" width=\"{width:.0}\" height=\"{height:.0}\">\n",
-        drawing::number(layout.width),
-        drawing::number(layout.height)
-    ));
-    svg.push_str(&format!(
-        "  <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\"/>\n",
-        drawing::number(layout.width),
-        drawing::number(layout.height)
-    ));
+    drawing::svg_begin(&mut svg, layout.width, layout.height);
     push_svg_header(&mut svg, &plan, &layout);
     push_svg_lanes(&mut svg, &plan, &layout);
     push_svg_title(&mut svg, &plan, &layout);
-    svg.push_str("</svg>\n");
+    drawing::svg_end(&mut svg);
     Ok(FeederDrawing { text: svg, summary: plan.summary })
 }
 
@@ -364,11 +352,15 @@ fn push_svg_title(svg: &mut String, plan: &Plan, layout: &Layout) {
         "    <text x=\"0\" y=\"0\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">load bar = loaded / capacity; mapping lines list the assigned reference designators</text>\n",
         drawing::hex(drawing::MUTED)
     ));
-    svg.push_str(&format!(
-        "    <text x=\"0\" y=\"4.2\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">unassigned: {}</text>\n",
-        drawing::hex(drawing::MUTED),
-        drawing::escape_xml(&if plan.unassigned.is_empty() { "none".to_string() } else { plan.unassigned.join(", ") })
-    ));
+    let unassigned = if plan.unassigned.is_empty() { vec!["none".to_string()] } else { wrap(&plan.unassigned) };
+    for (index, line) in unassigned.iter().enumerate() {
+        svg.push_str(&format!(
+            "    <text x=\"0\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">unassigned: {}</text>\n",
+            drawing::number(4.2 + index as f64 * 2.4),
+            drawing::hex(drawing::MUTED),
+            drawing::escape_xml(line)
+        ));
+    }
     svg.push_str("  </g>\n");
     svg.push_str(&format!("  <g id=\"title-block\" transform=\"translate({} {})\">\n", drawing::number(x), drawing::number(y)));
     svg.push_str(&format!(
@@ -381,7 +373,8 @@ fn push_svg_title(svg: &mut String, plan: &Plan, layout: &Layout) {
     // with its multiplier instead of a millimetre scale note.
     let multiplier = if plan.boards > 1 { format!(" | per board (x{} on the panel)", plan.boards) } else { String::new() };
     let lines = [
-        format!("OpenSMT feeder setup drawing | {} | revision {} | units {}", plan.id, plan.revision, plan.units),
+        format!("OpenSMT feeder setup drawing | drawing OSMT-FD-01 | revision {}", plan.revision),
+        drawing::title_stamp("feeder setup", "OSMT-FD-01", &plan.id, &plan.units, "1:1", "n/a (feeder bank)"),
         format!(
             "{} lane(s) | {} component(s) mapped | {} unassigned{}",
             plan.summary.lanes, plan.summary.mapped_components, plan.summary.unassigned_components, multiplier
