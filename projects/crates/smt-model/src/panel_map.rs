@@ -12,6 +12,7 @@ use serde::Serialize;
 
 use crate::{
     SmtError,
+    drawing::{self, DrawingLoss},
     model::{Side, SmtDocument},
 };
 
@@ -210,4 +211,219 @@ fn positive(value: f64) -> bool {
 
 fn non_negative(value: f64) -> bool {
     value.is_finite() && value >= 0.0
+}
+
+/// Counts of a rendered panel map drawing.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelMapDrawingSummary {
+    /// Unit system taken from the document.
+    pub units: String,
+    /// Number of panel rows.
+    pub rows: u32,
+    /// Number of panel columns.
+    pub columns: u32,
+    /// Number of boards on the panel.
+    pub board_count: u32,
+    /// Panel width including gaps, in millimetres.
+    pub panel_width: f64,
+    /// Panel depth including gaps, in millimetres.
+    pub panel_depth: f64,
+    /// Number of mapped components.
+    pub components: u32,
+    /// Components whose coordinates fall outside the single board.
+    pub outside_board: u32,
+    /// Number of non-ASCII characters written as `?`.
+    pub dropped_characters: u32,
+}
+
+impl PanelMapDrawingSummary {
+    /// Returns the aggregated text losses of this drawing.
+    pub fn losses(&self) -> Vec<DrawingLoss> {
+        if self.dropped_characters == 0 {
+            Vec::new()
+        }
+        else {
+            vec![DrawingLoss { code: "panel-map/non-ascii-text".to_string(), count: self.dropped_characters }]
+        }
+    }
+}
+
+/// One rendered panel map drawing and its summary.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PanelMapDrawing {
+    /// Complete file contents.
+    pub text: String,
+    /// Counts and losses of the rendered drawing.
+    pub summary: PanelMapDrawingSummary,
+}
+
+/// Draws the panel array with every board instance and its component dots.
+///
+/// The panel is scaled to fit a fixed plot box, board origins are numbered in
+/// row-major order, and each component is drawn as a side-coloured dot in panel
+/// coordinates. A coordinate origin cross marks the panel `(0, 0)`. The result
+/// is deterministic and the document is never modified.
+pub fn render_svg(document: &SmtDocument, id: &str) -> Result<PanelMapDrawing, SmtError> {
+    let report = map(document)?;
+    let (id, mut dropped) = drawing::ascii(id);
+    let (units, count) = drawing::ascii(&document.units);
+    dropped += count;
+
+    let plot_x = drawing::DRAW_MARGIN_MM + 18.0;
+    let plot_y = drawing::DRAW_MARGIN_MM + 18.0;
+    let plot_w = 150.0;
+    let plot_h = 110.0;
+    let scale = (plot_w / report.panel_width).min(plot_h / report.panel_depth);
+    let draw_w = report.panel_width * scale;
+    let draw_h = report.panel_depth * scale;
+    let width = plot_x + plot_w + drawing::DRAW_MARGIN_MM;
+    let title_y = plot_y + plot_h + 12.0;
+    let height = title_y + drawing::TITLE_HEIGHT_MM + drawing::DRAW_MARGIN_MM;
+    let px = |x: f64| plot_x + x * scale;
+    let py = |y: f64| plot_y + y * scale;
+
+    let mut svg = String::new();
+    svg.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    svg.push_str(&format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {} {}\" width=\"{:.0}\" height=\"{:.0}\">\n",
+        drawing::number(width),
+        drawing::number(height),
+        width * drawing::SVG_PX_PER_MM,
+        height * drawing::SVG_PX_PER_MM
+    ));
+    svg.push_str(&format!(
+        "  <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\"/>\n",
+        drawing::number(width),
+        drawing::number(height)
+    ));
+
+    svg.push_str(&format!(
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.2\" font-weight=\"bold\" fill=\"#{}\">PANEL MAP</text>\n",
+        drawing::number(drawing::DRAW_MARGIN_MM),
+        drawing::number(drawing::DRAW_MARGIN_MM + 4.0),
+        drawing::hex(drawing::INK)
+    ));
+    svg.push_str(&format!(
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">{} x {} array | {} board(s) | {} component(s){}</text>\n",
+        drawing::number(drawing::DRAW_MARGIN_MM),
+        drawing::number(drawing::DRAW_MARGIN_MM + 8.6),
+        drawing::hex(drawing::MUTED),
+        report.rows,
+        report.columns,
+        report.board_count,
+        report.components.len(),
+        if report.ok { String::new() } else { format!(" | {} outside board", report.outside_board) }
+    ));
+
+    // Panel outline.
+    svg.push_str(&format!(
+        "  <rect data-role=\"panel\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#{}\" stroke=\"#{}\" stroke-width=\"0.5\"/>\n",
+        drawing::number(plot_x),
+        drawing::number(plot_y),
+        drawing::number(draw_w),
+        drawing::number(draw_h),
+        drawing::hex(drawing::BOARD_FILL),
+        drawing::hex(drawing::PANEL_EDGE)
+    ));
+
+    // Board instances with their row-major number.
+    for instance in &report.instances {
+        let board_w = report.width * scale;
+        let board_h = report.depth * scale;
+        svg.push_str(&format!(
+            "  <rect data-board=\"{}\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"none\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
+            instance.board,
+            drawing::number(px(instance.offset_x)),
+            drawing::number(py(instance.offset_y)),
+            drawing::number(board_w),
+            drawing::number(board_h),
+            drawing::hex(drawing::BOARD_EDGE)
+        ));
+        svg.push_str(&format!(
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">B{}</text>\n",
+            drawing::number(px(instance.offset_x) + 1.4),
+            drawing::number(py(instance.offset_y) + 3.4),
+            drawing::hex(drawing::MUTED),
+            instance.board
+        ));
+    }
+
+    // Component dots in panel coordinates, coloured by side.
+    for component in &report.components {
+        let (fill, edge) = drawing::colors(component.side);
+        for placement in &component.instances {
+            svg.push_str(&format!(
+                "  <circle data-refdes=\"{}\" cx=\"{}\" cy=\"{}\" r=\"0.9\" fill=\"#{}\" stroke=\"#{}\" stroke-width=\"0.2\"/>\n",
+                drawing::escape_xml(&component.refdes),
+                drawing::number(px(placement.x)),
+                drawing::number(py(placement.y)),
+                drawing::hex(fill),
+                drawing::hex(edge)
+            ));
+        }
+    }
+
+    // Coordinate origin cross at the panel (0, 0).
+    svg.push_str(&format!(
+        "  <path d=\"M {} {} l 2.4 2.4 M {} {} l 2.4 -2.4\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
+        drawing::number(plot_x - 1.2),
+        drawing::number(plot_y - 1.2),
+        drawing::number(plot_x - 1.2),
+        drawing::number(plot_y + 1.2),
+        drawing::hex(drawing::INK)
+    ));
+    svg.push_str(&format!(
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" fill=\"#{}\">ORIGIN (0,0)</text>\n",
+        drawing::number(plot_x + 2.0),
+        drawing::number(plot_y + 3.6),
+        drawing::hex(drawing::MUTED)
+    ));
+
+    // Title block.
+    svg.push_str(&format!(
+        "  <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
+        drawing::number(drawing::DRAW_MARGIN_MM),
+        drawing::number(title_y),
+        drawing::number(width - 2.0 * drawing::DRAW_MARGIN_MM),
+        drawing::number(drawing::TITLE_HEIGHT_MM),
+        drawing::hex(drawing::PANEL_EDGE)
+    ));
+    let lines = [
+        format!("OpenSMT panel map drawing | {id} | revision {} | units {units}", document.revision),
+        format!(
+            "board {} x {} mm | gaps {} x {} mm | panel {} x {} mm",
+            drawing::number(report.width),
+            drawing::number(report.depth),
+            drawing::number(report.gap_x),
+            drawing::number(report.gap_y),
+            drawing::number(report.panel_width),
+            drawing::number(report.panel_depth)
+        ),
+        "boards are numbered row-major from the panel origin".to_string(),
+    ];
+    for (index, line) in lines.iter().enumerate() {
+        svg.push_str(&format!(
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" fill=\"#{}\">{}</text>\n",
+            drawing::number(drawing::DRAW_MARGIN_MM + 2.5),
+            drawing::number(title_y + 5.6 + index as f64 * 5.6),
+            if index == 0 { "2.4" } else { "2.0" },
+            drawing::hex(if index == 0 { drawing::INK } else { drawing::MUTED }),
+            drawing::escape_xml(line)
+        ));
+    }
+
+    svg.push_str("</svg>\n");
+    let summary = PanelMapDrawingSummary {
+        units,
+        rows: report.rows,
+        columns: report.columns,
+        board_count: report.board_count,
+        panel_width: report.panel_width,
+        panel_depth: report.panel_depth,
+        components: report.components.len() as u32,
+        outside_board: report.outside_board,
+        dropped_characters: dropped as u32,
+    };
+    Ok(PanelMapDrawing { text: svg, summary })
 }

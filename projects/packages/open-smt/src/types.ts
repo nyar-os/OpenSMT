@@ -26,7 +26,10 @@ export type ExportFormat =
     | 'stencil-pdf'
     | 'feeder-svg'
     | 'sequence-svg'
-    | 'sequence-pdf';
+    | 'sequence-pdf'
+    | 'reflow-svg'
+    | 'panel-svg'
+    | 'heatmap-svg';
 
 /** Severity of a validation finding. */
 export type Severity = 'error' | 'warning' | 'notice';

@@ -127,8 +127,18 @@ function exportFormat(value: string, ctx: CommandContext): ExportFormat {
     if (value === 'stencil-svg' || value === 'stencil-pdf') {
         return value;
     }
-    if (value === 'feeder-svg' || value === 'sequence-svg' || value === 'sequence-pdf') {
+    if (
+        value === 'feeder-svg' ||
+        value === 'sequence-svg' ||
+        value === 'sequence-pdf' ||
+        value === 'reflow-svg' ||
+        value === 'panel-svg' ||
+        value === 'heatmap-svg'
+    ) {
         return value;
+    }
+    if (value === 'panel-map-svg') {
+        return 'panel-svg';
     }
     if (value === 'kicad' || value === 'altium' || value === 'odb') {
         throw new NotImplementedError(`${value} export`);

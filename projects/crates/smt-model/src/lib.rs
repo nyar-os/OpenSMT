@@ -98,7 +98,10 @@ pub use crate::{
     first_article::{
         FirstArticleLane, FirstArticleMaterial, FirstArticleReport, FirstArticleStep, sheet as first_article_sheet,
     },
-    heatmap::{HeatPackage, HeatSide, HeatStep, HeatmapReport, heatmap as takt_heatmap},
+    heatmap::{
+        HeatPackage, HeatSide, HeatStep, HeatmapDrawing, HeatmapDrawingSummary, HeatmapReport, heatmap as takt_heatmap,
+        render_svg as render_heatmap_svg,
+    },
     import::{ImportLoss, ImportReport},
     machine_program::{
         MachineProgram, MachineProgramExport, MachineProgramVerify, ProgramMismatch, build as build_machine_program,
@@ -106,13 +109,19 @@ pub use crate::{
     },
     model::{Board, Component, FORMAT, Feeder, Panel, ReflowProfile, Side, SmtDocument, Splice, UNITS, VERSION, Zone},
     panel_fit::{PanelFitReport, fit as panel_fit},
-    panel_map::{MappedComponent, PanelInstance, PanelMapReport, PanelPlacement, map as panel_map},
+    panel_map::{
+        MappedComponent, PanelInstance, PanelMapDrawing, PanelMapDrawingSummary, PanelMapReport, PanelPlacement,
+        map as panel_map, render_svg as render_panel_map_svg,
+    },
     paste::{DEFAULT_FOIL_THICKNESS_MM, PasteOptions, PastePackage, PasteReport, csv as paste_csv, report as paste_report},
     place::{
         FeederReport, FeederUsage, HEAD_SPEED, PLACE_SECONDS, PackageUsage, PlacementEntry, PlacementReport,
         allocate as allocate_feeders, sequence as sequence_placement, sequence_with as sequence_placement_with,
     },
-    reflow::{AMBIENT, ReflowReport, ZoneReport, evaluate as evaluate_reflow},
+    reflow::{
+        AMBIENT, ReflowDrawing, ReflowDrawingSummary, ReflowReport, ZoneReport, evaluate as evaluate_reflow,
+        render_svg as render_reflow_svg,
+    },
     reflow_window::{ReflowWindowLimits, ReflowWindowReport, WindowCheck, WindowZone, evaluate as evaluate_reflow_window},
     schedule::{
         FeederScheduleReport, LaneSplice, ReelChange, ScheduleLane, plan as plan_feeder_schedule, plan_lane,
@@ -175,6 +184,9 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "pasteCsv": "supported",
     "sequenceSvg": "supported",
     "sequencePdf": "supported",
+    "reflowSvg": "supported",
+    "panelMapSvg": "supported",
+    "heatmapSvg": "supported",
     "kicad": "unsupported",
     "altium": "unsupported",
     "odb": "unsupported"
@@ -208,6 +220,9 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "feederSvg": "the feeder setup drawing is an SVG tape-bank sheet with one slot per lane in feeder id order, a load bar for the loaded share of the capacity and the assigned reference designators; it reads the same allocation as the feeders report and models no machine slot, tape direction or pitch constraint",
     "sequenceSvg": "the pick-and-place sequence drawing is a millimetre SVG sheet at 8 px/mm with one numbered route per board side over the default nearest-neighbour program; it models no acceleration, tape advance, vision or nozzle physics",
     "sequencePdf": "the pick-and-place sequence drawing is a one-page A4 landscape PDF fitted from the same millimetre layout with Helvetica; it models no acceleration, tape advance, vision or nozzle physics",
+    "reflowSvg": "the reflow drawing is a millimetre SVG time-temperature plot of the linear-ramp zone model with the liquidus and peak annotated; it plots set-points, not measured thermocouple data, and models no thermal mass or soak dynamics",
+    "panelMapSvg": "the panel map drawing is a millimetre SVG of the stored row-major panel array with board numbers, side-coloured component dots and a panel origin cross; it models no board rotation, edge rail, fiducial or panel outline",
+    "heatmapSvg": "the takt heat map drawing is a millimetre SVG of one board with a heat dot per program step plus a package Pareto column; it colours the analytical step time of the default machine model and models no acceleration, tape advance, vision or nozzle physics",
     "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }
 }"#;

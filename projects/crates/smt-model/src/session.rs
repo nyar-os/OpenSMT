@@ -101,6 +101,12 @@ pub enum ExportFormat {
     SequenceSvg,
     /// The pick-and-place sequence drawing as a one-page PDF.
     SequencePdf,
+    /// The reflow time-temperature profile drawing as SVG.
+    ReflowSvg,
+    /// The panel map drawing as SVG.
+    PanelMapSvg,
+    /// The takt bottleneck heat map drawing as SVG.
+    HeatmapSvg,
 }
 
 impl ExportFormat {
@@ -120,6 +126,9 @@ impl ExportFormat {
             Self::FeederSvg => "feeder-svg",
             Self::SequenceSvg => "sequence-svg",
             Self::SequencePdf => "sequence-pdf",
+            Self::ReflowSvg => "reflow-svg",
+            Self::PanelMapSvg => "panel-svg",
+            Self::HeatmapSvg => "heatmap-svg",
         }
     }
 }
@@ -142,11 +151,14 @@ impl FromStr for ExportFormat {
             "feeder-svg" => Ok(Self::FeederSvg),
             "sequence-svg" => Ok(Self::SequenceSvg),
             "sequence-pdf" => Ok(Self::SequencePdf),
+            "reflow-svg" => Ok(Self::ReflowSvg),
+            "panel-svg" | "panel-map-svg" => Ok(Self::PanelMapSvg),
+            "heatmap-svg" => Ok(Self::HeatmapSvg),
             "kicad" | "altium" | "odb" => Err(crate::not_implemented(&format!("`{value}` export"))),
             other => Err(SmtError::new(
                 "cli/unknown-format",
                 format!(
-                    "unknown export format `{other}`; only program, feeders, fai, json, md, svg or pdf, plus stencil, stencil-svg, stencil-pdf, feeder-svg, sequence-svg or sequence-pdf is supported"
+                    "unknown export format `{other}`; only program, feeders, fai, json, md, svg or pdf, plus stencil, stencil-svg, stencil-pdf, feeder-svg, sequence-svg, sequence-pdf, reflow-svg, panel-svg or heatmap-svg is supported"
                 ),
             )),
         }
@@ -936,6 +948,21 @@ impl OpenSmt {
             }
             ExportFormat::SequencePdf => {
                 let drawing = sequence_drawing::render_pdf(document, id)?;
+                losses = drawing.summary.losses();
+                drawing.text
+            }
+            ExportFormat::ReflowSvg => {
+                let drawing = reflow::render_svg(document, id)?;
+                losses = drawing.summary.losses();
+                drawing.text
+            }
+            ExportFormat::PanelMapSvg => {
+                let drawing = panel_map::render_svg(document, id)?;
+                losses = drawing.summary.losses();
+                drawing.text
+            }
+            ExportFormat::HeatmapSvg => {
+                let drawing = heatmap::render_svg(document, id)?;
                 losses = drawing.summary.losses();
                 drawing.text
             }

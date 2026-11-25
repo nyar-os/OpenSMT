@@ -15,6 +15,7 @@ use serde::Serialize;
 
 use crate::{
     SmtError,
+    drawing::{self, DrawingLoss},
     model::{Side, SmtDocument},
     place::{self, HEAD_SPEED, PLACE_SECONDS},
 };
@@ -228,4 +229,219 @@ pub fn heatmap(document: &SmtDocument) -> Result<HeatmapReport, SmtError> {
 /// Fraction of a total, zero for an empty total.
 fn share(value: f64, total: f64) -> f64 {
     if total > 0.0 { value / total } else { 0.0 }
+}
+
+/// Counts of a rendered takt heat map drawing.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HeatmapDrawingSummary {
+    /// Unit system taken from the document.
+    pub units: String,
+    /// Number of placement steps on one board.
+    pub components: u32,
+    /// Board time of the default model, in seconds.
+    pub total_seconds: f64,
+    /// Number of distinct packages in the Pareto column.
+    pub packages: u32,
+    /// Whether a bottleneck package is reported.
+    pub has_bottleneck: bool,
+    /// Number of non-ASCII characters written as `?`.
+    pub dropped_characters: u32,
+}
+
+impl HeatmapDrawingSummary {
+    /// Returns the aggregated text losses of this drawing.
+    pub fn losses(&self) -> Vec<DrawingLoss> {
+        if self.dropped_characters == 0 {
+            Vec::new()
+        }
+        else {
+            vec![DrawingLoss { code: "heatmap/non-ascii-text".to_string(), count: self.dropped_characters }]
+        }
+    }
+}
+
+/// One rendered takt heat map drawing and its summary.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeatmapDrawing {
+    /// Complete file contents.
+    pub text: String,
+    /// Counts and losses of the rendered drawing.
+    pub summary: HeatmapDrawingSummary,
+}
+
+/// Maps a normalised heat value in `[0, 1]` to a blue-to-red hex colour.
+fn heat_color(value: f64) -> String {
+    let t = value.clamp(0.0, 1.0);
+    let (red, green, blue) = if t < 0.5 {
+        let k = t / 0.5;
+        (37.0 + (245.0 - 37.0) * k, 99.0 + (158.0 - 99.0) * k, 235.0 + (11.0 - 235.0) * k)
+    }
+    else {
+        let k = (t - 0.5) / 0.5;
+        (245.0 + (220.0 - 245.0) * k, 158.0 + (38.0 - 158.0) * k, 11.0 + (38.0 - 11.0) * k)
+    };
+    format!("{:02x}{:02x}{:02x}", red.round() as u32, green.round() as u32, blue.round() as u32)
+}
+
+/// Draws the takt bottleneck heat map of one board as a millimetre SVG.
+///
+/// Every program step is plotted on the board outline with a colour and radius
+/// that grow with its share of the board time, and a Pareto column ranks the
+/// packages by their share. The result is deterministic and the document is
+/// never modified.
+pub fn render_svg(document: &SmtDocument, id: &str) -> Result<HeatmapDrawing, SmtError> {
+    let report = heatmap(document)?;
+    let (id, mut dropped) = drawing::ascii(id);
+    let (units, count) = drawing::ascii(&document.units);
+    dropped += count;
+
+    let plot_x = drawing::DRAW_MARGIN_MM;
+    let plot_y = drawing::DRAW_MARGIN_MM + 18.0;
+    let plot_w = 110.0;
+    let plot_h = 90.0;
+    let side_x = plot_x + plot_w + drawing::COLUMN_GAP_MM;
+    let side_w = 46.0;
+    let width = side_x + side_w + drawing::DRAW_MARGIN_MM;
+    let title_y = plot_y + plot_h + 10.0;
+    let height = title_y + drawing::TITLE_HEIGHT_MM + drawing::DRAW_MARGIN_MM;
+
+    let board_width = document.board.width.max(1e-9);
+    let board_depth = document.board.depth.max(1e-9);
+    let scale = (plot_w / board_width).min(plot_h / board_depth);
+    let draw_w = board_width * scale;
+    let draw_h = board_depth * scale;
+    let px = |x: f64| plot_x + x * scale;
+    let py = |y: f64| plot_y + y * scale;
+    let max_share = report.steps.iter().map(|step| step.share).fold(0.0, f64::max).max(1e-9);
+
+    let mut svg = String::new();
+    svg.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    svg.push_str(&format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {} {}\" width=\"{:.0}\" height=\"{:.0}\">\n",
+        drawing::number(width),
+        drawing::number(height),
+        width * drawing::SVG_PX_PER_MM,
+        height * drawing::SVG_PX_PER_MM
+    ));
+    svg.push_str(&format!(
+        "  <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\"/>\n",
+        drawing::number(width),
+        drawing::number(height)
+    ));
+
+    svg.push_str(&format!(
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.2\" font-weight=\"bold\" fill=\"#{}\">TAKT BOTTLENECK HEAT MAP</text>\n",
+        drawing::number(drawing::DRAW_MARGIN_MM),
+        drawing::number(drawing::DRAW_MARGIN_MM + 4.0),
+        drawing::hex(drawing::INK)
+    ));
+    svg.push_str(&format!(
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">{} step(s) | board {} s | bottleneck {}</text>\n",
+        drawing::number(drawing::DRAW_MARGIN_MM),
+        drawing::number(drawing::DRAW_MARGIN_MM + 8.6),
+        drawing::hex(drawing::MUTED),
+        report.components,
+        drawing::number(report.total_seconds),
+        drawing::escape_xml(&report.bottleneck.clone().unwrap_or_else(|| "none".to_string()))
+    ));
+
+    // Board outline.
+    svg.push_str(&format!(
+        "  <rect data-role=\"board\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#{}\" stroke=\"#{}\" stroke-width=\"0.4\"/>\n",
+        drawing::number(plot_x),
+        drawing::number(plot_y),
+        drawing::number(draw_w),
+        drawing::number(draw_h),
+        drawing::hex(drawing::BOARD_FILL),
+        drawing::hex(drawing::BOARD_EDGE)
+    ));
+
+    // Heat dots per step.
+    for step in &report.steps {
+        let normalised = step.share / max_share;
+        let radius = 0.9 + normalised * 2.2;
+        svg.push_str(&format!(
+            "  <circle data-step=\"{}\" cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"#{}\" stroke=\"#{}\" stroke-width=\"0.2\"/>\n",
+            step.sequence,
+            drawing::number(px(step.x)),
+            drawing::number(py(step.y)),
+            drawing::number(radius),
+            heat_color(normalised),
+            drawing::hex(drawing::INK)
+        ));
+    }
+
+    // Pareto column: packages ranked by share with a cumulative marker.
+    svg.push_str(&format!(
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" font-weight=\"bold\" fill=\"#{}\">PACKAGES</text>\n",
+        drawing::number(side_x),
+        drawing::number(plot_y + 3.0),
+        drawing::hex(drawing::INK)
+    ));
+    let bar_area = side_w - 14.0;
+    let top = report.packages.iter().take(8);
+    for (index, package) in top.enumerate() {
+        let (name, count) = drawing::ascii(&package.package);
+        dropped += count;
+        let row = plot_y + 8.0 + index as f64 * 6.4;
+        let bar_w = package.share * bar_area / report.packages.first().map_or(1.0, |first| first.share.max(1e-9));
+        svg.push_str(&format!(
+            "  <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"3.0\" fill=\"#{}\"/>\n",
+            drawing::number(side_x),
+            drawing::number(row),
+            drawing::number(bar_w.max(0.2)),
+            heat_color(package.share / report.packages.first().map_or(1.0, |first| first.share.max(1e-9)))
+        ));
+        svg.push_str(&format!(
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" fill=\"#{}\">{} {:.0}%</text>\n",
+            drawing::number(side_x + bar_area + 1.4),
+            drawing::number(row + 2.4),
+            drawing::hex(drawing::MUTED),
+            drawing::escape_xml(&name),
+            package.share * 100.0
+        ));
+    }
+
+    // Title block.
+    svg.push_str(&format!(
+        "  <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
+        drawing::number(drawing::DRAW_MARGIN_MM),
+        drawing::number(title_y),
+        drawing::number(width - 2.0 * drawing::DRAW_MARGIN_MM),
+        drawing::number(drawing::TITLE_HEIGHT_MM),
+        drawing::hex(drawing::PANEL_EDGE)
+    ));
+    let lines = [
+        format!("OpenSMT takt heat map drawing | {id} | revision {} | units {units}", document.revision),
+        format!(
+            "place {} s + travel {} s = {} s | {} package(s)",
+            drawing::number(report.place_seconds),
+            drawing::number(report.travel_seconds),
+            drawing::number(report.total_seconds),
+            report.packages.len()
+        ),
+        "dot colour and size grow with the share of board time".to_string(),
+    ];
+    for (index, line) in lines.iter().enumerate() {
+        svg.push_str(&format!(
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" fill=\"#{}\">{}</text>\n",
+            drawing::number(drawing::DRAW_MARGIN_MM + 2.5),
+            drawing::number(title_y + 5.6 + index as f64 * 5.6),
+            if index == 0 { "2.4" } else { "2.0" },
+            drawing::hex(if index == 0 { drawing::INK } else { drawing::MUTED }),
+            drawing::escape_xml(line)
+        ));
+    }
+
+    svg.push_str("</svg>\n");
+    let summary = HeatmapDrawingSummary {
+        units,
+        components: report.components,
+        total_seconds: report.total_seconds,
+        packages: report.packages.len() as u32,
+        has_bottleneck: report.bottleneck.is_some(),
+        dropped_characters: dropped as u32,
+    };
+    Ok(HeatmapDrawing { text: svg, summary })
 }

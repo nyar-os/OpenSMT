@@ -8,7 +8,12 @@
 
 use serde::Serialize;
 
-use crate::{SmtError, model::SmtDocument, validate};
+use crate::{
+    SmtError,
+    drawing::{self, DrawingLoss},
+    model::SmtDocument,
+    validate,
+};
 
 /// Temperature assumed at the conveyor entrance, in degrees Celsius.
 pub const AMBIENT: f64 = 25.0;
@@ -117,4 +122,247 @@ fn seconds_above(entry: f64, exit: f64, seconds: f64, liquidus: f64) -> f64 {
         return 0.0;
     }
     if exit > entry { seconds * (exit - liquidus) / difference } else { seconds * (entry - liquidus) / difference }
+}
+
+/// Counts of a rendered reflow time-temperature drawing.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReflowDrawingSummary {
+    /// Unit system taken from the document.
+    pub units: String,
+    /// Unit of every temperature value.
+    pub temperature_unit: String,
+    /// Number of zones plotted.
+    pub zones: u32,
+    /// Total conveyor time of the profile, in seconds.
+    pub total_seconds: f64,
+    /// Highest set-point temperature, in degrees Celsius.
+    pub peak_temperature: f64,
+    /// Alloy liquidus, in degrees Celsius.
+    pub liquidus: f64,
+    /// Total time above the liquidus, in seconds.
+    pub time_above_liquidus: f64,
+    /// Number of non-ASCII characters written as `?`.
+    pub dropped_characters: u32,
+}
+
+impl ReflowDrawingSummary {
+    /// Returns the aggregated text losses of this drawing.
+    pub fn losses(&self) -> Vec<DrawingLoss> {
+        if self.dropped_characters == 0 {
+            Vec::new()
+        }
+        else {
+            vec![DrawingLoss { code: "reflow/non-ascii-text".to_string(), count: self.dropped_characters }]
+        }
+    }
+}
+
+/// One rendered reflow time-temperature drawing and its summary.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReflowDrawing {
+    /// Complete file contents.
+    pub text: String,
+    /// Counts and losses of the rendered drawing.
+    pub summary: ReflowDrawingSummary,
+}
+
+/// Plots the evaluated reflow profile as a millimetre time-temperature SVG.
+///
+/// The curve is the linear-ramp model of [`evaluate`]: it starts at
+/// [`AMBIENT`] degrees and reaches each zone set-point at the zone exit. The
+/// liquidus is drawn as a reference line and the time above it is annotated.
+/// The result is deterministic and the document is never modified.
+pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, SmtError> {
+    let report = evaluate(document)?;
+    let (id, mut dropped) = drawing::ascii(id);
+    let (units, count) = drawing::ascii(&document.units);
+    dropped += count;
+
+    let plot_x = drawing::DRAW_MARGIN_MM + 18.0;
+    let plot_y = drawing::DRAW_MARGIN_MM + 18.0;
+    let plot_w = 150.0;
+    let plot_h = 90.0;
+    let width = plot_x + plot_w + drawing::DRAW_MARGIN_MM;
+    let title_y = plot_y + plot_h + 12.0;
+    let height = title_y + drawing::TITLE_HEIGHT_MM + drawing::DRAW_MARGIN_MM;
+
+    let total = report.total_seconds.max(1e-9);
+    let tmin = AMBIENT;
+    let tmax = report.peak_temperature.max(report.liquidus) + 20.0;
+    let tx = |time: f64| plot_x + time / total * plot_w;
+    let ty = |temperature: f64| plot_y + plot_h - (temperature - tmin) / (tmax - tmin) * plot_h;
+
+    let mut svg = String::new();
+    svg.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    svg.push_str(&format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {} {}\" width=\"{:.0}\" height=\"{:.0}\">\n",
+        drawing::number(width),
+        drawing::number(height),
+        width * drawing::SVG_PX_PER_MM,
+        height * drawing::SVG_PX_PER_MM
+    ));
+    svg.push_str(&format!(
+        "  <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\"/>\n",
+        drawing::number(width),
+        drawing::number(height)
+    ));
+
+    svg.push_str(&format!(
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.2\" font-weight=\"bold\" fill=\"#{}\">REFLOW TIME-TEMPERATURE PROFILE</text>\n",
+        drawing::number(drawing::DRAW_MARGIN_MM),
+        drawing::number(drawing::DRAW_MARGIN_MM + 4.0),
+        drawing::hex(drawing::INK)
+    ));
+    svg.push_str(&format!(
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">{} zone(s) | conveyor {} mm/min | peak {} C | time above liquidus {} s</text>\n",
+        drawing::number(drawing::DRAW_MARGIN_MM),
+        drawing::number(drawing::DRAW_MARGIN_MM + 8.6),
+        drawing::hex(drawing::MUTED),
+        report.zones.len(),
+        drawing::number(report.conveyor_speed),
+        drawing::number(report.peak_temperature),
+        drawing::number(report.time_above_liquidus)
+    ));
+
+    // Plot frame and axes.
+    svg.push_str(&format!(
+        "  <rect data-role=\"plot\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#{}\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
+        drawing::number(plot_x),
+        drawing::number(plot_y),
+        drawing::number(plot_w),
+        drawing::number(plot_h),
+        drawing::hex(drawing::BOARD_FILL),
+        drawing::hex(drawing::BOARD_EDGE)
+    ));
+
+    // Temperature gridlines and labels (ambient, liquidus, peak).
+    for (temperature, label) in [(tmin, "AMBIENT"), (report.liquidus, "LIQUIDUS"), (report.peak_temperature, "PEAK")] {
+        let y = ty(temperature);
+        let dashed = if temperature == report.liquidus { " stroke-dasharray=\"2 1.4\"" } else { "" };
+        svg.push_str(&format!(
+            "  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#{}\" stroke-width=\"0.25\"{}/>\n",
+            drawing::number(plot_x),
+            drawing::number(y),
+            drawing::number(plot_x + plot_w),
+            drawing::number(y),
+            drawing::hex(drawing::RULE),
+            dashed
+        ));
+        svg.push_str(&format!(
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" text-anchor=\"end\" fill=\"#{}\">{} {}C</text>\n",
+            drawing::number(plot_x - 1.6),
+            drawing::number(y + 0.6),
+            drawing::hex(drawing::MUTED),
+            label,
+            drawing::number(temperature)
+        ));
+    }
+
+    // Zone boundaries and names along the time axis.
+    let mut elapsed = 0.0;
+    for zone in &report.zones {
+        let (name, count) = drawing::ascii(&zone.name);
+        dropped += count;
+        let start = elapsed;
+        elapsed += zone.seconds;
+        if start > 0.0 {
+            svg.push_str(&format!(
+                "  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#{}\" stroke-width=\"0.25\" stroke-dasharray=\"1.6 1.6\"/>\n",
+                drawing::number(tx(start)),
+                drawing::number(plot_y),
+                drawing::number(tx(start)),
+                drawing::number(plot_y + plot_h),
+                drawing::hex(drawing::RULE)
+            ));
+        }
+        svg.push_str(&format!(
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" text-anchor=\"middle\" fill=\"#{}\">{}</text>\n",
+            drawing::number(tx((start + elapsed) / 2.0)),
+            drawing::number(plot_y + plot_h + 4.0),
+            drawing::hex(drawing::MUTED),
+            drawing::escape_xml(&name)
+        ));
+        svg.push_str(&format!(
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.6\" text-anchor=\"middle\" fill=\"#{}\">{} s</text>\n",
+            drawing::number(tx((start + elapsed) / 2.0)),
+            drawing::number(plot_y + plot_h + 7.6),
+            drawing::hex(drawing::MUTED),
+            drawing::number(zone.seconds)
+        ));
+    }
+
+    // The profile polyline.
+    let mut points = vec![format!("{},{}", drawing::number(tx(0.0)), drawing::number(ty(AMBIENT)))];
+    let mut elapsed = 0.0;
+    for zone in &report.zones {
+        elapsed += zone.seconds;
+        points.push(format!("{},{}", drawing::number(tx(elapsed)), drawing::number(ty(zone.exit_temperature))));
+    }
+    svg.push_str(&format!(
+        "  <polyline data-role=\"profile\" points=\"{}\" fill=\"none\" stroke=\"#{}\" stroke-width=\"0.5\" stroke-linejoin=\"round\"/>\n",
+        points.join(" "),
+        drawing::hex(drawing::TOP_EDGE)
+    ));
+
+    // Peak marker.
+    let peak_time = report
+        .zones
+        .iter()
+        .scan(0.0, |elapsed, zone| {
+            *elapsed += zone.seconds;
+            Some((*elapsed, zone.exit_temperature))
+        })
+        .max_by(|left, right| left.1.partial_cmp(&right.1).unwrap_or(std::cmp::Ordering::Equal))
+        .unwrap_or((0.0, report.peak_temperature));
+    svg.push_str(&format!(
+        "  <circle data-role=\"peak\" cx=\"{}\" cy=\"{}\" r=\"1.1\" fill=\"#{}\" stroke=\"#{}\" stroke-width=\"0.25\"/>\n",
+        drawing::number(tx(peak_time.0)),
+        drawing::number(ty(peak_time.1)),
+        drawing::hex(drawing::BOTTOM_FILL),
+        drawing::hex(drawing::BOTTOM_EDGE)
+    ));
+
+    // Title block.
+    svg.push_str(&format!(
+        "  <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
+        drawing::number(drawing::DRAW_MARGIN_MM),
+        drawing::number(title_y),
+        drawing::number(width - 2.0 * drawing::DRAW_MARGIN_MM),
+        drawing::number(drawing::TITLE_HEIGHT_MM),
+        drawing::hex(drawing::PANEL_EDGE)
+    ));
+    let lines = [
+        format!("OpenSMT reflow profile drawing | {id} | revision {} | units {units}", document.revision),
+        format!(
+            "linear-ramp model | total {} s | {} C to {} C",
+            drawing::number(report.total_seconds),
+            drawing::number(tmin),
+            drawing::number(tmax)
+        ),
+        "the curve enters each zone at the previous set-point and ramps to its own".to_string(),
+    ];
+    for (index, line) in lines.iter().enumerate() {
+        svg.push_str(&format!(
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" fill=\"#{}\">{}</text>\n",
+            drawing::number(drawing::DRAW_MARGIN_MM + 2.5),
+            drawing::number(title_y + 5.6 + index as f64 * 5.6),
+            if index == 0 { "2.4" } else { "2.0" },
+            drawing::hex(if index == 0 { drawing::INK } else { drawing::MUTED }),
+            drawing::escape_xml(line)
+        ));
+    }
+
+    svg.push_str("</svg>\n");
+    let summary = ReflowDrawingSummary {
+        units,
+        temperature_unit: report.temperature_unit.clone(),
+        zones: report.zones.len() as u32,
+        total_seconds: report.total_seconds,
+        peak_temperature: report.peak_temperature,
+        liquidus: report.liquidus,
+        time_above_liquidus: report.time_above_liquidus,
+        dropped_characters: dropped as u32,
+    };
+    Ok(ReflowDrawing { text: svg, summary })
 }
