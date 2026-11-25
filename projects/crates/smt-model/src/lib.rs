@@ -28,6 +28,8 @@
 //! * a read-only stencil aperture report and sheet from the package rules table;
 //! * a read-only feeder setup drawing with lane slots, load bars and the
 //!   component-to-lane mapping;
+//! * a read-only pick-and-place sequence drawing with one numbered route per
+//!   board side;
 //! * a read-only component height and clearance check;
 //! * a neutral machine program interchange with a readback check;
 //! * CSV program and feeder sheets, plus JSON and Markdown reports.
@@ -61,6 +63,7 @@ mod place;
 mod reflow;
 mod reflow_window;
 mod schedule;
+mod sequence_drawing;
 mod session;
 mod station;
 mod stencil;
@@ -110,6 +113,9 @@ pub use crate::{
     schedule::{
         FeederScheduleReport, LaneSplice, ReelChange, ScheduleLane, plan as plan_feeder_schedule, plan_lane,
         report as feeder_schedule_report,
+    },
+    sequence_drawing::{
+        SequenceDrawing, SequenceDrawingSummary, render_pdf as render_sequence_pdf, render_svg as render_sequence_svg,
     },
     session::{ComponentUpdate, DEFAULT_BOARD, DocumentSummary, ExportFormat, ExportReport, FeederUpdate, OpenSmt, Report},
     station::{DEFAULT_SLOT_PITCH, Station, StationReport, assign as assign_stations},
@@ -161,6 +167,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "svg": "supported",
     "pdf": "supported",
     "feederSvg": "supported",
+    "sequenceSvg": "supported",
+    "sequencePdf": "supported",
     "kicad": "unsupported",
     "altium": "unsupported",
     "odb": "unsupported"
@@ -191,6 +199,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "svg": "one millimetre placement sheet at 8 px/mm; component bodies come from the package rules table with a 2.0 x 1.2 mm generic fallback, labels are ASCII-only, collision-free and drawn on board 1 only",
     "pdf": "one A4 landscape page fitted and centred from the same millimetre layout with Helvetica; the same rules-table body sizing, ASCII-only collision-free labels and board-1 labels apply",
     "feederSvg": "the feeder setup drawing is an SVG tape-bank sheet with one slot per lane in feeder id order, a load bar for the loaded share of the capacity and the assigned reference designators; it reads the same allocation as the feeders report and models no machine slot, tape direction or pitch constraint",
+    "sequenceSvg": "the pick-and-place sequence drawing is a millimetre SVG sheet at 8 px/mm with one numbered route per board side over the default nearest-neighbour program; it models no acceleration, tape advance, vision or nozzle physics",
+    "sequencePdf": "the pick-and-place sequence drawing is a one-page A4 landscape PDF fitted from the same millimetre layout with Helvetica; it models no acceleration, tape advance, vision or nozzle physics",
     "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }
 }"#;

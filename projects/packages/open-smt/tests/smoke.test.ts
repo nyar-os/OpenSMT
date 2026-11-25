@@ -559,6 +559,63 @@ test('svg and pdf drawings are written through the sdk and the cli', { skip: ski
     }
 });
 
+test('feeder and sequence drawings are written through the sdk and the cli', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-sequence-'));
+    const file = path.join(directory, 'panel.osmt');
+    const feederFile = path.join(directory, 'feeders.svg');
+    const sequenceFile = path.join(directory, 'sequence.svg');
+    const sequencePdfFile = path.join(directory, 'sequence.pdf');
+    const cliSequence = path.join(directory, 'cli-sequence.svg');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0603', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'C1', package: '0805', side: 'bottom', x: 40, y: 30, rotation: 90 });
+        await document.addFeeder({ id: 'F1', package: '0603', pitch: 4, capacity: 100 });
+        await document.addFeeder({ id: 'F2', package: '0805', pitch: 8, capacity: 50 });
+        const before = document.revision;
+
+        const feeder = await document.exportDocument('feeder-svg', feederFile);
+        assert.equal(feeder.format, 'feeder-svg');
+        assert.ok(feeder.bytes > 0);
+        assert.deepEqual(feeder.losses ?? [], []);
+        const feederText = await fs.readFile(feederFile, 'utf8');
+        assert.ok(feederText.includes('FEEDER SETUP'));
+        assert.ok(feederText.includes('data-lane="F1"'));
+
+        const sequence = await document.exportDocument('sequence-svg', sequenceFile);
+        assert.equal(sequence.format, 'sequence-svg');
+        assert.ok(sequence.bytes > 0);
+        assert.deepEqual(sequence.losses ?? [], []);
+        const sequenceText = await fs.readFile(sequenceFile, 'utf8');
+        assert.ok(sequenceText.includes('PICK AND PLACE SEQUENCE'));
+        assert.ok(sequenceText.includes('data-route="top"'));
+        assert.ok(sequenceText.includes('data-route="bottom"'));
+        assert.ok(sequenceText.includes('data-step="1"'));
+
+        const sequencePdf = await document.exportDocument('sequence-pdf', sequencePdfFile);
+        assert.equal(sequencePdf.format, 'sequence-pdf');
+        assert.ok((await fs.readFile(sequencePdfFile)).toString('latin1').includes('%PDF-1.4'));
+        assert.equal(document.revision, before);
+
+        await fs.cp(path.join(packageRoot, 'locales'), cliLocales, { recursive: true, force: true });
+        const cliRun = await run(process.execPath, [
+            cliPath,
+            'export',
+            file,
+            '--format',
+            'sequence-svg',
+            '--out',
+            cliSequence,
+        ]);
+        assert.equal(JSON.parse(cliRun.stdout).format, 'sequence-svg');
+        assert.equal((await fs.readFile(cliSequence)).length, sequence.bytes);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
 test('reflow window compares the profile with limits and leaves the document unchanged', {
     skip: skipWithoutNative,
 }, async () => {

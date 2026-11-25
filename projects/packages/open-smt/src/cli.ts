@@ -127,7 +127,7 @@ function exportFormat(value: string, ctx: CommandContext): ExportFormat {
     if (value === 'stencil-svg' || value === 'stencil-pdf') {
         return value;
     }
-    if (value === 'feeder-svg') {
+    if (value === 'feeder-svg' || value === 'sequence-svg' || value === 'sequence-pdf') {
         return value;
     }
     if (value === 'kicad' || value === 'altium' || value === 'odb') {

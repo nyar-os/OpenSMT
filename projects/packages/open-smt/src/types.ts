@@ -24,7 +24,9 @@ export type ExportFormat =
     | 'stencil'
     | 'stencil-svg'
     | 'stencil-pdf'
-    | 'feeder-svg';
+    | 'feeder-svg'
+    | 'sequence-svg'
+    | 'sequence-pdf';
 
 /** Severity of a validation finding. */
 export type Severity = 'error' | 'warning' | 'notice';

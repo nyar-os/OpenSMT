@@ -890,6 +890,32 @@ impl Pdf {
         self.content.push_str(&format!("{operator}\n"));
     }
 
+    /// Draws an open polyline through the sheet millimetre points.
+    pub(crate) fn route(&mut self, points: &[(f64, f64)], stroke: &str, line_width: f64) {
+        self.content.push_str(&format!("{stroke} RG {:.2} w ", (line_width * self.scale).max(0.2)));
+        for (index, (x, y)) in points.iter().enumerate() {
+            let (px, py) = self.point(*x, *y);
+            if index == 0 {
+                self.content.push_str(&format!("{px:.2} {py:.2} m "));
+            }
+            else {
+                self.content.push_str(&format!("{px:.2} {py:.2} l "));
+            }
+        }
+        self.content.push_str("S\n");
+    }
+
+    /// Draws a filled circle marker with a 12-segment polygon.
+    pub(crate) fn marker(&mut self, x: f64, y: f64, radius: f64, fill: &str, stroke: &str) {
+        let points: Vec<(f64, f64)> = (0..12)
+            .map(|index| {
+                let angle = std::f64::consts::PI * 2.0 * index as f64 / 12.0;
+                (x + radius * angle.cos(), y + radius * angle.sin())
+            })
+            .collect();
+        self.polygon(&points, Some(fill), Some(stroke), 0.25);
+    }
+
     pub(crate) fn text(&mut self, x: f64, y: f64, size: f64, color: &str, text: &str) {
         let (px, py) = self.point(x, y);
         let size = (size * self.scale).clamp(3.0, 12.0);

@@ -37,6 +37,7 @@ use crate::{
     reflow::{self, ReflowReport},
     reflow_window::{self, ReflowWindowLimits, ReflowWindowReport},
     schedule::{self, FeederScheduleReport},
+    sequence_drawing,
     station::{self, StationReport},
     stencil::{self, StencilReport},
     takt::{self, TaktOptions, TaktReport},
@@ -95,6 +96,10 @@ pub enum ExportFormat {
     StencilPdf,
     /// The feeder setup drawing as SVG.
     FeederSvg,
+    /// The pick-and-place sequence drawing as SVG.
+    SequenceSvg,
+    /// The pick-and-place sequence drawing as a one-page PDF.
+    SequencePdf,
 }
 
 impl ExportFormat {
@@ -112,6 +117,8 @@ impl ExportFormat {
             Self::StencilSvg => "stencil-svg",
             Self::StencilPdf => "stencil-pdf",
             Self::FeederSvg => "feeder-svg",
+            Self::SequenceSvg => "sequence-svg",
+            Self::SequencePdf => "sequence-pdf",
         }
     }
 }
@@ -132,11 +139,13 @@ impl FromStr for ExportFormat {
             "stencil-svg" => Ok(Self::StencilSvg),
             "stencil-pdf" => Ok(Self::StencilPdf),
             "feeder-svg" => Ok(Self::FeederSvg),
+            "sequence-svg" => Ok(Self::SequenceSvg),
+            "sequence-pdf" => Ok(Self::SequencePdf),
             "kicad" | "altium" | "odb" => Err(crate::not_implemented(&format!("`{value}` export"))),
             other => Err(SmtError::new(
                 "cli/unknown-format",
                 format!(
-                    "unknown export format `{other}`; only program, feeders, fai, json, md, svg or pdf, plus stencil, stencil-svg, stencil-pdf or feeder-svg is supported"
+                    "unknown export format `{other}`; only program, feeders, fai, json, md, svg or pdf, plus stencil, stencil-svg, stencil-pdf, feeder-svg, sequence-svg or sequence-pdf is supported"
                 ),
             )),
         }
@@ -891,6 +900,16 @@ impl OpenSmt {
             }
             ExportFormat::FeederSvg => {
                 let drawing = feeder_layout::render_svg(document, id)?;
+                losses = drawing.summary.losses();
+                drawing.text
+            }
+            ExportFormat::SequenceSvg => {
+                let drawing = sequence_drawing::render_svg(document, id)?;
+                losses = drawing.summary.losses();
+                drawing.text
+            }
+            ExportFormat::SequencePdf => {
+                let drawing = sequence_drawing::render_pdf(document, id)?;
                 losses = drawing.summary.losses();
                 drawing.text
             }
