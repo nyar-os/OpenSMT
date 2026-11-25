@@ -13,7 +13,17 @@ export type Units = 'mm';
 export type Side = 'top' | 'bottom';
 
 /** Export formats `exportDocument()` can write. */
-export type ExportFormat = 'program' | 'feeders' | 'fai' | 'json' | 'md' | 'svg' | 'pdf';
+export type ExportFormat =
+    | 'program'
+    | 'feeders'
+    | 'fai'
+    | 'json'
+    | 'md'
+    | 'svg'
+    | 'pdf'
+    | 'stencil'
+    | 'stencil-svg'
+    | 'stencil-pdf';
 
 /** Severity of a validation finding. */
 export type Severity = 'error' | 'warning' | 'notice';
@@ -313,6 +323,68 @@ export interface PanelMapReport {
     readonly outsideBoard: number;
     /** Whether every component lies inside the single board. */
     readonly ok: boolean;
+}
+
+/** Stencil rule of one package, derived from the shared package rules table. */
+export interface StencilRule {
+    /** Package identifier as written on the component. */
+    readonly package: string;
+    /** Recognised family: `chip`, `sot23`, `soic`, `qfp`, `qfn`, `lga` or `generic`. */
+    readonly family: string;
+    /** Aperture shape: `rect` or `circle`. */
+    readonly shape: string;
+    /** Nominal terminal width along the component long axis in millimetres. */
+    readonly padWidth: number;
+    /** Nominal terminal height across the component short axis in millimetres. */
+    readonly padHeight: number;
+    /** Aperture width after the area reduction in millimetres. */
+    readonly apertureWidth: number;
+    /** Aperture height after the area reduction in millimetres. */
+    readonly apertureHeight: number;
+    /** Paste area reduction factor; `0.9` means a 10 % area reduction. */
+    readonly areaReduction: number;
+    /** Apertures generated per component of this package. */
+    readonly aperturesPerComponent: number;
+}
+
+/** One generated stencil aperture on a single board. */
+export interface StencilAperture {
+    readonly refdes: string;
+    readonly package: string;
+    readonly side: Side;
+    /** One-based aperture number within the component. */
+    readonly index: number;
+    /** Aperture shape: `rect` or `circle`. */
+    readonly shape: string;
+    /** Aperture centre X on a single board in millimetres. */
+    readonly x: number;
+    /** Aperture centre Y on a single board in millimetres. */
+    readonly y: number;
+    /** Aperture width in millimetres; diameter for a circle. */
+    readonly width: number;
+    /** Aperture height in millimetres; diameter for a circle. */
+    readonly height: number;
+    /** Rotation of the owning component in degrees; `0` for a circle. */
+    readonly rotation: number;
+}
+
+/** Read-only stencil aperture report. */
+export interface StencilReport {
+    readonly format: 'open-smt-stencil';
+    readonly version: number;
+    readonly units: string;
+    readonly boardWidth: number;
+    readonly boardDepth: number;
+    /** Number of components on one board. */
+    readonly components: number;
+    /** Number of generated apertures on one board. */
+    readonly apertures: number;
+    /** Packages that fell back to the generic rule, in first-seen order. */
+    readonly unmatchedPackages: readonly string[];
+    /** One rule per distinct package, in first-seen order. */
+    readonly rules: readonly StencilRule[];
+    /** One entry per aperture, in component order. */
+    readonly entries: readonly StencilAperture[];
 }
 
 /** One reference designator the BOM and the placement table disagree about. */

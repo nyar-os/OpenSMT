@@ -36,6 +36,7 @@ use crate::{
     reflow_window::{self, ReflowWindowLimits, ReflowWindowReport},
     schedule::{self, FeederScheduleReport},
     station::{self, StationReport},
+    stencil::{self, StencilReport},
     takt::{self, TaktOptions, TaktReport},
     validate::{self, ValidationReport},
 };
@@ -84,6 +85,12 @@ pub enum ExportFormat {
     Svg,
     /// The placement drawing as a one-page PDF.
     Pdf,
+    /// The stencil aperture entries as CSV.
+    Stencil,
+    /// The stencil drawing as SVG.
+    StencilSvg,
+    /// The stencil drawing as a one-page PDF.
+    StencilPdf,
 }
 
 impl ExportFormat {
@@ -97,6 +104,9 @@ impl ExportFormat {
             Self::Md => "md",
             Self::Svg => "svg",
             Self::Pdf => "pdf",
+            Self::Stencil => "stencil",
+            Self::StencilSvg => "stencil-svg",
+            Self::StencilPdf => "stencil-pdf",
         }
     }
 }
@@ -113,10 +123,15 @@ impl FromStr for ExportFormat {
             "md" | "markdown" => Ok(Self::Md),
             "svg" => Ok(Self::Svg),
             "pdf" => Ok(Self::Pdf),
+            "stencil" | "stencil-csv" => Ok(Self::Stencil),
+            "stencil-svg" => Ok(Self::StencilSvg),
+            "stencil-pdf" => Ok(Self::StencilPdf),
             "kicad" | "altium" | "odb" => Err(crate::not_implemented(&format!("`{value}` export"))),
             other => Err(SmtError::new(
                 "cli/unknown-format",
-                format!("unknown export format `{other}`; only program, feeders, fai, json, md, svg or pdf is supported"),
+                format!(
+                    "unknown export format `{other}`; only program, feeders, fai, json, md, svg or pdf, plus stencil, stencil-svg or stencil-pdf is supported"
+                ),
             )),
         }
     }
@@ -576,6 +591,16 @@ impl OpenSmt {
         Ok(component_list::report(self.document()?))
     }
 
+    /// Returns the read-only stencil aperture report of the open document.
+    ///
+    /// Apertures are generated from the shared package rules table: every
+    /// component gets one aperture per terminal, sized from the family rule and
+    /// shrunk by its area reduction. Unrecognised packages fall back to the
+    /// generic rule and are listed. The document is never modified.
+    pub fn stencil(&self) -> Result<StencilReport, SmtError> {
+        Ok(stencil::report(self.document()?))
+    }
+
     /// Returns the read-only feeder loading report of the open document.
     ///
     /// The report aggregates placements by package and suggests one tape slot
@@ -810,6 +835,7 @@ impl OpenSmt {
         let document = self.document()?;
         let id = self.path.as_ref().and_then(|path| path.file_stem()).and_then(|value| value.to_str()).unwrap_or("document");
         let mut summary = None;
+        let mut losses = Vec::new();
         let text = match format {
             ExportFormat::Program => {
                 let feeders = place::allocate(document)?;
@@ -837,9 +863,20 @@ impl OpenSmt {
                 summary = Some(drawing.summary);
                 drawing.text
             }
+            ExportFormat::Stencil => stencil::csv(&stencil::report(document)),
+            ExportFormat::StencilSvg => {
+                let drawing = stencil::render_svg(document, id)?;
+                losses = drawing.summary.losses();
+                drawing.text
+            }
+            ExportFormat::StencilPdf => {
+                let drawing = stencil::render_pdf(document, id)?;
+                losses = drawing.summary.losses();
+                drawing.text
+            }
         };
         write_atomic(target, &text)?;
-        let losses = summary.as_ref().map(DrawingSummary::losses).unwrap_or_default();
+        let losses = summary.as_ref().map(DrawingSummary::losses).unwrap_or(losses);
         Ok(ExportReport {
             format: format.as_str().to_string(),
             path: target.display().to_string(),

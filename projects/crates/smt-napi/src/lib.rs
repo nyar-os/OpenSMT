@@ -456,6 +456,16 @@ fn panel_map(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the read-only stencil aperture report.
+#[function]
+fn stencil(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.stencil().map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Returns the read-only first-article inspection sheet.
 #[function]
 fn first_article(ctx: CallContext) -> Result<JsValue> {
@@ -706,7 +716,8 @@ fn changeover(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
-/// Exports a document as `program`, `feeders`, `fai`, `json`, `md`, `svg` or `pdf`.
+/// Exports a document as `program`, `feeders`, `fai`, `json`, `md`, `svg`, `pdf`,
+/// `stencil`, `stencil-svg` or `stencil-pdf`.
 #[function]
 fn export(ctx: CallContext) -> Result<JsValue> {
     let path = text(&ctx, 0)?;
@@ -752,6 +763,7 @@ register_module![
     component_list,
     feeder_report,
     panel_map,
+    stencil,
     first_article,
     panel_fit,
     bom_check,

@@ -32,28 +32,28 @@ pub const DEFAULT_COMPONENT_WIDTH_MM: f64 = 2.0;
 /// Height of the default component footprint in millimetres.
 pub const DEFAULT_COMPONENT_HEIGHT_MM: f64 = 1.2;
 
-const DRAW_MARGIN_MM: f64 = 8.0;
-const COLUMN_GAP_MM: f64 = 6.0;
-const SIDE_WIDTH_MM: f64 = 66.0;
-const LEGEND_HEIGHT_MM: f64 = 44.0;
-const TITLE_HEIGHT_MM: f64 = 32.0;
-const FEEDER_ROW_MM: f64 = 4.6;
+pub(crate) const DRAW_MARGIN_MM: f64 = 8.0;
+pub(crate) const COLUMN_GAP_MM: f64 = 6.0;
+pub(crate) const SIDE_WIDTH_MM: f64 = 66.0;
+pub(crate) const LEGEND_HEIGHT_MM: f64 = 44.0;
+pub(crate) const TITLE_HEIGHT_MM: f64 = 32.0;
+pub(crate) const FEEDER_ROW_MM: f64 = 4.6;
 const FEEDER_TOP_MM: f64 = DRAW_MARGIN_MM + LEGEND_HEIGHT_MM + COLUMN_GAP_MM;
 
-const PDF_PAGE_WIDTH: f64 = 841.89;
-const PDF_PAGE_HEIGHT: f64 = 595.28;
-const PDF_MARGIN: f64 = 24.0;
+pub(crate) const PDF_PAGE_WIDTH: f64 = 841.89;
+pub(crate) const PDF_PAGE_HEIGHT: f64 = 595.28;
+pub(crate) const PDF_MARGIN: f64 = 24.0;
 
-const INK: &str = "0.06 0.09 0.16";
-const MUTED: &str = "0.32 0.38 0.47";
-const RULE: &str = "0.78 0.82 0.87";
-const BOARD_FILL: &str = "0.973 0.980 0.988";
-const BOARD_EDGE: &str = "0.20 0.25 0.33";
-const PANEL_EDGE: &str = "0.06 0.09 0.16";
-const TOP_FILL: &str = "0.86 0.92 1.00";
-const TOP_EDGE: &str = "0.11 0.31 0.85";
-const BOTTOM_FILL: &str = "1.00 0.93 0.86";
-const BOTTOM_EDGE: &str = "0.76 0.25 0.05";
+pub(crate) const INK: &str = "0.06 0.09 0.16";
+pub(crate) const MUTED: &str = "0.32 0.38 0.47";
+pub(crate) const RULE: &str = "0.78 0.82 0.87";
+pub(crate) const BOARD_FILL: &str = "0.973 0.980 0.988";
+pub(crate) const BOARD_EDGE: &str = "0.20 0.25 0.33";
+pub(crate) const PANEL_EDGE: &str = "0.06 0.09 0.16";
+pub(crate) const TOP_FILL: &str = "0.86 0.92 1.00";
+pub(crate) const TOP_EDGE: &str = "0.11 0.31 0.85";
+pub(crate) const BOTTOM_FILL: &str = "1.00 0.93 0.86";
+pub(crate) const BOTTOM_EDGE: &str = "0.76 0.25 0.05";
 
 /// Count of a text loss in a drawing export.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -164,7 +164,11 @@ pub fn render_pdf(document: &SmtDocument, id: &str) -> Result<Drawing, SmtError>
     let scale_note = format!("A4 landscape fit; 1 mm = {PT_PER_MM} pt x fit {fit:.3}");
     push_pdf_title(&mut pdf, &plan, &layout, &scale_note);
 
-    let content = pdf.content;
+    Ok(Drawing { text: pdf_page(pdf.content), summary: plan.summary })
+}
+
+/// Assembles one A4 landscape page around a drawing content stream.
+pub(crate) fn pdf_page(content: String) -> String {
     let objects = [
         "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
@@ -188,7 +192,7 @@ pub fn render_pdf(document: &SmtDocument, id: &str) -> Result<Drawing, SmtError>
         text.push_str(&format!("{offset:010} 00000 n \n"));
     }
     text.push_str(&format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1));
-    Ok(Drawing { text, summary: plan.summary })
+    text
 }
 
 struct Part {
@@ -652,7 +656,7 @@ fn labels_note(plan: &Plan) -> String {
     if plan.summary.boards > 1 { "labels on board 1 only".to_string() } else { "labels on the single board".to_string() }
 }
 
-fn colors(side: Side) -> (&'static str, &'static str) {
+pub(crate) fn colors(side: Side) -> (&'static str, &'static str) {
     match side {
         Side::Top => (TOP_FILL, TOP_EDGE),
         Side::Bottom => (BOTTOM_FILL, BOTTOM_EDGE),
@@ -680,12 +684,12 @@ fn legend_text(x: f64, y: f64, size: f64, text: &str) -> String {
     )
 }
 
-fn number(value: f64) -> String {
+pub(crate) fn number(value: f64) -> String {
     let value = if value.abs() < 0.0005 { 0.0 } else { value };
     format!("{value:.3}")
 }
 
-fn ascii(text: &str) -> (String, usize) {
+pub(crate) fn ascii(text: &str) -> (String, usize) {
     let mut escaped = String::with_capacity(text.len());
     let mut dropped = 0;
     for character in text.chars() {
@@ -703,11 +707,11 @@ fn ascii(text: &str) -> (String, usize) {
     (escaped, dropped)
 }
 
-fn escape_xml(text: &str) -> String {
+pub(crate) fn escape_xml(text: &str) -> String {
     text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&apos;")
 }
 
-fn hex(rgb: &str) -> String {
+pub(crate) fn hex(rgb: &str) -> String {
     let values: Vec<f64> = rgb.split_whitespace().filter_map(|value| value.parse::<f64>().ok()).collect();
     if values.len() != 3 {
         return "000000".to_string();
@@ -716,20 +720,20 @@ fn hex(rgb: &str) -> String {
     format!("{:02x}{:02x}{:02x}", component(values[0]), component(values[1]), component(values[2]))
 }
 
-struct Pdf {
-    content: String,
-    height: f64,
-    scale: f64,
-    origin_x: f64,
-    origin_y: f64,
+pub(crate) struct Pdf {
+    pub(crate) content: String,
+    pub(crate) height: f64,
+    pub(crate) scale: f64,
+    pub(crate) origin_x: f64,
+    pub(crate) origin_y: f64,
 }
 
 impl Pdf {
-    fn point(&self, x: f64, y: f64) -> (f64, f64) {
+    pub(crate) fn point(&self, x: f64, y: f64) -> (f64, f64) {
         (self.origin_x + x * self.scale, self.origin_y + (self.height - y) * self.scale)
     }
 
-    fn rect(&mut self, x: f64, y: f64, width: f64, height: f64, fill: Option<&str>, stroke: Option<(&str, f64)>) {
+    pub(crate) fn rect(&mut self, x: f64, y: f64, width: f64, height: f64, fill: Option<&str>, stroke: Option<(&str, f64)>) {
         let (left, top) = self.point(x, y);
         let bottom = top - height * self.scale;
         if let Some(color) = fill {
@@ -756,7 +760,7 @@ impl Pdf {
         ));
     }
 
-    fn line(&mut self, x1: f64, y1: f64, x2: f64, y2: f64, stroke: &str, line_width: f64) {
+    pub(crate) fn line(&mut self, x1: f64, y1: f64, x2: f64, y2: f64, stroke: &str, line_width: f64) {
         let (start_x, start_y) = self.point(x1, y1);
         let (end_x, end_y) = self.point(x2, y2);
         self.content.push_str(&format!(
@@ -769,7 +773,7 @@ impl Pdf {
         ));
     }
 
-    fn polygon(&mut self, points: &[(f64, f64)], fill: Option<&str>, stroke: Option<&str>, line_width: f64) {
+    pub(crate) fn polygon(&mut self, points: &[(f64, f64)], fill: Option<&str>, stroke: Option<&str>, line_width: f64) {
         if let Some(color) = fill {
             self.content.push_str(&format!("{color} rg "));
         }
@@ -797,14 +801,14 @@ impl Pdf {
         self.content.push_str(&format!("{operator}\n"));
     }
 
-    fn text(&mut self, x: f64, y: f64, size: f64, color: &str, text: &str) {
+    pub(crate) fn text(&mut self, x: f64, y: f64, size: f64, color: &str, text: &str) {
         let (px, py) = self.point(x, y);
         let size = (size * self.scale).clamp(3.0, 12.0);
         let (literal, _) = pdf_text(text);
         self.content.push_str(&format!("{color} rg BT /F1 {size:.2} Tf {px:.2} {py:.2} Td {literal} Tj ET\n"));
     }
 
-    fn text_centered(&mut self, x: f64, y: f64, size: f64, color: &str, text: &str) {
+    pub(crate) fn text_centered(&mut self, x: f64, y: f64, size: f64, color: &str, text: &str) {
         let size_pt = (size * self.scale).clamp(3.0, 12.0);
         let width_mm = text.chars().count() as f64 * size_pt * 0.5 / self.scale;
         self.text(x - width_mm / 2.0, y, size, color, text);

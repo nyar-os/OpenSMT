@@ -46,6 +46,7 @@ import type {
     ReflowWindowReport,
     Report,
     StationReport,
+    StencilReport,
     TaktHeatmapReport,
     TaktOptions,
     TaktReport,
@@ -211,6 +212,12 @@ export class SmtDocument {
     async panelMap(): Promise<PanelMapReport> {
         this.assertOpen();
         return service.panelMap(this.state.path);
+    }
+
+    /** Returns the read-only stencil aperture report. */
+    async stencil(): Promise<StencilReport> {
+        this.assertOpen();
+        return service.stencil(this.state.path);
     }
 
     /** Returns the read-only first-article inspection sheet. */

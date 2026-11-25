@@ -121,6 +121,12 @@ function exportFormat(value: string, ctx: CommandContext): ExportFormat {
     if (value === 'json' || value === 'md' || value === 'svg' || value === 'pdf') {
         return value;
     }
+    if (value === 'stencil' || value === 'stencil-csv') {
+        return 'stencil';
+    }
+    if (value === 'stencil-svg' || value === 'stencil-pdf') {
+        return value;
+    }
     if (value === 'kicad' || value === 'altium' || value === 'odb') {
         throw new NotImplementedError(`${value} export`);
     }
@@ -672,6 +678,22 @@ cli
         guard(ctx, async () => {
             await editDocument(options, ctx, 'placement <file>', async (document) => {
                 const report = await document.placement(flag(options, 'optimize'));
+                const target = optionText(options, 'out');
+                if (target !== undefined) {
+                    fs.writeFileSync(target, JSON.stringify(report, null, 2));
+                }
+                print(report);
+            });
+        }),
+    );
+
+cli
+    .command('stencil', 'cli.cmd.stencil')
+    .option('--out <stencil.json>', 'cli.opt.out')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(options, ctx, 'stencil <file> [--out <stencil.json>]', async (document) => {
+                const report = await document.stencil();
                 const target = optionText(options, 'out');
                 if (target !== undefined) {
                     fs.writeFileSync(target, JSON.stringify(report, null, 2));

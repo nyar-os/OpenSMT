@@ -45,6 +45,7 @@ import type {
     Report,
     Side,
     StationReport,
+    StencilReport,
     TaktHeatmapReport,
     TaktOptions,
     TaktReport,
@@ -224,6 +225,11 @@ export function panelMap(path: string): PanelMapReport {
     return decode<PanelMapReport>(() => binding('panel.map').panel_map(path));
 }
 
+/** Returns the read-only stencil aperture report. */
+export function stencil(path: string): StencilReport {
+    return decode<StencilReport>(() => binding('stencil').stencil(path));
+}
+
 /** Returns the read-only first-article inspection sheet. */
 export function firstArticle(path: string): FirstArticleReport {
     return decode<FirstArticleReport>(() => binding('first-article').first_article(path));
@@ -347,7 +353,7 @@ export function changeover(path: string, nextPath: string, feederChangeSeconds?:
     );
 }
 
-/** Exports a document as `program`, `feeders`, `fai`, `json`, `md`, `svg` or `pdf`. */
+/** Exports a document as `program`, `feeders`, `fai`, `json`, `md`, `svg`, `pdf`, `stencil`, `stencil-svg` or `stencil-pdf`. */
 export function exportDocument(path: string, format: ExportFormat, target: string): ExportReport {
     return decode<ExportReport>(() => binding('export').export(path, format, target));
 }
