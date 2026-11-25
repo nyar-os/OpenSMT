@@ -704,7 +704,7 @@ Neither document is modified.
 ## export
 
 ```shell
-open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|stencil-svg|stencil-pdf|feeder-svg|sequence-svg|sequence-pdf --out <path>
+open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|stencil-svg|stencil-pdf|feeder-svg|sequence-svg|sequence-pdf|reflow-svg|panel-svg|heatmap-svg --out <path>
 ```
 
 | Format | Content |
@@ -722,6 +722,9 @@ open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|sten
 | `feeder-svg` | feeder setup drawing as SVG: one tape-bank slot per lane in feeder id order, a load bar for the loaded share of the capacity and the assigned reference designators |
 | `sequence-svg` | pick-and-place sequence drawing as SVG: one numbered route per board side over the default nearest-neighbour program, with a travel-length legend |
 | `sequence-pdf` | the same sequence sheet as one A4 landscape page fitted and centred, with Helvetica |
+| `reflow-svg` | reflow time-temperature drawing as SVG: the linear-ramp profile polyline over a time axis, ambient/liquidus/peak reference lines, dashed zone boundaries with zone names and seconds, a peak marker and a title block |
+| `panel-svg` | panel map drawing as SVG: the panel outline, every board instance numbered row-major, each component as a side-coloured dot in panel coordinates and an origin cross |
+| `heatmap-svg` | takt bottleneck heat map drawing as SVG: one step dot per placement on the board outline, coloured and sized by its share of the board time, plus a Pareto column ranking the packages |
 
 The `svg` and `pdf` sheets use a millimetre `viewBox`; the SVG opens at 8 px/mm
 and the PDF maps 1 mm to 2.834646 pt before fitting. Component bodies take their
@@ -746,6 +749,17 @@ sheets run the same allocation and nearest-neighbour sequence as the default
 same way; their non-ASCII losses are reported as `sequence/non-ascii-text`.
 All three sheets are byte-identical on repeat and the `drawing` summary field
 is absent.
+
+The `reflow-svg` sheet plots the same linear-ramp evaluation as the `reflow`
+report and fails with the same validation errors; its non-ASCII losses are
+reported as `reflow/non-ascii-text`. The `panel-svg` sheet (also accepted as
+`panel-map-svg`) draws the stored panel array exactly like the `panel map`
+report and fails with `board/invalid` or `panel/invalid` the same way; its
+non-ASCII losses are reported as `panel-map/non-ascii-text`. The `heatmap-svg`
+sheet runs the same allocation and sequence as the `takt heatmap` report, so
+it fails with `feeder/missing` or `feeder/capacity` the same way; its
+non-ASCII losses are reported as `heatmap/non-ascii-text`. All three are
+byte-identical on repeat and the `drawing` summary field is absent.
 
 These are export formats. `kicad`, `altium` and `odb` are still declared but
 unimplemented and exit with code `2`. The separate `import` command reads a
@@ -817,4 +831,7 @@ open-smt export panel.osmt --format stencil-pdf --out stencil.pdf
 open-smt export panel.osmt --format feeder-svg --out feeders.svg
 open-smt export panel.osmt --format sequence-svg --out sequence.svg
 open-smt export panel.osmt --format sequence-pdf --out sequence.pdf
+open-smt export panel.osmt --format reflow-svg --out reflow.svg
+open-smt export panel.osmt --format panel-svg --out panel-map.svg
+open-smt export panel.osmt --format heatmap-svg --out heatmap.svg
 ```

@@ -567,6 +567,49 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt stencil paste panel.osmt --boards 24 --waste 5 --out paste.json --csv paste.csv
     ```
 
+31. **Reflow profile drawing.** `export --format reflow-svg` renders the same
+    linear-ramp evaluation as the `reflow` report as a millimetre time-temperature
+    sheet: the profile polyline enters each zone at the previous set-point and
+    ramps to its own, ambient/liquidus/peak reference lines carry their
+    temperatures, dashed boundaries split the time axis into zones with their
+    names and seconds, and a marker sits on the peak. It validates like the
+    `reflow` report, so an inconsistent profile fails with the same code. Text
+    is ASCII-only and dropped characters are reported as `reflow/non-ascii-text`
+    in the export `losses`. The render is deterministic and byte-identical on
+    repeat and never changes the document.
+
+    ```shell
+    open-smt export panel.osmt --format reflow-svg --out reflow.svg
+    ```
+
+32. **Panel map drawing.** `export --format panel-svg` (also accepted as
+    `panel-map-svg`) draws the stored panel array from the `panel map` report:
+    the panel outline, one rectangle per board instance numbered row-major from
+    the panel origin, every component as a side-coloured dot at its panel
+    coordinates on every instance and an origin cross at `(0, 0)`. It fails with
+    the same `board/invalid` and `panel/invalid` codes as the report. Text is
+    ASCII-only and dropped characters are reported as `panel-map/non-ascii-text`
+    in the export `losses`. The render is deterministic and byte-identical on
+    repeat and never changes the document.
+
+    ```shell
+    open-smt export panel.osmt --format panel-svg --out panel-map.svg
+    ```
+
+33. **Takt heat map drawing.** `export --format heatmap-svg` plots the
+    `takt heatmap` report on the board outline: one dot per program step whose
+    colour and radius grow with its share of the board time, and a Pareto column
+    ranking up to eight packages by share. It runs the same allocation and
+    sequence as the heat map report, so it fails with `feeder/missing` or
+    `feeder/capacity` the same way. Text is ASCII-only and dropped characters
+    are reported as `heatmap/non-ascii-text` in the export `losses`. The render
+    is deterministic and byte-identical on repeat and never changes the
+    document.
+
+    ```shell
+    open-smt export panel.osmt --format heatmap-svg --out heatmap.svg
+    ```
+
 ## KiCad PCB import
 
 `open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
@@ -719,10 +762,13 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/machine_program.rs` | fixed header and program order, station/pitch/nozzle/speed fields, three-decimal canonical values, render-parse round trip, tampered field and reordered row mismatches, step-count mismatch, malformed files, empty document, invalid nozzle map, feeder coverage propagation, deterministic unchanged document, export-readback and verify-file paths |
 | `tests/heatmap.rs` | step placement and inbound travel time, package ordering with cumulative shares, per-side origin restart, equality with the default takt board time, empty document, feeder coverage propagation, determinism, unchanged document |
 | `tests/drawing.rs` | SVG panel/board/component/label/legend/title structure, XML escaping, rotated rectangle coordinates, byte-identical repeat renders, one-page A4 PDF with Helvetica and exact MediaBox, empty document, non-ASCII loss reporting, invalid board/panel codes, `svg`/`pdf` format parsing |
-| `tests/stencil.rs` | chip rule aperture size after the area reduction and terminal offsets, rotated offsets, one aperture per terminal for SOIC/QFP/QFN/SOT-23/LGA, generic fallback and `unmatchedPackages`, determinism and unchanged document, CSV/SVG/PDF export contents, `stencil`/`stencil-svg`/`stencil-pdf` format parsing, invalid board code, non-ASCII loss reporting |
+| `tests/stencil.rs` | chip rule aperture size after the area reduction and terminal offsets, rotated offsets, one aperture per terminal for SOIC/QFP/QFN/SOT-23/LGA, generic fallback and `unmatchedPackages`, determinism and unchanged document, CSV/SVG/PDF export contents, bottom sheet mirrored along X with reversed rotation, `stencil`/`stencil-svg`/`stencil-pdf` format parsing, invalid board code, non-ASCII loss reporting |
 | `tests/clearance.rs` | height, overlap and gap findings with exact messages and rounded gaps, rotated bounding boxes, default and custom limits, opposite sides never paired, `clearance/invalid`, non-finite coordinates skipped, determinism and unchanged document, session forwarding |
-| `tests/feeder_drawing.rs` | lane rows in feeder id order with slots, load bars and reference designators, valid hex fill and stroke attributes, `feeder/missing` propagation, empty setup framed sheet, byte-identical repeat renders, non-ASCII loss reporting, `feeder-svg` format parsing, session export path |
-| `tests/sequence_drawing.rs` | one numbered route per side with step markers, travel length matching the drawn segments, valid hex fill and stroke attributes, one-page A4 PDF with Helvetica and the routes, empty program framed sheet, `feeder/missing` propagation, byte-identical repeat renders, non-ASCII loss reporting, `sequence-svg`/`sequence-pdf` format parsing, session export path |
+| `tests/feeder_drawing.rs` | lane rows in feeder id order with slots, load bars and reference designators, valid hex fill and stroke attributes, `feeder/missing` propagation, empty setup framed sheet, byte-identical repeat renders, non-ASCII loss reporting, dropped scale note and panel multiplier annotation, `feeder-svg` format parsing, session export path |
+| `tests/sequence_drawing.rs` | one numbered route per side with step markers, collision-avoiding step labels, travel length matching the drawn segments, valid hex fill and stroke attributes, one-page A4 PDF with Helvetica and the routes, empty program framed sheet, `feeder/missing` propagation, byte-identical repeat renders, non-ASCII loss reporting, `sequence-svg`/`sequence-pdf` format parsing, session export path |
+| `tests/reflow_drawing.rs` | four-zone profile sheet with plot frame, profile polyline, peak marker, ambient/liquidus/peak references and zone labels, valid hex fill and stroke attributes, byte-identical repeat renders, non-ASCII loss reporting, `reflow-svg` format parsing, session export path |
+| `tests/panel_map_drawing.rs` | row-major board rectangles with labels, component dots on every instance, origin cross, valid hex fill and stroke attributes, byte-identical repeat renders, non-ASCII loss reporting, `panel-svg`/`panel-map-svg` format parsing, session export path |
+| `tests/heatmap_drawing.rs` | one heat dot per program step with Pareto package column, valid hex fill and stroke attributes, `feeder/missing` propagation, byte-identical repeat renders, non-ASCII loss reporting, `heatmap-svg` format parsing, session export path |
 | `tests/paste.rs` | empty document zero report, exact rect and circle aperture arithmetic against the rule table, board and waste scaling, custom foil thickness, `paste/invalid` for every bad input, per-package CSV sheet, byte-identical repeat reports, unchanged document, session `paste-csv` file write |
 | `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption, splice/scrap SDK edits, splice/scrap CLI commands, SVG/PDF placement drawing exports, feeder/sequence drawing exports and the stencil paste volume report through the SDK and CLI, and changeover smokes |
 
