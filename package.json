@@ -24,7 +24,7 @@
         "u": "cargo upgrade --workspace"
     },
     "devDependencies": {
-        "@doki-land/nifty": "^0.1.15",
+        "@doki-land/nifty": "^0.1.17",
         "@types/node": "^22.20.4",
         "@wae/wae": "0.0.6",
         "typescript": "^5.9.2"
