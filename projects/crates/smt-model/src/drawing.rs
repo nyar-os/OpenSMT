@@ -475,6 +475,7 @@ fn push_svg_panel(svg: &mut String, plan: &Plan, layout: &Layout) {
         svg.push_str(&format!("    <g data-side=\"{}\">\n", side.as_str()));
         for part in plan.parts.iter().filter(|part| part.side == side) {
             let (fill, edge) = colors(side);
+            let (fill, edge) = (hex(fill), hex(edge));
             for (_, x, y) in &part.instances {
                 let corners = corners(*x, *y, part.rotation, part.body_length, part.body_width);
                 let points =

@@ -46,6 +46,42 @@ fn the_svg_draws_panel_boards_components_labels_legend_and_title() {
     assert_eq!(drawing.summary.dropped_characters, 0);
 }
 
+/// Collects every `fill="..."` and `stroke="..."` value of the sheet.
+fn color_attributes(svg: &str) -> Vec<String> {
+    let mut values = Vec::new();
+    for attribute in ["fill=\"", "stroke=\""] {
+        let mut rest = svg;
+        while let Some(index) = rest.find(attribute) {
+            let after = &rest[index + attribute.len()..];
+            let end = after.find('"').expect("closing quote");
+            values.push(after[..end].to_string());
+            rest = &after[end..];
+        }
+    }
+    values
+}
+
+#[test]
+fn every_svg_fill_and_stroke_is_a_valid_hex_color() {
+    let svg = render_svg(&document(), "panel").expect("rendered").text;
+    let colors = color_attributes(&svg);
+    assert!(!colors.is_empty());
+    for color in &colors {
+        assert!(color == "none" || color.starts_with('#'), "missing # prefix in `{color}`");
+        if color == "none" {
+            continue;
+        }
+        let digits = &color[1..];
+        assert_eq!(digits.len(), 6, "invalid color `{color}`");
+        assert!(digits.chars().all(|character| character.is_ascii_hexdigit()), "invalid color `{color}`");
+    }
+    // The component bodies must carry the legend colours, not decimal triples.
+    assert!(colors.contains(&"#dbebff".to_string()), "top fill missing from {colors:?}");
+    assert!(colors.contains(&"#1c4fd9".to_string()), "top edge missing from {colors:?}");
+    assert!(colors.contains(&"#ffeddb".to_string()), "bottom fill missing from {colors:?}");
+    assert!(colors.contains(&"#c2400d".to_string()), "bottom edge missing from {colors:?}");
+}
+
 #[test]
 fn the_pdf_is_one_a4_landscape_page_with_helvetica_and_the_same_labels() {
     let drawing = render_pdf(&document(), "panel").expect("rendered");
