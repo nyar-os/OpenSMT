@@ -35,7 +35,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | JSON / Markdown reports | ✅ supported |
 | SVG placement drawing (panel, components, labels, legend, title block) | ✅ supported (1:1 mm at 8 px/mm; fixed 2.0 × 1.2 mm footprint; ASCII-only labels) |
 | PDF placement drawing (same sheet, A4 landscape) | ✅ supported (fit to page, Helvetica; same fixed footprint and ASCII-only labels) |
-| paste aperture / stencil generation | ❌ not implemented |
+| paste aperture / stencil generation | ✅ supported (fixed package rules table keyed by package name; one area reduction per family; CSV report plus SVG/PDF sheet) |
 | vendor machine programs (Fuji, Yamaha, Juki, ASM) | ❌ not implemented |
 | line balancing | ✅ supported |
 | multi-lane scheduling (2–16 lanes, including the dual-lane report) | ✅ supported (greedy or LPT, optional swaps; not optimal) |
@@ -451,6 +451,37 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt export panel.osmt --format pdf --out panel.pdf
     ```
 
+26. **Stencil apertures.** `stencil` (CLI `open-smt stencil <file>
+    [--out stencil.json]`, SDK `document.stencil()`) generates paste apertures
+    from a fixed package rules table keyed by package name, because the model
+    stores no footprint data. Names are matched case-insensitively: a leading
+    letter (`R0603`) keeps the chip code and a trailing number (`SOIC-8`,
+    `QFP-44`) names the lead count. Each family contributes one rule: `chip`
+    (0201–2010) gets two rectangular terminal apertures at the body ends,
+    `sot23` three, `soic` one row per side at 1.27 mm pitch, `qfp` and `qfn`
+    four rows at 0.5 mm pitch, `lga` (also `csp`/`bga`) a square grid of round
+    terminals, and an unrecognised package the `generic` rule (one aperture on
+    the default drawing footprint, listed in `unmatchedPackages`). Every
+    aperture side is the nominal pad side multiplied by the square root of the
+    family's `areaReduction` (0.8–1.0), so the aperture area is reduced by the
+    stated factor. Apertures inherit the component position and rotation;
+    coordinates are rounded to three decimals. The report lists one rule per
+    distinct package in first-seen order and one entry per aperture in
+    component order for a single board. `export --format stencil` writes the
+    same entries as CSV, and `export --format stencil-svg` / `stencil-pdf`
+    render a stencil sheet that reuses the placement-drawing infrastructure:
+    the board outline, apertures coloured by side, the rule table, a legend and
+    a title block; labels are ASCII-only and non-ASCII text is reported as
+    `stencil/non-ascii-text`. An invalid board reports `board/invalid`. The
+    generation is read-only, deterministic and byte-identical on repeat.
+
+    ```shell
+    open-smt stencil panel.osmt --out stencil.json
+    open-smt export panel.osmt --format stencil --out stencil.csv
+    open-smt export panel.osmt --format stencil-svg --out stencil.svg
+    open-smt export panel.osmt --format stencil-pdf --out stencil.pdf
+    ```
+
 ## KiCad PCB import
 
 `open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
@@ -601,6 +632,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/machine_program.rs` | fixed header and program order, station/pitch/nozzle/speed fields, three-decimal canonical values, render-parse round trip, tampered field and reordered row mismatches, step-count mismatch, malformed files, empty document, invalid nozzle map, feeder coverage propagation, deterministic unchanged document, export-readback and verify-file paths |
 | `tests/heatmap.rs` | step placement and inbound travel time, package ordering with cumulative shares, per-side origin restart, equality with the default takt board time, empty document, feeder coverage propagation, determinism, unchanged document |
 | `tests/drawing.rs` | SVG panel/board/component/label/legend/title structure, XML escaping, rotated rectangle coordinates, byte-identical repeat renders, one-page A4 PDF with Helvetica and exact MediaBox, empty document, non-ASCII loss reporting, invalid board/panel codes, `svg`/`pdf` format parsing |
+| `tests/stencil.rs` | chip rule aperture size after the area reduction and terminal offsets, rotated offsets, one aperture per terminal for SOIC/QFP/QFN/SOT-23/LGA, generic fallback and `unmatchedPackages`, determinism and unchanged document, CSV/SVG/PDF export contents, `stencil`/`stencil-svg`/`stencil-pdf` format parsing, invalid board code, non-ASCII loss reporting |
 | `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption, splice/scrap SDK edits, splice/scrap CLI commands, SVG/PDF drawing exports through the SDK and CLI, and changeover smokes |
 
 ## Limitations
@@ -679,8 +711,14 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 - Line balancing distributes whole components across 1–64 machines but does not
   emit vendor machine programs, model conveyor lanes or account for line
   changeover time.
-- Vendor dialects and paste apertures are out of scope and reported as such;
-  the neutral machine program is an interchange format, not a vendor dialect.
+- Vendor dialects are out of scope and reported as such; the neutral machine
+  program is an interchange format, not a vendor dialect.
+- Stencil apertures come from a fixed package rules table keyed by package
+  name, not from footprint or pad-stack data. Each family carries one nominal
+  terminal size and one area reduction factor; QFN centre thermal pads and
+  step/stencil foil thickness are not modelled, the sheet draws a single board
+  rather than a panel, and unrecognised packages fall back to the generic rule
+  and are listed in `unmatchedPackages`.
 - KiCad import covers the component list and a rectangular outline only. Nets,
   tracks, vias, pads, zones, graphics and 3D models are counted in the loss
   ledger and are not part of the document. Altium and ODB import remain

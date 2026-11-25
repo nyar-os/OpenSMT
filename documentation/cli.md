@@ -430,6 +430,36 @@ millimetres saved, `0` when no reversal improves the route). Without the flag
 the output is byte-for-byte the nearest-neighbour program and carries neither
 field.
 
+## stencil
+
+```shell
+open-smt stencil <file> [--out stencil.json]
+```
+
+Prints the read-only stencil aperture report as JSON and optionally writes the
+same JSON to `--out`. Apertures are generated from a fixed package rules table
+keyed by package name (`chip` 0201–2010, `sot23`, `soic`, `qfp`, `qfn`, `lga`
+including `csp`/`bga`, `generic`): every component gets one aperture per
+terminal, and each aperture side is the nominal pad side multiplied by the
+square root of the family's `areaReduction`. Unrecognised packages fall back to
+the generic rule and are listed in `unmatchedPackages`. The document is never
+modified.
+
+The report contains `format` (`open-smt-stencil`), `version`, `units`, the
+single-board `boardWidth` and `boardDepth`, `components`, `apertures`,
+`unmatchedPackages`, one `rules` entry per distinct package in first-seen order
+(`package`, `family`, `shape`, `padWidth`, `padHeight`, `apertureWidth`,
+`apertureHeight`, `areaReduction`, `aperturesPerComponent`) and one `entries`
+row per aperture in component order (`refdes`, `package`, `side`, one-based
+`index`, `shape`, absolute centre `x`/`y` on one board, `width`, `height`,
+`rotation`). Coordinates are rounded to three decimals.
+
+`export --format stencil --out stencil.csv` writes the same entries as CSV, and
+`export --format stencil-svg` / `stencil-pdf` render a stencil sheet (board
+outline, apertures coloured by side, rule table, legend, title block) that
+reuses the placement-drawing infrastructure. A non-finite or non-positive board
+reports `board/invalid` and exits with code `1`.
+
 ## feeders
 
 ```shell
@@ -634,7 +664,7 @@ Neither document is modified.
 ## export
 
 ```shell
-open-smt export <file> --format program|feeders|fai|json|md|svg|pdf --out <path>
+open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|stencil-svg|stencil-pdf --out <path>
 ```
 
 | Format | Content |
@@ -646,6 +676,9 @@ open-smt export <file> --format program|feeders|fai|json|md|svg|pdf --out <path>
 | `md` | Markdown board, feeder, reflow and program tables |
 | `svg` | placement drawing as SVG: panel and board frames, rotated component rectangles, refdes/package/lane labels, legend, feeder table and title block |
 | `pdf` | the same placement drawing as one A4 landscape page fitted and centred, with Helvetica |
+| `stencil` | stencil aperture CSV, one row per generated aperture |
+| `stencil-svg` | stencil sheet as SVG: board outline, apertures coloured by side, rule table, legend and title block |
+| `stencil-pdf` | the same stencil sheet as one A4 landscape page fitted and centred, with Helvetica |
 
 The `svg` and `pdf` sheets use a millimetre `viewBox`; the SVG opens at 8 px/mm
 and the PDF maps 1 mm to 2.834646 pt before fitting. Component rectangles use a
@@ -655,6 +688,10 @@ written as `?` and reported under `losses` as `drawing/non-ascii-text`, while
 `drawing` reports the panel size, board/component/placement counts and the
 number of default footprints. An empty document still produces a framed sheet
 with its title block. Two exports of one document are byte-identical.
+
+The `stencil-svg` and `stencil-pdf` sheets share the same millimetre conventions
+but draw one board, not a panel; their non-ASCII losses are reported as
+`stencil/non-ascii-text` and the `drawing` summary field is absent.
 
 These are export formats. `kicad`, `altium` and `odb` are still declared but
 unimplemented and exit with code `2`. The separate `import` command reads a
@@ -704,6 +741,7 @@ open-smt bom check panel.osmt --bom bom.csv
 open-smt quality first-article panel.osmt
 open-smt validate panel.osmt
 open-smt placement panel.osmt
+open-smt stencil panel.osmt --out stencil.json
 open-smt schedule dual panel.osmt
 open-smt schedule lanes panel.osmt --count 3 --strategy lpt --improve
 open-smt reflow panel.osmt
@@ -717,4 +755,7 @@ open-smt export panel.osmt --format program --out program.csv
 open-smt export panel.osmt --format fai --out first-article.csv
 open-smt export panel.osmt --format svg --out panel.svg
 open-smt export panel.osmt --format pdf --out panel.pdf
+open-smt export panel.osmt --format stencil --out stencil.csv
+open-smt export panel.osmt --format stencil-svg --out stencil.svg
+open-smt export panel.osmt --format stencil-pdf --out stencil.pdf
 ```
