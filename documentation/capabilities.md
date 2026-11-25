@@ -36,6 +36,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | SVG placement drawing (panel, components, labels, legend, title block) | ✅ supported (1:1 mm at 8 px/mm; fixed 2.0 × 1.2 mm footprint; ASCII-only labels) |
 | PDF placement drawing (same sheet, A4 landscape) | ✅ supported (fit to page, Helvetica; same fixed footprint and ASCII-only labels) |
 | paste aperture / stencil generation | ✅ supported (fixed package rules table keyed by package name; one area reduction per family; CSV report plus SVG/PDF sheet) |
+| component height and clearance check | ✅ supported (rotated bounding boxes from the package rules table; warning findings; configurable minimum gap and maximum height) |
 | vendor machine programs (Fuji, Yamaha, Juki, ASM) | ❌ not implemented |
 | line balancing | ✅ supported |
 | multi-lane scheduling (2–16 lanes, including the dual-lane report) | ✅ supported (greedy or LPT, optional swaps; not optimal) |
@@ -482,6 +483,28 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt export panel.osmt --format stencil-pdf --out stencil.pdf
     ```
 
+27. **Height and clearance check.** `clearance` (CLI `open-smt clearance <file>
+    [--min-gap <mm>] [--max-height <mm>]`, SDK `document.clearance(limits)`)
+    warns about components taller than the maximum height and about same-side
+    bodies that overlap or sit closer than the minimum gap. The model stores no
+    footprint data, so each body outline comes from the same package rules
+    table as the stencil apertures, and a rotated body is compared as its
+    axis-aligned bounding box, which handles any rotation conservatively.
+    Heights are only checked for components that store one. The gap between two
+    boxes is the diagonal separation when they are apart on both axes and the
+    largest single-axis separation otherwise; an overlap reports gap `0`.
+    Findings are warnings with codes `clearance/height`, `clearance/overlap`
+    and `clearance/gap`, listed height-first in component order and then in
+    pair order, and `pairsChecked` counts the same-side pairs compared.
+    Components with non-finite coordinates are skipped. `minGap` defaults to
+    0.5 mm and `maxHeight` to 12 mm; invalid limits report `clearance/invalid`.
+    The check is read-only and deterministic; it never changes the document and
+    never affects the validation report.
+
+    ```shell
+    open-smt clearance panel.osmt --min-gap 0.4 --max-height 10
+    ```
+
 ## KiCad PCB import
 
 `open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
@@ -596,6 +619,7 @@ are skipped. Rows keep the order of the source.
 | `profile/invalid` | empty zones, non-positive length/temperature/speed/liquidus |
 | `station/invalid` | a feeder station assignment requested a non-positive or non-finite slot pitch |
 | `changeover/invalid` | a changeover requested a non-positive or non-finite time per reel change |
+| `clearance/invalid` | a clearance check requested a non-finite or negative minimum gap, or a non-finite or non-positive maximum height |
 | `reflow/invalid` | a process-window limit is non-finite or negative, or a minimum exceeds its maximum |
 | `consumption/invalid` | a consumption plan requested fewer than one board |
 | `schedule/invalid` | a feeder replenishment schedule requested fewer than one board |
@@ -633,6 +657,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/heatmap.rs` | step placement and inbound travel time, package ordering with cumulative shares, per-side origin restart, equality with the default takt board time, empty document, feeder coverage propagation, determinism, unchanged document |
 | `tests/drawing.rs` | SVG panel/board/component/label/legend/title structure, XML escaping, rotated rectangle coordinates, byte-identical repeat renders, one-page A4 PDF with Helvetica and exact MediaBox, empty document, non-ASCII loss reporting, invalid board/panel codes, `svg`/`pdf` format parsing |
 | `tests/stencil.rs` | chip rule aperture size after the area reduction and terminal offsets, rotated offsets, one aperture per terminal for SOIC/QFP/QFN/SOT-23/LGA, generic fallback and `unmatchedPackages`, determinism and unchanged document, CSV/SVG/PDF export contents, `stencil`/`stencil-svg`/`stencil-pdf` format parsing, invalid board code, non-ASCII loss reporting |
+| `tests/clearance.rs` | height, overlap and gap findings with exact messages and rounded gaps, rotated bounding boxes, default and custom limits, opposite sides never paired, `clearance/invalid`, non-finite coordinates skipped, determinism and unchanged document, session forwarding |
 | `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption, splice/scrap SDK edits, splice/scrap CLI commands, SVG/PDF drawing exports through the SDK and CLI, and changeover smokes |
 
 ## Limitations
@@ -719,6 +744,10 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   step/stencil foil thickness are not modelled, the sheet draws a single board
   rather than a panel, and unrecognised packages fall back to the generic rule
   and are listed in `unmatchedPackages`.
+- The clearance check reuses the same fixed package rules table, so body
+  outlines are rule defaults rather than footprint data, rotated bodies are
+  compared conservatively as axis-aligned bounding boxes, findings are warnings
+  only, and components without a stored height are never height-checked.
 - KiCad import covers the component list and a rectangular outline only. Nets,
   tracks, vias, pads, zones, graphics and 3D models are counted in the loss
   ledger and are not part of the document. Altium and ODB import remain

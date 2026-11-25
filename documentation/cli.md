@@ -460,6 +460,28 @@ outline, apertures coloured by side, rule table, legend, title block) that
 reuses the placement-drawing infrastructure. A non-finite or non-positive board
 reports `board/invalid` and exits with code `1`.
 
+## clearance
+
+```shell
+open-smt clearance <file> [--min-gap <mm>] [--max-height <mm>]
+```
+
+Prints the read-only component height and clearance report as JSON. Body
+outlines come from the same fixed package rules table as the stencil apertures
+and rotated bodies are compared as axis-aligned bounding boxes, so the check is
+conservative for any rotation. The report contains `format`
+(`open-smt-clearance`), `version`, `units`, the applied `minGap` (default `0.5`)
+and `maxHeight` (default `12`), `components`, `pairsChecked` (same-side pairs
+compared; opposite sides are never paired) and `findings` — warning entries
+with `severity`, `code` (`clearance/height`, `clearance/overlap` or
+`clearance/gap`), `message`, `refdes`, and pair findings also naming `other`,
+`side` and the rounded `gap` (`0` for an overlap); height findings also carry
+`height`. `ok` is true when there are no findings; warnings never fail the
+document and the check never modifies it. Components without a stored height
+are not height-checked and components with non-finite coordinates are skipped.
+A non-finite or negative `--min-gap` or a non-finite or non-positive
+`--max-height` reports `clearance/invalid` and exits with code `1`.
+
 ## feeders
 
 ```shell
@@ -742,6 +764,7 @@ open-smt quality first-article panel.osmt
 open-smt validate panel.osmt
 open-smt placement panel.osmt
 open-smt stencil panel.osmt --out stencil.json
+open-smt clearance panel.osmt --min-gap 0.4 --max-height 10
 open-smt schedule dual panel.osmt
 open-smt schedule lanes panel.osmt --count 3 --strategy lpt --improve
 open-smt reflow panel.osmt
