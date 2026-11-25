@@ -67,11 +67,13 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
 
     let plot_x = 34.0;
     let plot_y = 26.0;
-    let plot_w = 150.0;
-    let plot_h = 88.0;
+    let plot_w = 170.0;
+    let plot_h = 100.0;
     let width = plot_x + plot_w + 12.0;
     let title_y = plot_y + plot_h + 24.0;
-    let height = title_y + drawing::TITLE_HEIGHT_MM + 10.0;
+    let laid_title = drawing::lay_out(&title_text(document, &report, &id, &units), width - 20.0 - 5.0);
+    let title_h = drawing::block_height(&laid_title) + 6.0;
+    let height = title_y + title_h + 10.0;
 
     let target = report.total_seconds / MACHINES as f64;
     let raw_top = (report.max_seconds.max(target) * 1.18).max(1e-9);
@@ -87,11 +89,11 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
     drawing::svg_begin(&mut svg, width, height);
 
     svg.push_str(&format!(
-        "  <text x=\"12\" y=\"17\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.2\" font-weight=\"bold\" fill=\"#{}\">LINE BALANCE</text>\n",
+        "  <text x=\"12\" y=\"17\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"4.2\" font-weight=\"bold\" fill=\"#{}\">LINE BALANCE</text>\n",
         drawing::hex(drawing::INK)
     ));
     svg.push_str(&format!(
-        "  <text x=\"12\" y=\"22.4\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">station cycle time | bottleneck highlighted | dashed line = average target</text>\n",
+        "  <text x=\"12\" y=\"22.4\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.8\" fill=\"#{}\">station cycle time | bottleneck highlighted | dashed line = average target</text>\n",
         drawing::hex(drawing::MUTED)
     ));
 
@@ -117,7 +119,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
             drawing::hex(drawing::RULE)
         ));
         svg.push_str(&format!(
-            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" text-anchor=\"end\" fill=\"#{}\">{:.1} s</text>\n",
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.4\" text-anchor=\"end\" fill=\"#{}\">{:.1} s</text>\n",
             drawing::number(plot_x - 1.8),
             drawing::number(y + 0.6),
             drawing::hex(drawing::MUTED),
@@ -125,7 +127,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
         ));
     }
     svg.push_str(&format!(
-        "  <text x=\"10\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" text-anchor=\"middle\" transform=\"rotate(-90 10 {})\" fill=\"#{}\">cycle time (s)</text>\n",
+        "  <text x=\"10\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.4\" text-anchor=\"middle\" transform=\"rotate(-90 10 {})\" fill=\"#{}\">cycle time (s)</text>\n",
         drawing::number(plot_y + plot_h / 2.0),
         drawing::number(plot_y + plot_h / 2.0),
         drawing::hex(drawing::MUTED)
@@ -148,21 +150,21 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
             drawing::hex(edge)
         ));
         svg.push_str(&format!(
-            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.9\" text-anchor=\"middle\" fill=\"#{}\">{:.2} s</text>\n",
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.5\" text-anchor=\"middle\" fill=\"#{}\">{:.2} s</text>\n",
             drawing::number(centre),
             drawing::number(base_y - bar_h - 1.4),
             drawing::hex(drawing::INK),
             machine.seconds
         ));
         svg.push_str(&format!(
-            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" text-anchor=\"middle\" fill=\"#{}\">M{}</text>\n",
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.8\" text-anchor=\"middle\" fill=\"#{}\">M{}</text>\n",
             drawing::number(centre),
             drawing::number(base_y + 5.0),
             drawing::hex(drawing::INK),
             machine.index + 1
         ));
         svg.push_str(&format!(
-            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.6\" text-anchor=\"middle\" fill=\"#{}\">{} part(s)</text>\n",
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.2\" text-anchor=\"middle\" fill=\"#{}\">{} part(s)</text>\n",
             drawing::number(centre),
             drawing::number(base_y + 8.6),
             drawing::hex(drawing::MUTED),
@@ -181,7 +183,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
         drawing::hex(drawing::TOP_EDGE)
     ));
     svg.push_str(&format!(
-        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.7\" text-anchor=\"end\" fill=\"#{}\">target {:.2} s</text>\n",
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.3\" text-anchor=\"end\" fill=\"#{}\">target {:.2} s</text>\n",
         drawing::number(plot_x + plot_w - 1.0),
         drawing::number(target_y - 1.2),
         drawing::hex(drawing::TOP_EDGE),
@@ -198,7 +200,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
         drawing::hex(drawing::TOP_EDGE)
     ));
     svg.push_str(&format!(
-        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.9\" fill=\"#{}\">station cycle</text>\n",
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.5\" fill=\"#{}\">station cycle</text>\n",
         drawing::number(plot_x + 9.0),
         drawing::number(legend_y),
         drawing::hex(drawing::INK)
@@ -209,7 +211,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
         drawing::number(legend_y - 2.6)
     ));
     svg.push_str(&format!(
-        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.9\" fill=\"#{}\">bottleneck</text>\n",
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.5\" fill=\"#{}\">bottleneck</text>\n",
         drawing::number(plot_x + 53.0),
         drawing::number(legend_y),
         drawing::hex(drawing::INK)
@@ -223,26 +225,13 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<LineBalanceDrawing
         drawing::hex(drawing::TOP_EDGE)
     ));
     svg.push_str(&format!(
-        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.9\" fill=\"#{}\">average target</text>\n",
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.5\" fill=\"#{}\">average target</text>\n",
         drawing::number(plot_x + 100.0),
         drawing::number(legend_y),
         drawing::hex(drawing::INK)
     ));
 
-    let lines = [
-        format!("OpenSMT line balance drawing | drawing OSMT-LB-01 | revision {}", document.revision),
-        drawing::title_stamp("line balance", "OSMT-LB-01", &id, &units, "1:1 (seconds)", "n/a (line)"),
-        format!(
-            "{} station(s) | total {:.2} s | bottleneck M{} at {:.2} s | imbalance {:.1}%",
-            report.machines.len(),
-            report.total_seconds,
-            bottleneck + 1,
-            report.max_seconds,
-            report.imbalance * 100.0
-        ),
-        format!("assumes a {MACHINES}-machine line; stations are balanced by smallest completion time"),
-    ];
-    push_title(&mut svg, 10.0, title_y, width - 20.0, &lines);
+    push_title(&mut svg, 10.0, title_y, width - 20.0, title_h, &laid_title);
     drawing::svg_end(&mut svg);
 
     let summary = LineBalanceSummary {
@@ -287,23 +276,34 @@ fn bottleneck(report: &BalanceReport) -> u32 {
         .map_or(0, |machine| machine.index)
 }
 
-fn push_title(svg: &mut String, x: f64, y: f64, width: f64, lines: &[String]) {
+fn title_text(document: &SmtDocument, report: &BalanceReport, id: &str, units: &str) -> Vec<drawing::TextLine> {
+    let title = |text: String| drawing::TextLine { text, size: drawing::FONT_TITLE, emphasis: true };
+    let body = |text: String| drawing::TextLine { text, size: drawing::FONT_BODY, emphasis: false };
+    vec![
+        title(format!("OpenSMT line balance drawing | drawing OSMT-LB-01 | revision {}", document.revision)),
+        body(drawing::title_stamp("line balance", "OSMT-LB-01", id, units, "1:1 (seconds)", "n/a (line)")),
+        body(format!(
+            "{} station(s) | total {:.2} s | bottleneck M{} at {:.2} s | imbalance {:.1}%",
+            report.machines.len(),
+            report.total_seconds,
+            bottleneck(report) + 1,
+            report.max_seconds,
+            report.imbalance * 100.0
+        )),
+        body(format!("assumes a {MACHINES}-machine line; stations are balanced by smallest completion time")),
+        body("millimetres; 1 mm = 8 px".to_string()),
+    ]
+}
+
+fn push_title(svg: &mut String, x: f64, y: f64, width: f64, height: f64, laid: &[drawing::LaidLine]) {
     svg.push_str(&format!(
-        "  <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
+        "  <g id=\"title-block\" transform=\"translate({} {})\">\n    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
         drawing::number(x),
         drawing::number(y),
         drawing::number(width),
-        drawing::number(drawing::TITLE_HEIGHT_MM),
+        drawing::number(height),
         drawing::hex(drawing::PANEL_EDGE)
     ));
-    for (index, line) in lines.iter().enumerate() {
-        svg.push_str(&format!(
-            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" fill=\"#{}\">{}</text>\n",
-            drawing::number(x + 2.5),
-            drawing::number(y + 5.6 + index as f64 * 5.6),
-            if index == 0 { "2.4" } else { "2.0" },
-            drawing::hex(if index == 0 { drawing::INK } else { drawing::MUTED }),
-            drawing::escape_xml(line)
-        ));
-    }
+    drawing::push_block_svg(svg, 2.5, 3.0, laid);
+    svg.push_str("  </g>\n");
 }

@@ -284,7 +284,7 @@ struct Plan {
     board_width: f64,
     board_depth: f64,
     apertures: Vec<Aperture>,
-    labels: Vec<drawing::SheetLabel>,
+    labels: Vec<drawing::PlacedLabel>,
     rules: Vec<RuleLine>,
     summary: StencilDrawingSummary,
 }
@@ -295,6 +295,7 @@ struct StencilLayout {
     side_x: f64,
     rules_y: f64,
     title_y: f64,
+    title_h: f64,
 }
 
 impl StencilLayout {
@@ -305,14 +306,11 @@ impl StencilLayout {
         let content_bottom = (drawing::DRAW_MARGIN_MM + plan.board_depth)
             .max(drawing::DRAW_MARGIN_MM + drawing::LEGEND_HEIGHT_MM)
             .max(rules_y + rules_height);
+        let width = side_x + drawing::SIDE_WIDTH_MM + drawing::DRAW_MARGIN_MM;
+        let laid = drawing::lay_out(&title_text(plan, "1 mm = 8 px"), width - 2.0 * drawing::DRAW_MARGIN_MM - 5.0);
+        let title_h = drawing::block_height(&laid) + 6.0;
         let title_y = content_bottom + drawing::COLUMN_GAP_MM;
-        Self {
-            width: side_x + drawing::SIDE_WIDTH_MM + drawing::DRAW_MARGIN_MM,
-            height: title_y + drawing::TITLE_HEIGHT_MM + drawing::DRAW_MARGIN_MM,
-            side_x,
-            rules_y,
-            title_y,
-        }
+        Self { width, height: title_y + title_h + drawing::DRAW_MARGIN_MM, side_x, rules_y, title_y, title_h }
     }
 }
 
@@ -346,8 +344,10 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
             circle: entry.shape == "circle",
         })
         .collect::<Vec<_>>();
-    // Reference labels sit above the body outline and are skipped when they
-    // would collide with an aperture or an already accepted label.
+    // Reference labels take the first free slot of eight candidates around the
+    // whole aperture cluster of their component; a label that finds no free
+    // slot is omitted instead of printed over a neighbour.
+    let frame = (0.4, 0.4, document.board.width - 0.4, document.board.depth - 0.4);
     let mut occupied: Vec<drawing::Box4> = report
         .entries
         .iter()
@@ -369,24 +369,8 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
             body = (body.0.min(box_.0), body.1.min(box_.1), body.2.max(box_.2), body.3.max(box_.3));
         }
         let font = drawing::label_font(geometry.body_length.min(geometry.body_width));
-        let half = drawing::text_width(&refdes, font) / 2.0;
-        let above: drawing::Box4 = (centre_x - half, body.1 - 0.4 - font, centre_x + half, body.1 - 0.4);
-        let below: drawing::Box4 = (centre_x - half, body.3 + 0.4, centre_x + half, body.3 + 0.4 + font);
-        let placed = if drawing::collides(&above, &occupied) {
-            if drawing::collides(&below, &occupied) { None } else { Some(below) }
-        }
-        else {
-            Some(above)
-        };
-        if let Some(placed) = placed {
-            occupied.push(placed);
-            labels.push(drawing::SheetLabel {
-                x: round3(centre_x),
-                y: round3(placed.3),
-                size: font,
-                text: refdes,
-                muted: false,
-            });
+        if let Some(label) = drawing::place_label(&refdes, font, body, frame, &mut occupied) {
+            labels.push(label);
         }
     }
 
@@ -477,14 +461,7 @@ fn push_svg_board(svg: &mut String, plan: &Plan) {
         }
     }
     for label in &plan.labels {
-        svg.push_str(&format!(
-            "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" text-anchor=\"middle\" fill=\"#{}\">{}</text>\n",
-            drawing::number(label.x),
-            drawing::number(label.y),
-            drawing::number(label.size),
-            drawing::hex(drawing::INK),
-            drawing::escape_xml(&label.text)
-        ));
+        drawing::push_labels_svg(svg, std::slice::from_ref(label), drawing::INK);
     }
     svg.push_str("  </g>\n");
 }
@@ -494,30 +471,37 @@ fn push_svg_legend(svg: &mut String, layout: &StencilLayout) {
     let y = drawing::DRAW_MARGIN_MM;
     svg.push_str(&format!("  <g id=\"legend\" transform=\"translate({} {})\">\n", drawing::number(x), drawing::number(y)));
     svg.push_str(&format!(
-        "    <text x=\"0\" y=\"4\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.9\" font-weight=\"bold\" fill=\"#{}\">LEGEND</text>\n",
+        "    <text x=\"0\" y=\"4.6\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" font-weight=\"bold\" fill=\"#{}\">LEGEND</text>\n",
+        drawing::number(drawing::FONT_SECTION),
         drawing::hex(drawing::INK)
     ));
-    svg.push_str(&format!(
-        "    <rect x=\"0\" y=\"7\" width=\"7\" height=\"3.4\" fill=\"#{}\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
-        drawing::hex(drawing::BOARD_FILL),
-        drawing::hex(drawing::BOARD_EDGE)
-    ));
-    svg.push_str(&svg_legend_text(13.0, 9.7, 2.2, "board outline, single stencil"));
-    svg.push_str(&format!(
-        "    <rect x=\"0\" y=\"13\" width=\"7\" height=\"3.4\" fill=\"#{}\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
-        drawing::hex(drawing::TOP_FILL),
-        drawing::hex(drawing::TOP_EDGE)
-    ));
-    svg.push_str(&svg_legend_text(13.0, 15.7, 2.2, "top-side aperture"));
-    svg.push_str(&format!(
-        "    <rect x=\"0\" y=\"19\" width=\"7\" height=\"3.4\" fill=\"#{}\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
-        drawing::hex(drawing::BOTTOM_FILL),
-        drawing::hex(drawing::BOTTOM_EDGE)
-    ));
-    svg.push_str(&svg_legend_text(13.0, 21.7, 2.2, "bottom-side aperture"));
-    svg.push_str(&svg_legend_text(0.0, 29.0, 2.0, "aperture side = pad side x sqrt(reduction)"));
-    svg.push_str(&svg_legend_text(0.0, 34.0, 2.0, "unmatched packages use the generic rule"));
-    svg.push_str(&svg_legend_text(0.0, 39.0, 2.0, "QFN thermal pads are not modelled"));
+    let rows = [
+        (drawing::BOARD_FILL, drawing::BOARD_EDGE, "board outline, single stencil"),
+        (drawing::TOP_FILL, drawing::TOP_EDGE, "top-side aperture"),
+        (drawing::BOTTOM_FILL, drawing::BOTTOM_EDGE, "bottom-side aperture"),
+    ];
+    for (index, (fill, edge, text)) in rows.iter().enumerate() {
+        let top = 9.0 + index as f64 * 9.0;
+        svg.push_str(&format!(
+            "    <rect x=\"0\" y=\"{}\" width=\"10\" height=\"5\" fill=\"#{}\" stroke=\"#{}\" stroke-width=\"0.35\"/>\n",
+            drawing::number(top),
+            drawing::hex(fill),
+            drawing::hex(edge)
+        ));
+        svg.push_str(&svg_legend_text(15.0, top + 3.9, drawing::FONT_BODY, text));
+    }
+    let notes = [
+        "aperture side = pad side x sqrt(reduction)",
+        "unmatched packages use the generic rule",
+        "QFN thermal pads are not modelled",
+    ];
+    let mut offset = 39.0;
+    for note in notes {
+        for line in drawing::wrap_text(note, drawing::SIDE_WIDTH_MM - 2.0, drawing::FONT_NOTE) {
+            svg.push_str(&svg_legend_text(0.0, offset, drawing::FONT_NOTE, &line));
+            offset += drawing::FONT_NOTE * drawing::LINE_ADVANCE;
+        }
+    }
     svg.push_str("  </g>\n");
 }
 
@@ -526,50 +510,45 @@ fn push_svg_rules(svg: &mut String, plan: &Plan, layout: &StencilLayout) {
     let y = layout.rules_y;
     svg.push_str(&format!("  <g id=\"rules\" transform=\"translate({} {})\">\n", drawing::number(x), drawing::number(y)));
     svg.push_str(&format!(
-        "    <text x=\"0\" y=\"4\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.8\" font-weight=\"bold\" fill=\"#{}\">STENCIL RULES</text>\n",
+        "    <text x=\"0\" y=\"4.6\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" font-weight=\"bold\" fill=\"#{}\">STENCIL RULES</text>\n",
+        drawing::number(drawing::FONT_SECTION),
         drawing::hex(drawing::INK)
     ));
-    svg.push_str(&format!(
-        "    <line x1=\"0\" y1=\"6.2\" x2=\"{}\" y2=\"6.2\" stroke=\"#{}\" stroke-width=\"0.2\"/>\n",
-        drawing::number(drawing::SIDE_WIDTH_MM - 2.0),
-        drawing::hex(drawing::RULE)
-    ));
     if plan.rules.is_empty() {
-        svg.push_str(&svg_legend_text(0.0, 11.0, 2.1, "no components; no apertures generated"));
+        svg.push_str(&svg_legend_text(0.0, 11.0, drawing::FONT_BODY, "no components; no apertures generated"));
         svg.push_str("  </g>\n");
         return;
     }
-    for (column, label) in ["PACKAGE", "FAMILY", "SHAPE", "SIZE MM", "RED", "PER"].iter().enumerate() {
-        let offset = [0.0, 15.0, 27.0, 35.0, 50.0, 57.0][column];
-        svg.push_str(&format!(
-            "    <text x=\"{}\" y=\"10\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" fill=\"#{}\">{label}</text>\n",
-            drawing::number(offset),
-            drawing::hex(drawing::MUTED)
-        ));
-    }
-    for (index, rule) in plan.rules.iter().enumerate() {
-        let line_y = 15.0 + index as f64 * drawing::FEEDER_ROW_MM;
-        for (column, value) in [
-            rule.package.clone(),
-            rule.family.clone(),
-            rule.shape.clone(),
-            rule.size.clone(),
-            rule.reduction.clone(),
-            rule.count.to_string(),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let offset = [0.0, 15.0, 27.0, 35.0, 50.0, 57.0][column];
-            svg.push_str(&format!(
-                "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">{}</text>\n",
-                drawing::number(offset),
-                drawing::number(line_y),
-                drawing::hex(drawing::INK),
-                drawing::escape_xml(&value)
-            ));
-        }
-    }
+    let rows = plan
+        .rules
+        .iter()
+        .map(|rule| {
+            vec![
+                rule.package.clone(),
+                rule.family.clone(),
+                rule.shape.clone(),
+                rule.size.clone(),
+                rule.reduction.clone(),
+                rule.count.to_string(),
+            ]
+        })
+        .collect();
+    drawing::Table::new(
+        &[
+            ("PACKAGE", drawing::Align::Left),
+            ("FAMILY", drawing::Align::Left),
+            ("SHAPE", drawing::Align::Left),
+            ("SIZE MM", drawing::Align::Right),
+            ("RED", drawing::Align::Right),
+            ("PER", drawing::Align::Right),
+        ],
+        rows,
+        drawing::FONT_TABLE,
+        3.6,
+    )
+    .with_row(5.4)
+    .fit_width(drawing::SIDE_WIDTH_MM)
+    .push_svg(svg, 0.0, 7.0, "stencil-rules");
     svg.push_str("  </g>\n");
 }
 
@@ -581,18 +560,12 @@ fn push_svg_title(svg: &mut String, plan: &Plan, layout: &StencilLayout, scale_n
     svg.push_str(&format!(
         "    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
         drawing::number(width),
-        drawing::number(drawing::TITLE_HEIGHT_MM),
+        drawing::number(layout.title_h),
         drawing::hex(drawing::PANEL_EDGE)
     ));
-    for (index, line) in title_lines(plan, scale_note).iter().enumerate() {
-        svg.push_str(&format!(
-            "    <text x=\"2.5\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" fill=\"#{}\">{}</text>\n",
-            drawing::number(5.6 + index as f64 * 5.6),
-            if index == 0 { "2.9" } else { "2.2" },
-            if index == 0 { drawing::hex(drawing::INK) } else { drawing::hex(drawing::MUTED) },
-            drawing::escape_xml(line)
-        ));
-    }
+    let lines = title_text(plan, scale_note);
+    let laid = drawing::lay_out(&lines, width - 5.0);
+    drawing::push_block_svg(svg, 2.5, 3.0, &laid);
     svg.push_str("  </g>\n");
 }
 
@@ -620,86 +593,112 @@ fn push_pdf_board(pdf: &mut drawing::Pdf, plan: &Plan) {
         }
     }
     for label in &plan.labels {
-        pdf.text_centered(x + label.x, y + label.y, label.size, drawing::INK, &label.text);
+        if let Some((start, end)) = label.leader {
+            pdf.line(x + start.0, y + start.1, x + end.0, y + end.1, drawing::INK, 0.18);
+        }
+        pdf.text(x + label.x, y + label.y, label.size, drawing::INK, &label.text);
     }
 }
 
 fn push_pdf_legend(pdf: &mut drawing::Pdf, layout: &StencilLayout) {
     let x = layout.side_x;
     let y = drawing::DRAW_MARGIN_MM;
-    pdf.text(x, y + 4.0, 2.9, drawing::INK, "LEGEND");
-    pdf.rect(x, y + 7.0, 7.0, 3.4, Some(drawing::BOARD_FILL), Some((drawing::BOARD_EDGE, 0.3)));
-    pdf.text(x + 13.0, y + 9.7, 2.2, drawing::INK, "board outline, single stencil");
-    pdf.rect(x, y + 13.0, 7.0, 3.4, Some(drawing::TOP_FILL), Some((drawing::TOP_EDGE, 0.3)));
-    pdf.text(x + 13.0, y + 15.7, 2.2, drawing::INK, "top-side aperture");
-    pdf.rect(x, y + 19.0, 7.0, 3.4, Some(drawing::BOTTOM_FILL), Some((drawing::BOTTOM_EDGE, 0.3)));
-    pdf.text(x + 13.0, y + 21.7, 2.2, drawing::INK, "bottom-side aperture");
-    pdf.text(x, y + 29.0, 2.0, drawing::INK, "aperture side = pad side x sqrt(reduction)");
-    pdf.text(x, y + 34.0, 2.0, drawing::INK, "unmatched packages use the generic rule");
-    pdf.text(x, y + 39.0, 2.0, drawing::INK, "QFN thermal pads are not modelled");
+    pdf.text(x, y + 4.6, drawing::FONT_SECTION, drawing::INK, "LEGEND");
+    let rows = [
+        (drawing::BOARD_FILL, drawing::BOARD_EDGE, "board outline, single stencil"),
+        (drawing::TOP_FILL, drawing::TOP_EDGE, "top-side aperture"),
+        (drawing::BOTTOM_FILL, drawing::BOTTOM_EDGE, "bottom-side aperture"),
+    ];
+    for (index, (fill, edge, text)) in rows.iter().enumerate() {
+        let top = y + 9.0 + index as f64 * 9.0;
+        pdf.rect(x, top, 10.0, 5.0, Some(fill), Some((edge, 0.35)));
+        pdf.text(x + 15.0, top + 3.9, drawing::FONT_BODY, drawing::INK, text);
+    }
+    let notes = [
+        "aperture side = pad side x sqrt(reduction)",
+        "unmatched packages use the generic rule",
+        "QFN thermal pads are not modelled",
+    ];
+    let mut offset = y + 39.0;
+    for note in notes {
+        for line in drawing::wrap_text(note, drawing::SIDE_WIDTH_MM - 2.0, drawing::FONT_NOTE) {
+            pdf.text(x, offset, drawing::FONT_NOTE, drawing::INK, &line);
+            offset += drawing::FONT_NOTE * drawing::LINE_ADVANCE;
+        }
+    }
 }
 
 fn push_pdf_rules(pdf: &mut drawing::Pdf, plan: &Plan, layout: &StencilLayout) {
     let x = layout.side_x;
     let y = layout.rules_y;
-    pdf.text(x, y + 4.0, 2.8, drawing::INK, "STENCIL RULES");
-    pdf.line(x, y + 6.2, x + drawing::SIDE_WIDTH_MM - 2.0, y + 6.2, drawing::RULE, 0.2);
+    pdf.text(x, y + 4.6, drawing::FONT_SECTION, drawing::INK, "STENCIL RULES");
     if plan.rules.is_empty() {
-        pdf.text(x, y + 11.0, 2.1, drawing::INK, "no components; no apertures generated");
+        pdf.text(x, y + 11.0, drawing::FONT_BODY, drawing::INK, "no components; no apertures generated");
         return;
     }
-    for (column, label) in ["PACKAGE", "FAMILY", "SHAPE", "SIZE MM", "RED", "PER"].iter().enumerate() {
-        let offset = [0.0, 15.0, 27.0, 35.0, 50.0, 57.0][column];
-        pdf.text(x + offset, y + 10.0, 1.8, drawing::MUTED, label);
-    }
-    for (index, rule) in plan.rules.iter().enumerate() {
-        let line_y = y + 15.0 + index as f64 * drawing::FEEDER_ROW_MM;
-        for (column, value) in [
-            rule.package.clone(),
-            rule.family.clone(),
-            rule.shape.clone(),
-            rule.size.clone(),
-            rule.reduction.clone(),
-            rule.count.to_string(),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let offset = [0.0, 15.0, 27.0, 35.0, 50.0, 57.0][column];
-            pdf.text(x + offset, line_y, 2.0, drawing::INK, &value);
-        }
-    }
+    let rows = plan
+        .rules
+        .iter()
+        .map(|rule| {
+            vec![
+                rule.package.clone(),
+                rule.family.clone(),
+                rule.shape.clone(),
+                rule.size.clone(),
+                rule.reduction.clone(),
+                rule.count.to_string(),
+            ]
+        })
+        .collect();
+    drawing::Table::new(
+        &[
+            ("PACKAGE", drawing::Align::Left),
+            ("FAMILY", drawing::Align::Left),
+            ("SHAPE", drawing::Align::Left),
+            ("SIZE MM", drawing::Align::Right),
+            ("RED", drawing::Align::Right),
+            ("PER", drawing::Align::Right),
+        ],
+        rows,
+        drawing::FONT_TABLE,
+        3.6,
+    )
+    .with_row(5.4)
+    .fit_width(drawing::SIDE_WIDTH_MM)
+    .push_pdf(pdf, x, y + 7.0);
 }
 
 fn push_pdf_title(pdf: &mut drawing::Pdf, plan: &Plan, layout: &StencilLayout, scale_note: &str) {
     let x = drawing::DRAW_MARGIN_MM;
     let y = layout.title_y;
     let width = layout.width - 2.0 * drawing::DRAW_MARGIN_MM;
-    pdf.rect(x, y, width, drawing::TITLE_HEIGHT_MM, Some("1 1 1"), Some((drawing::PANEL_EDGE, 0.45)));
-    for (index, line) in title_lines(plan, scale_note).iter().enumerate() {
-        pdf.text(
-            x + 2.5,
-            y + 5.6 + index as f64 * 5.6,
-            if index == 0 { 2.9 } else { 2.2 },
-            if index == 0 { drawing::INK } else { drawing::MUTED },
-            line,
-        );
-    }
+    pdf.rect(x, y, width, layout.title_h, Some("1 1 1"), Some((drawing::PANEL_EDGE, 0.45)));
+    let lines = title_text(plan, scale_note);
+    drawing::push_block_pdf(pdf, x + 2.5, y + 3.0, &drawing::lay_out(&lines, width - 5.0));
 }
 
-fn title_lines(plan: &Plan, scale_note: &str) -> Vec<String> {
+fn title_text(plan: &Plan, scale_note: &str) -> Vec<drawing::TextLine> {
+    let title = |text: String| drawing::TextLine { text, size: drawing::FONT_TITLE, emphasis: true };
+    let body = |text: String| drawing::TextLine { text, size: drawing::FONT_BODY, emphasis: false };
     vec![
-        format!("OpenSMT stencil drawing | drawing OSMT-ST-01 | revision {}", plan.revision),
-        drawing::title_stamp("stencil", "OSMT-ST-01", &plan.id, &plan.units, "1:1", "top + bottom (bottom mirrored about X)"),
-        format!(
+        title(format!("OpenSMT stencil drawing | drawing OSMT-ST-01 | revision {}", plan.revision)),
+        body(drawing::title_stamp(
+            "stencil",
+            "OSMT-ST-01",
+            &plan.id,
+            &plan.units,
+            "1:1",
+            "top + bottom (bottom mirrored about X)",
+        )),
+        body(format!(
             "{} component(s) | {} aperture(s) | {} package rule(s) | {} unmatched package(s)",
             plan.summary.components,
             plan.summary.apertures,
             plan.rules.len(),
             plan.summary.unmatched_packages
-        ),
-        "apertures from the package rules table; QFN thermal pads not modelled".to_string(),
-        scale_note.to_string(),
+        )),
+        body("apertures from the package rules table; QFN thermal pads not modelled".to_string()),
+        body(scale_note.to_string()),
     ]
 }
 

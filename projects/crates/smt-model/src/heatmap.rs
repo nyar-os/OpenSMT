@@ -284,6 +284,30 @@ fn heat_color(value: f64) -> String {
     format!("{:02x}{:02x}{:02x}", red.round() as u32, green.round() as u32, blue.round() as u32)
 }
 
+fn title_text(
+    document: &SmtDocument,
+    report: &HeatmapReport,
+    id: &str,
+    units: &str,
+    scale_note: &str,
+) -> Vec<drawing::TextLine> {
+    let title = |text: String| drawing::TextLine { text, size: drawing::FONT_TITLE, emphasis: true };
+    let body = |text: String| drawing::TextLine { text, size: drawing::FONT_BODY, emphasis: false };
+    vec![
+        title(format!("OpenSMT takt heat map drawing | drawing OSMT-HT-01 | revision {}", document.revision)),
+        body(drawing::title_stamp("takt heat map", "OSMT-HT-01", id, units, scale_note, "top and bottom")),
+        body(format!(
+            "place {} s + travel {} s = {} s | {} package(s)",
+            drawing::number(report.place_seconds),
+            drawing::number(report.travel_seconds),
+            drawing::number(report.total_seconds),
+            report.packages.len()
+        )),
+        body("dot colour and size grow with the share of board time".to_string()),
+        body(format!("millimetres; {scale_note}")),
+    ]
+}
+
 /// Draws the takt bottleneck heat map of one board as a millimetre SVG.
 ///
 /// Every program step is plotted on the board outline with a colour and radius
@@ -298,10 +322,10 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<HeatmapDrawing, Sm
 
     let plot_x = drawing::DRAW_MARGIN_MM;
     let plot_y = drawing::DRAW_MARGIN_MM + 18.0;
-    let plot_w = 110.0;
-    let plot_h = 90.0;
+    let plot_w = 135.0;
+    let plot_h = 105.0;
     let side_x = plot_x + plot_w + drawing::COLUMN_GAP_MM;
-    let side_w = 46.0;
+    let side_w = 70.0;
     let width = side_x + side_w + drawing::DRAW_MARGIN_MM;
 
     let board_width = document.board.width.max(1e-9);
@@ -310,7 +334,12 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<HeatmapDrawing, Sm
     let draw_w = board_width * scale;
     let draw_h = board_depth * scale;
     let title_y = plot_y + draw_h + 12.0;
-    let height = title_y + drawing::TITLE_HEIGHT_MM + drawing::DRAW_MARGIN_MM;
+    let laid_title = drawing::lay_out(
+        &title_text(document, &report, &id, &units, "fit to frame"),
+        width - 2.0 * drawing::DRAW_MARGIN_MM - 5.0,
+    );
+    let title_h = drawing::block_height(&laid_title) + 6.0;
+    let height = title_y + title_h + drawing::DRAW_MARGIN_MM;
     let px = |x: f64| plot_x + x * scale;
     let py = |y: f64| plot_y + y * scale;
     let max_share = report.steps.iter().map(|step| step.share).fold(0.0, f64::max).max(1e-9);
@@ -319,13 +348,13 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<HeatmapDrawing, Sm
     drawing::svg_begin(&mut svg, width, height);
 
     svg.push_str(&format!(
-        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.2\" font-weight=\"bold\" fill=\"#{}\">TAKT BOTTLENECK HEAT MAP</text>\n",
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"4.2\" font-weight=\"bold\" fill=\"#{}\">TAKT BOTTLENECK HEAT MAP</text>\n",
         drawing::number(drawing::DRAW_MARGIN_MM),
         drawing::number(drawing::DRAW_MARGIN_MM + 4.0),
         drawing::hex(drawing::INK)
     ));
     svg.push_str(&format!(
-        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">{} step(s) | board {} s | bottleneck {}</text>\n",
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.8\" fill=\"#{}\">{} step(s) | board {} s | bottleneck {}</text>\n",
         drawing::number(drawing::DRAW_MARGIN_MM),
         drawing::number(drawing::DRAW_MARGIN_MM + 8.6),
         drawing::hex(drawing::MUTED),
@@ -362,67 +391,84 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<HeatmapDrawing, Sm
 
     // Pareto column: packages ranked by share with a cumulative marker.
     svg.push_str(&format!(
-        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" font-weight=\"bold\" fill=\"#{}\">PACKAGES</text>\n",
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.3\" font-weight=\"bold\" fill=\"#{}\">PACKAGES</text>\n",
         drawing::number(side_x),
         drawing::number(plot_y + 3.0),
         drawing::hex(drawing::INK)
     ));
-    let bar_area = side_w - 16.0;
-    let top = report.packages.iter().take(8);
-    for (index, package) in top.enumerate() {
+    let bar_area = side_w - 2.0;
+    let top: Vec<_> = report.packages.iter().take(8).collect();
+    // Spread few packages over the plot height instead of leaving the column
+    // half empty; dense documents keep the compact 8.4 mm pitch.
+    let row_step = if top.len() <= 1 { 12.0 } else { ((draw_h - 30.0) / top.len() as f64).clamp(8.4, 16.0) };
+    for (index, package) in top.iter().enumerate() {
         let (name, count) = drawing::ascii(&package.package);
         dropped += count;
-        let row = plot_y + 8.0 + index as f64 * 6.4;
+        let row = plot_y + 9.0 + index as f64 * row_step;
         let ratio = package.share / report.packages.first().map_or(1.0, |first| first.share.max(1e-9));
-        let bar_w = (package.share * bar_area / report.packages.first().map_or(1.0, |first| first.share.max(1e-9))).max(0.2);
+        let bar_w = (package.share * bar_area / report.packages.first().map_or(1.0, |first| first.share.max(1e-9))).max(0.4);
+        let percentage = format!("{:.0}%", package.share * 100.0);
         svg.push_str(&format!(
-            "  <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"3.0\" fill=\"#{}\"/>\n",
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.3\" fill=\"#{}\">{}</text>\n",
             drawing::number(side_x),
             drawing::number(row),
+            drawing::hex(drawing::INK),
+            drawing::escape_xml(&name)
+        ));
+        svg.push_str(&format!(
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.3\" text-anchor=\"end\" fill=\"#{}\">{}</text>\n",
+            drawing::number(side_x + side_w),
+            drawing::number(row),
+            drawing::hex(drawing::MUTED),
+            percentage
+        ));
+        svg.push_str(&format!(
+            "  <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"2.4\" fill=\"#{}\"/>\n",
+            drawing::number(side_x),
+            drawing::number(row + 1.4),
             drawing::number(bar_w),
             heat_color(ratio)
         ));
-        svg.push_str(&format!(
-            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" fill=\"#{}\">{} {:.0}%</text>\n",
-            drawing::number(side_x + bar_w + 1.4),
-            drawing::number(row + 2.4),
-            drawing::hex(drawing::MUTED),
-            drawing::escape_xml(&name),
-            package.share * 100.0
-        ));
+    }
+    let notes_y = plot_y + draw_h - 12.0;
+    svg.push_str(&format!(
+        "  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#{}\" stroke-width=\"0.25\"/>\n",
+        drawing::number(side_x),
+        drawing::number(notes_y - 3.4),
+        drawing::number(side_x + side_w),
+        drawing::number(notes_y - 3.4),
+        drawing::hex(drawing::RULE)
+    ));
+    let notes = [
+        "share = step time / board time",
+        "dot size and colour grow with the share",
+        "travel runs from the previous step of the side",
+    ];
+    let mut line_y = notes_y;
+    for note in notes {
+        for line in drawing::wrap_text(note, side_w, 2.3) {
+            svg.push_str(&format!(
+                "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.3\" fill=\"#{}\">{}</text>\n",
+                drawing::number(side_x),
+                drawing::number(line_y),
+                drawing::hex(drawing::MUTED),
+                drawing::escape_xml(&line)
+            ));
+            line_y += 3.3;
+        }
     }
 
     // Title block.
     svg.push_str(&format!(
-        "  <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
+        "  <g id=\"title-block\" transform=\"translate({} {})\">\n    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
         drawing::number(drawing::DRAW_MARGIN_MM),
         drawing::number(title_y),
         drawing::number(width - 2.0 * drawing::DRAW_MARGIN_MM),
-        drawing::number(drawing::TITLE_HEIGHT_MM),
+        drawing::number(title_h),
         drawing::hex(drawing::PANEL_EDGE)
     ));
-    let lines = [
-        format!("OpenSMT takt heat map drawing | drawing OSMT-HT-01 | revision {}", document.revision),
-        drawing::title_stamp("takt heat map", "OSMT-HT-01", &id, &units, "fit to frame", "top and bottom"),
-        format!(
-            "place {} s + travel {} s = {} s | {} package(s)",
-            drawing::number(report.place_seconds),
-            drawing::number(report.travel_seconds),
-            drawing::number(report.total_seconds),
-            report.packages.len()
-        ),
-        "dot colour and size grow with the share of board time".to_string(),
-    ];
-    for (index, line) in lines.iter().enumerate() {
-        svg.push_str(&format!(
-            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" fill=\"#{}\">{}</text>\n",
-            drawing::number(drawing::DRAW_MARGIN_MM + 2.5),
-            drawing::number(title_y + 5.6 + index as f64 * 5.6),
-            if index == 0 { "2.4" } else { "2.0" },
-            drawing::hex(if index == 0 { drawing::INK } else { drawing::MUTED }),
-            drawing::escape_xml(line)
-        ));
-    }
+    drawing::push_block_svg(&mut svg, 2.5, 3.0, &laid_title);
+    svg.push_str("  </g>\n");
 
     drawing::svg_end(&mut svg);
     let summary = HeatmapDrawingSummary {

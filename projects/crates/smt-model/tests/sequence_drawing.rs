@@ -217,7 +217,7 @@ fn label_anchors(svg: &str) -> Vec<(String, String)> {
         let y_after = after.split_once("y=\"").expect("y attribute").1;
         let y = &y_after[..y_after.find('"').expect("y quote")];
         let element = &after[..after.find("</text>").unwrap_or(after.len())];
-        if element.contains("font-size=\"1.7\"") {
+        if element.contains("font-size=\"2.2\"") {
             anchors.push((x.to_string(), y.to_string()));
         }
         rest = &after[x.len()..];

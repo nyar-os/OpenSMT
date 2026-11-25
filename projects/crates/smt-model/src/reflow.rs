@@ -167,6 +167,25 @@ pub struct ReflowDrawing {
     pub summary: ReflowDrawingSummary,
 }
 
+fn title_text(document: &SmtDocument, report: &ReflowReport, id: &str, units: &str) -> Vec<drawing::TextLine> {
+    let title = |text: String| drawing::TextLine { text, size: drawing::FONT_TITLE, emphasis: true };
+    let body = |text: String| drawing::TextLine { text, size: drawing::FONT_BODY, emphasis: false };
+    let tmin = report.zones.first().map_or(0.0, |zone| zone.entry_temperature);
+    let tmax = report.peak_temperature;
+    vec![
+        title(format!("OpenSMT reflow profile drawing | drawing OSMT-RF-01 | revision {}", document.revision)),
+        body(drawing::title_stamp("reflow profile", "OSMT-RF-01", id, units, "1:1 (time axis)", "n/a (process profile)")),
+        body(format!(
+            "linear-ramp model | total {} s | {} C to {} C",
+            drawing::number(report.total_seconds),
+            drawing::number(tmin),
+            drawing::number(tmax)
+        )),
+        body("the curve enters each zone at the previous set-point and ramps to its own".to_string()),
+        body("millimetres; 1 mm = 8 px".to_string()),
+    ]
+}
+
 /// Plots the evaluated reflow profile as a millimetre time-temperature SVG.
 ///
 /// The curve is the linear-ramp model of [`evaluate`]: it starts at
@@ -179,13 +198,15 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
     let (units, count) = drawing::ascii(&document.units);
     dropped += count;
 
-    let plot_x = drawing::DRAW_MARGIN_MM + 24.0;
+    let plot_x = drawing::DRAW_MARGIN_MM + 28.0;
     let plot_y = drawing::DRAW_MARGIN_MM + 18.0;
-    let plot_w = 150.0;
-    let plot_h = 90.0;
+    let plot_w = 175.0;
+    let plot_h = 110.0;
     let width = plot_x + plot_w + drawing::DRAW_MARGIN_MM;
     let title_y = plot_y + plot_h + 22.0;
-    let height = title_y + drawing::TITLE_HEIGHT_MM + drawing::DRAW_MARGIN_MM;
+    let laid_title = drawing::lay_out(&title_text(document, &report, &id, &units), width - 2.0 * drawing::DRAW_MARGIN_MM - 5.0);
+    let title_h = drawing::block_height(&laid_title) + 6.0;
+    let height = title_y + title_h + drawing::DRAW_MARGIN_MM;
 
     let total = report.total_seconds.max(1e-9);
     let tmin = AMBIENT;
@@ -197,13 +218,13 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
     drawing::svg_begin(&mut svg, width, height);
 
     svg.push_str(&format!(
-        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.2\" font-weight=\"bold\" fill=\"#{}\">REFLOW TIME-TEMPERATURE PROFILE</text>\n",
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"4.2\" font-weight=\"bold\" fill=\"#{}\">REFLOW TIME-TEMPERATURE PROFILE</text>\n",
         drawing::number(drawing::DRAW_MARGIN_MM),
         drawing::number(drawing::DRAW_MARGIN_MM + 4.0),
         drawing::hex(drawing::INK)
     ));
     svg.push_str(&format!(
-        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">{} zone(s) | conveyor {} mm/min | peak {} C | time above liquidus {} s</text>\n",
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.8\" fill=\"#{}\">{} zone(s) | conveyor {} mm/min | peak {} C | time above liquidus {} s</text>\n",
         drawing::number(drawing::DRAW_MARGIN_MM),
         drawing::number(drawing::DRAW_MARGIN_MM + 8.6),
         drawing::hex(drawing::MUTED),
@@ -238,7 +259,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
             dashed
         ));
         svg.push_str(&format!(
-            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" text-anchor=\"end\" fill=\"#{}\">{} {:.0} C</text>\n",
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.4\" text-anchor=\"end\" fill=\"#{}\">{} {:.0} C</text>\n",
             drawing::number(plot_x - 1.6),
             drawing::number(y + 0.6),
             drawing::hex(drawing::MUTED),
@@ -248,7 +269,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
     }
     // Vertical axis: unit and tick marks.
     svg.push_str(&format!(
-        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" text-anchor=\"middle\" transform=\"rotate(-90 {} {})\" fill=\"#{}\">temperature (C)</text>\n",
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.4\" text-anchor=\"middle\" transform=\"rotate(-90 {} {})\" fill=\"#{}\">temperature (C)</text>\n",
         drawing::number(plot_x - 21.0),
         drawing::number(plot_y + plot_h / 2.0),
         drawing::number(plot_x - 21.0),
@@ -268,7 +289,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
             drawing::hex(drawing::RULE)
         ));
         svg.push_str(&format!(
-            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.6\" text-anchor=\"middle\" fill=\"#{}\">{:.0} s</text>\n",
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.2\" text-anchor=\"middle\" fill=\"#{}\">{:.0} s</text>\n",
             drawing::number(x),
             drawing::number(plot_y + plot_h + 4.0),
             drawing::hex(drawing::MUTED),
@@ -276,7 +297,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
         ));
     }
     svg.push_str(&format!(
-        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" text-anchor=\"middle\" fill=\"#{}\">time (s)</text>\n",
+        "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.4\" text-anchor=\"middle\" fill=\"#{}\">time (s)</text>\n",
         drawing::number(plot_x + plot_w / 2.0),
         drawing::number(plot_y + plot_h + 19.0),
         drawing::hex(drawing::MUTED)
@@ -300,14 +321,14 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
             ));
         }
         svg.push_str(&format!(
-            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" text-anchor=\"middle\" fill=\"#{}\">{}</text>\n",
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.4\" text-anchor=\"middle\" fill=\"#{}\">{}</text>\n",
             drawing::number(tx((start + elapsed) / 2.0)),
             drawing::number(plot_y + plot_h + 8.6),
             drawing::hex(drawing::MUTED),
             drawing::escape_xml(&name)
         ));
         svg.push_str(&format!(
-            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.6\" text-anchor=\"middle\" fill=\"#{}\">{} s</text>\n",
+            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.2\" text-anchor=\"middle\" fill=\"#{}\">{} s</text>\n",
             drawing::number(tx((start + elapsed) / 2.0)),
             drawing::number(plot_y + plot_h + 12.0),
             drawing::hex(drawing::MUTED),
@@ -348,34 +369,15 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<ReflowDrawing, Smt
 
     // Title block.
     svg.push_str(&format!(
-        "  <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
+        "  <g id=\"title-block\" transform=\"translate({} {})\">\n    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
         drawing::number(drawing::DRAW_MARGIN_MM),
         drawing::number(title_y),
         drawing::number(width - 2.0 * drawing::DRAW_MARGIN_MM),
-        drawing::number(drawing::TITLE_HEIGHT_MM),
+        drawing::number(title_h),
         drawing::hex(drawing::PANEL_EDGE)
     ));
-    let lines = [
-        format!("OpenSMT reflow profile drawing | drawing OSMT-RF-01 | revision {}", document.revision),
-        drawing::title_stamp("reflow profile", "OSMT-RF-01", &id, &units, "1:1 (time axis)", "n/a (process profile)"),
-        format!(
-            "linear-ramp model | total {} s | {} C to {} C",
-            drawing::number(report.total_seconds),
-            drawing::number(tmin),
-            drawing::number(tmax)
-        ),
-        "the curve enters each zone at the previous set-point and ramps to its own".to_string(),
-    ];
-    for (index, line) in lines.iter().enumerate() {
-        svg.push_str(&format!(
-            "  <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" fill=\"#{}\">{}</text>\n",
-            drawing::number(drawing::DRAW_MARGIN_MM + 2.5),
-            drawing::number(title_y + 5.6 + index as f64 * 5.6),
-            if index == 0 { "2.4" } else { "2.0" },
-            drawing::hex(if index == 0 { drawing::INK } else { drawing::MUTED }),
-            drawing::escape_xml(line)
-        ));
-    }
+    drawing::push_block_svg(&mut svg, 2.5, 3.0, &laid_title);
+    svg.push_str("  </g>\n");
 
     drawing::svg_end(&mut svg);
     let summary = ReflowDrawingSummary {

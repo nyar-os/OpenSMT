@@ -28,11 +28,9 @@ pub const PAGE_HEIGHT_MM: f64 = 210.0;
 pub const ROWS_PER_PAGE: usize = 20;
 
 const PAGE_MARGIN_MM: f64 = 12.0;
-const HEADER_HEIGHT_MM: f64 = 30.0;
-const ROW_HEIGHT_MM: f64 = 7.2;
-const FOOTER_HEIGHT_MM: f64 = 20.0;
-const COLUMNS: [f64; 8] = [0.0, 20.0, 40.0, 84.0, 112.0, 134.0, 166.0, 196.0];
-const HEADERS: [&str; 8] = ["SLOT", "LANE", "PART NUMBER", "NOZZLE", "TAPE MM", "QTY", "ASSIGNED", "REFERENCE DESIGNATORS"];
+const HEADER_HEIGHT_MM: f64 = 28.0;
+const ROW_HEIGHT_MM: f64 = 6.0;
+const FOOTER_HEIGHT_MM: f64 = 22.0;
 
 /// Counts of a rendered setup sheet.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -179,7 +177,7 @@ pub fn render_svg(document: &SmtDocument, id: &str) -> Result<SetupSheet, SmtErr
     let width = PAGE_WIDTH_MM;
     // A table with a handful of rows must not leave half a page empty.
     let rows_on_page = plan.rows.len().clamp(1, ROWS_PER_PAGE) as f64;
-    let page_height = (HEADER_HEIGHT_MM + rows_on_page * ROW_HEIGHT_MM + 12.0 + FOOTER_HEIGHT_MM + 8.0).max(110.0);
+    let page_height = HEADER_HEIGHT_MM + rows_on_page * ROW_HEIGHT_MM + 10.0 + FOOTER_HEIGHT_MM + 2.0 * PAGE_MARGIN_MM;
     let height = pages as f64 * page_height + (pages.saturating_sub(1)) as f64 * gap;
     let mut svg = String::new();
     drawing::svg_begin_framed(&mut svg, width, height, false);
@@ -246,65 +244,52 @@ fn push_page(svg: &mut String, plan: &Plan, page: usize, offset_y: f64, page_hei
         drawing::hex(drawing::PANEL_EDGE)
     ));
     svg.push_str(&format!(
-        "    <text x=\"4\" y=\"9\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.2\" font-weight=\"bold\" fill=\"#{}\">SMT SETUP SHEET</text>\n",
+        "    <text x=\"4\" y=\"9\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"4.2\" font-weight=\"bold\" fill=\"#{}\">SMT SETUP SHEET</text>\n",
         drawing::hex(drawing::INK)
     ));
     svg.push_str(&format!(
-        "    <text x=\"4\" y=\"14.4\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">nozzle and feeder schedule | nozzle class and tape width derived from the package rules</text>\n",
+        "    <text x=\"4\" y=\"14.4\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" fill=\"#{}\">nozzle and feeder schedule | nozzle class and tape width derived from the package rules</text>\n",
         drawing::hex(drawing::MUTED)
     ));
     let table_y = HEADER_HEIGHT_MM;
-    for (index, label) in HEADERS.iter().enumerate() {
-        svg.push_str(&format!(
-            "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.9\" fill=\"#{}\">{}</text>\n",
-            drawing::number(4.0 + COLUMNS[index]),
-            drawing::number(table_y),
-            drawing::hex(drawing::MUTED),
-            label
-        ));
-    }
-    svg.push_str(&format!(
-        "    <line x1=\"0\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
-        drawing::number(table_y + 2.4),
-        drawing::number(content_w),
-        drawing::number(table_y + 2.4),
-        drawing::hex(drawing::PANEL_EDGE)
-    ));
-    for (index, row) in rows_of(plan, page).iter().enumerate() {
-        let row_y = table_y + 6.0 + index as f64 * ROW_HEIGHT_MM;
-        if index % 2 == 1 {
-            svg.push_str(&format!(
-                "    <rect x=\"0\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"#{}\"/>\n",
-                drawing::number(row_y - 4.8),
-                drawing::number(content_w),
-                drawing::number(ROW_HEIGHT_MM),
-                drawing::hex(drawing::BOARD_FILL)
-            ));
-        }
-        let values = [
-            format!("{:02}", page * ROWS_PER_PAGE + index + 1),
-            row.lane.clone(),
-            row.package.clone(),
-            row.nozzle.clone(),
-            format!("{:.0}", row.tape),
-            row.quantity.clone(),
-            row.assigned.to_string(),
-            row.refdes.clone(),
-        ];
-        for (column, value) in values.iter().enumerate() {
-            svg.push_str(&format!(
-                "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">{}</text>\n",
-                drawing::number(4.0 + COLUMNS[column]),
-                drawing::number(row_y),
-                drawing::hex(drawing::INK),
-                drawing::escape_xml(value)
-            ));
-        }
-    }
+    let rows: Vec<Vec<String>> = rows_of(plan, page)
+        .iter()
+        .enumerate()
+        .map(|(index, row)| {
+            vec![
+                format!("{:02}", page * ROWS_PER_PAGE + index + 1),
+                row.lane.clone(),
+                row.package.clone(),
+                row.nozzle.clone(),
+                format!("{:.0}", row.tape),
+                row.quantity.clone(),
+                row.assigned.to_string(),
+                row.refdes.clone(),
+            ]
+        })
+        .collect();
+    drawing::Table::new(
+        &[
+            ("SLOT", drawing::Align::Right),
+            ("LANE", drawing::Align::Left),
+            ("PART NUMBER", drawing::Align::Left),
+            ("NOZZLE", drawing::Align::Left),
+            ("TAPE MM", drawing::Align::Right),
+            ("QTY", drawing::Align::Right),
+            ("ASSIGNED", drawing::Align::Right),
+            ("REFERENCE DESIGNATORS", drawing::Align::Left),
+        ],
+        rows,
+        drawing::FONT_TABLE,
+        4.0,
+    )
+    .with_row(ROW_HEIGHT_MM)
+    .fit_width(content_w - 8.0)
+    .push_svg(svg, 4.0, table_y + 2.0, "setup-table");
     if plan.rows.is_empty() {
         svg.push_str(&format!(
-            "    <text x=\"4\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.2\" fill=\"#{}\">no feeder lanes declared</text>\n",
-            drawing::number(table_y + 10.0),
+            "    <text x=\"4\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.9\" fill=\"#{}\">no feeder lanes declared</text>\n",
+            drawing::number(table_y + 12.0),
             drawing::hex(drawing::MUTED)
         ));
     }
@@ -317,19 +302,19 @@ fn push_page(svg: &mut String, plan: &Plan, page: usize, offset_y: f64, page_hei
         drawing::hex(drawing::PANEL_EDGE)
     ));
     svg.push_str(&format!(
-        "    <text x=\"3\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.1\" font-weight=\"bold\" fill=\"#{}\">{}</text>\n",
+        "    <text x=\"3\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.7\" font-weight=\"bold\" fill=\"#{}\">{}</text>\n",
         drawing::number(footer_y + 6.0),
         drawing::hex(drawing::INK),
         drawing::escape_xml(&title_line(plan, page))
     ));
     svg.push_str(&format!(
-        "    <text x=\"3\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">{}</text>\n",
+        "    <text x=\"3\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" fill=\"#{}\">{}</text>\n",
         drawing::number(footer_y + 11.6),
         drawing::hex(drawing::MUTED),
         drawing::escape_xml(&stamp(plan))
     ));
     svg.push_str(&format!(
-        "    <text x=\"3\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">unassigned components: {}</text>\n",
+        "    <text x=\"3\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" fill=\"#{}\">unassigned components: {}</text>\n",
         drawing::number(footer_y + 15.6),
         drawing::hex(drawing::MUTED),
         plan.unassigned
@@ -351,31 +336,42 @@ fn push_page_pdf(pdf: &mut Pdf, plan: &Plan, page: usize) {
         "nozzle and feeder schedule | nozzle class and tape width derived from the package rules",
     );
     let table_y = y + HEADER_HEIGHT_MM;
-    for (index, label) in HEADERS.iter().enumerate() {
-        pdf.text(x + 4.0 + COLUMNS[index], table_y, 1.9, drawing::MUTED, label);
-    }
-    pdf.line(x, table_y + 2.4, x + content_w, table_y + 2.4, drawing::PANEL_EDGE, 0.3);
-    for (index, row) in rows_of(plan, page).iter().enumerate() {
-        let row_y = table_y + 6.0 + index as f64 * ROW_HEIGHT_MM;
-        if index % 2 == 1 {
-            pdf.rect(x, row_y - 4.8, content_w, ROW_HEIGHT_MM, Some(drawing::BOARD_FILL), None);
-        }
-        let values = [
-            format!("{:02}", page * ROWS_PER_PAGE + index + 1),
-            row.lane.clone(),
-            row.package.clone(),
-            row.nozzle.clone(),
-            format!("{:.0}", row.tape),
-            row.quantity.clone(),
-            row.assigned.to_string(),
-            row.refdes.clone(),
-        ];
-        for (column, value) in values.iter().enumerate() {
-            pdf.text(x + 4.0 + COLUMNS[column], row_y, 2.0, drawing::INK, value);
-        }
-    }
+    let rows: Vec<Vec<String>> = rows_of(plan, page)
+        .iter()
+        .enumerate()
+        .map(|(index, row)| {
+            vec![
+                format!("{:02}", page * ROWS_PER_PAGE + index + 1),
+                row.lane.clone(),
+                row.package.clone(),
+                row.nozzle.clone(),
+                format!("{:.0}", row.tape),
+                row.quantity.clone(),
+                row.assigned.to_string(),
+                row.refdes.clone(),
+            ]
+        })
+        .collect();
+    drawing::Table::new(
+        &[
+            ("SLOT", drawing::Align::Right),
+            ("LANE", drawing::Align::Left),
+            ("PART NUMBER", drawing::Align::Left),
+            ("NOZZLE", drawing::Align::Left),
+            ("TAPE MM", drawing::Align::Right),
+            ("QTY", drawing::Align::Right),
+            ("ASSIGNED", drawing::Align::Right),
+            ("REFERENCE DESIGNATORS", drawing::Align::Left),
+        ],
+        rows,
+        drawing::FONT_TABLE,
+        4.0,
+    )
+    .with_row(ROW_HEIGHT_MM)
+    .fit_width(content_w - 8.0)
+    .push_pdf(pdf, x + 4.0, table_y + 2.0);
     if plan.rows.is_empty() {
-        pdf.text(x + 4.0, table_y + 10.0, 2.2, drawing::MUTED, "no feeder lanes declared");
+        pdf.text(x + 4.0, table_y + 12.0, 2.9, drawing::MUTED, "no feeder lanes declared");
     }
     let footer_y = y + PAGE_HEIGHT_MM - 2.0 * PAGE_MARGIN_MM - FOOTER_HEIGHT_MM;
     pdf.rect(x, footer_y, content_w, FOOTER_HEIGHT_MM, Some("1 1 1"), Some((drawing::PANEL_EDGE, 0.4)));

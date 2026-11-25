@@ -13,17 +13,17 @@ use serde::Serialize;
 
 use crate::{
     SmtError,
-    drawing::{self, DrawingLoss, TITLE_HEIGHT_MM},
+    drawing::{self, DrawingLoss},
     model::SmtDocument,
     place,
 };
 
 /// Width of the sheet content beside the margins, in millimetres.
-const CONTENT_MM: f64 = 170.0;
+const CONTENT_MM: f64 = 210.0;
 /// Height of one lane row without mapping lines, in millimetres.
-const ROW_MM: f64 = 11.0;
+const ROW_MM: f64 = 12.0;
 /// Height of one wrapped reference designator line, in millimetres.
-const LINE_MM: f64 = 3.2;
+const LINE_MM: f64 = 3.6;
 /// Width of the load bar, in millimetres.
 const BAR_MM: f64 = 30.0;
 /// Longest mapping line before the reference list wraps, in characters.
@@ -159,20 +159,19 @@ struct Layout {
     height: f64,
     rows_y: f64,
     title_y: f64,
+    title_h: f64,
 }
 
 impl Layout {
     fn new(plan: &Plan) -> Self {
-        let rows_y = drawing::DRAW_MARGIN_MM + 18.0;
+        let rows_y = drawing::DRAW_MARGIN_MM + 22.0;
         let rows_height = plan.lanes.iter().map(|lane| ROW_MM + wrapped_lines(&lane.refdes) as f64 * LINE_MM).sum::<f64>();
         let notes_y = if plan.lanes.is_empty() { rows_y + 8.0 } else { rows_y + rows_height + 6.0 };
+        let width = 2.0 * drawing::DRAW_MARGIN_MM + CONTENT_MM;
+        let laid = drawing::lay_out(&title_text(plan, "1 mm = 8 px"), CONTENT_MM - 5.0);
+        let title_h = drawing::block_height(&laid) + 6.0;
         let title_y = notes_y + 10.0;
-        Self {
-            width: 2.0 * drawing::DRAW_MARGIN_MM + CONTENT_MM,
-            height: title_y + TITLE_HEIGHT_MM + drawing::DRAW_MARGIN_MM,
-            rows_y,
-            title_y,
-        }
+        Self { width, height: title_y + title_h + drawing::DRAW_MARGIN_MM, rows_y, title_y, title_h }
     }
 }
 
@@ -225,29 +224,29 @@ fn push_svg_header(svg: &mut String, plan: &Plan, layout: &Layout) {
     let y = drawing::DRAW_MARGIN_MM;
     svg.push_str(&format!("  <g id=\"header\" transform=\"translate({} {})\">\n", drawing::number(x), drawing::number(y)));
     svg.push_str(&format!(
-        "    <text x=\"0\" y=\"4\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"3.2\" font-weight=\"bold\" fill=\"#{}\">FEEDER SETUP</text>\n",
+        "    <text x=\"0\" y=\"5.2\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"4.2\" font-weight=\"bold\" fill=\"#{}\">FEEDER SETUP</text>\n",
         drawing::hex(drawing::INK)
     ));
     svg.push_str(&format!(
-        "    <text x=\"0\" y=\"8.6\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">tape bank, lanes in feeder id order</text>\n",
+        "    <text x=\"0\" y=\"9.8\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" fill=\"#{}\">tape bank, lanes in feeder id order</text>\n",
         drawing::hex(drawing::MUTED)
     ));
     svg.push_str(&format!(
-        "    <line x1=\"0\" y1=\"12.4\" x2=\"{}\" y2=\"12.4\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
+        "    <line x1=\"0\" y1=\"13.2\" x2=\"{}\" y2=\"13.2\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
         drawing::number(CONTENT_MM),
         drawing::hex(drawing::RULE)
     ));
     for (column, label) in ["SLOT", "PACKAGE", "PITCH", "LOADED", "LOAD BAR", "ASSIGNED", "REMAINING"].iter().enumerate() {
-        let offset = [0.0, 20.0, 55.0, 80.0, 104.0, 140.0, 158.0][column];
+        let offset = [0.0, 22.0, 62.0, 90.0, 116.0, 152.0, 182.0][column];
         svg.push_str(&format!(
-            "    <text x=\"{}\" y=\"16.6\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" fill=\"#{}\">{label}</text>\n",
+            "    <text x=\"{}\" y=\"17.4\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.3\" fill=\"#{}\">{label}</text>\n",
             drawing::number(offset),
             drawing::hex(drawing::MUTED)
         ));
     }
     if plan.lanes.is_empty() {
         svg.push_str(&format!(
-            "    <text x=\"0\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.1\" fill=\"#{}\">no feeder lanes declared</text>\n",
+            "    <text x=\"0\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.7\" fill=\"#{}\">no feeder lanes declared</text>\n",
             drawing::number(layout.rows_y - y + 4.0),
             drawing::hex(drawing::MUTED)
         ));
@@ -269,38 +268,38 @@ fn push_svg_lanes(svg: &mut String, plan: &Plan, layout: &Layout) {
     for lane in &plan.lanes {
         svg.push_str(&format!("    <g data-lane=\"{}\">\n", drawing::escape_xml(&lane.id)));
         svg.push_str(&format!(
-            "      <rect x=\"0\" y=\"{}\" width=\"14\" height=\"9\" fill=\"#{}\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
+            "      <rect x=\"0\" y=\"{}\" width=\"16\" height=\"9\" fill=\"#{}\" stroke=\"#{}\" stroke-width=\"0.3\"/>\n",
             drawing::number(row_y + 1.0),
             drawing::hex(drawing::BOARD_FILL),
             drawing::hex(drawing::BOARD_EDGE)
         ));
         svg.push_str(&format!(
-            "      <text x=\"7\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.2\" text-anchor=\"middle\" fill=\"#{}\">{}</text>\n",
+            "      <text x=\"8\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.8\" text-anchor=\"middle\" fill=\"#{}\">{}</text>\n",
             drawing::number(row_y + 6.4),
             drawing::hex(drawing::INK),
             drawing::escape_xml(&lane.id)
         ));
         svg.push_str(&format!(
-            "      <text x=\"20\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.2\" fill=\"#{}\">{}</text>\n",
+            "      <text x=\"22\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.8\" fill=\"#{}\">{}</text>\n",
             drawing::number(row_y + 6.4),
             drawing::hex(drawing::INK),
             drawing::escape_xml(&lane.package)
         ));
         svg.push_str(&format!(
-            "      <text x=\"55\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.2\" fill=\"#{}\">{}</text>\n",
+            "      <text x=\"62\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.8\" fill=\"#{}\">{}</text>\n",
             drawing::number(row_y + 6.4),
             drawing::hex(drawing::INK),
             drawing::number(lane.pitch)
         ));
         svg.push_str(&format!(
-            "      <text x=\"80\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.2\" fill=\"#{}\">{}/{}</text>\n",
+            "      <text x=\"90\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.8\" fill=\"#{}\">{}/{}</text>\n",
             drawing::number(row_y + 6.4),
             drawing::hex(drawing::INK),
             lane.loaded,
             lane.capacity
         ));
         svg.push_str(&format!(
-            "      <rect data-load-bar=\"true\" x=\"104\" y=\"{}\" width=\"{}\" height=\"3\" fill=\"none\" stroke=\"#{}\" stroke-width=\"0.2\"/>\n",
+            "      <rect data-load-bar=\"true\" x=\"116\" y=\"{}\" width=\"{}\" height=\"3\" fill=\"none\" stroke=\"#{}\" stroke-width=\"0.2\"/>\n",
             drawing::number(row_y + 4.0),
             drawing::number(BAR_MM),
             drawing::hex(drawing::RULE)
@@ -308,27 +307,27 @@ fn push_svg_lanes(svg: &mut String, plan: &Plan, layout: &Layout) {
         let ratio = if lane.capacity == 0 { 0.0 } else { (lane.loaded as f64 / lane.capacity as f64).min(1.0) };
         if ratio > 0.0 {
             svg.push_str(&format!(
-                "      <rect x=\"104\" y=\"{}\" width=\"{}\" height=\"3\" fill=\"#{}\" stroke=\"none\"/>\n",
+                "      <rect x=\"116\" y=\"{}\" width=\"{}\" height=\"3\" fill=\"#{}\" stroke=\"none\"/>\n",
                 drawing::number(row_y + 4.0),
                 drawing::number(BAR_MM * ratio),
                 drawing::hex(drawing::TOP_EDGE)
             ));
         }
         svg.push_str(&format!(
-            "      <text x=\"140\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.2\" fill=\"#{}\">{}</text>\n",
+            "      <text x=\"152\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.8\" fill=\"#{}\">{}</text>\n",
             drawing::number(row_y + 6.4),
             drawing::hex(drawing::INK),
             lane.assigned
         ));
         svg.push_str(&format!(
-            "      <text x=\"158\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.2\" fill=\"#{}\">{}</text>\n",
+            "      <text x=\"182\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.8\" fill=\"#{}\">{}</text>\n",
             drawing::number(row_y + 6.4),
             drawing::hex(drawing::INK),
             lane.remaining
         ));
         for (index, line) in wrap(&lane.refdes).iter().enumerate() {
             svg.push_str(&format!(
-                "      <text x=\"20\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"1.8\" fill=\"#{}\">{}</text>\n",
+                "      <text x=\"22\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.3\" fill=\"#{}\">{}</text>\n",
                 drawing::number(row_y + 12.0 + index as f64 * LINE_MM),
                 drawing::hex(drawing::MUTED),
                 drawing::escape_xml(line)
@@ -349,14 +348,14 @@ fn push_svg_title(svg: &mut String, plan: &Plan, layout: &Layout) {
         drawing::number(y - 10.0)
     ));
     svg.push_str(&format!(
-        "    <text x=\"0\" y=\"0\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">load bar = loaded / capacity; mapping lines list the assigned reference designators</text>\n",
+        "    <text x=\"0\" y=\"2.8\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" fill=\"#{}\">load bar = loaded / capacity; mapping lines list the assigned reference designators</text>\n",
         drawing::hex(drawing::MUTED)
     ));
     let unassigned = if plan.unassigned.is_empty() { vec!["none".to_string()] } else { wrap(&plan.unassigned) };
     for (index, line) in unassigned.iter().enumerate() {
         svg.push_str(&format!(
-            "    <text x=\"0\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.0\" fill=\"#{}\">unassigned: {}</text>\n",
-            drawing::number(4.2 + index as f64 * 2.4),
+            "    <text x=\"0\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.6\" fill=\"#{}\">unassigned: {}</text>\n",
+            drawing::number(6.4 + index as f64 * 3.2),
             drawing::hex(drawing::MUTED),
             drawing::escape_xml(line)
         ));
@@ -366,29 +365,28 @@ fn push_svg_title(svg: &mut String, plan: &Plan, layout: &Layout) {
     svg.push_str(&format!(
         "    <rect x=\"0\" y=\"0\" width=\"{}\" height=\"{}\" fill=\"#ffffff\" stroke=\"#{}\" stroke-width=\"0.45\"/>\n",
         drawing::number(CONTENT_MM),
-        drawing::number(TITLE_HEIGHT_MM),
+        drawing::number(layout.title_h),
         drawing::hex(drawing::PANEL_EDGE)
     ));
+    let laid = drawing::lay_out(&title_text(plan, "1 mm = 8 px"), CONTENT_MM - 5.0);
+    drawing::push_block_svg(svg, 2.5, 3.0, &laid);
+    svg.push_str("  </g>\n");
+}
+
+fn title_text(plan: &Plan, scale_note: &str) -> Vec<drawing::TextLine> {
     // The allocation is for a single board, so a multi-board panel is annotated
     // with its multiplier instead of a millimetre scale note.
     let multiplier = if plan.boards > 1 { format!(" | per board (x{} on the panel)", plan.boards) } else { String::new() };
-    let lines = [
-        format!("OpenSMT feeder setup drawing | drawing OSMT-FD-01 | revision {}", plan.revision),
-        drawing::title_stamp("feeder setup", "OSMT-FD-01", &plan.id, &plan.units, "1:1", "n/a (feeder bank)"),
-        format!(
+    let title = |text: String| drawing::TextLine { text, size: drawing::FONT_TITLE, emphasis: true };
+    let body = |text: String| drawing::TextLine { text, size: drawing::FONT_BODY, emphasis: false };
+    vec![
+        title(format!("OpenSMT feeder setup drawing | drawing OSMT-FD-01 | revision {}", plan.revision)),
+        body(drawing::title_stamp("feeder setup", "OSMT-FD-01", &plan.id, &plan.units, "1:1", "n/a (feeder bank)")),
+        body(format!(
             "{} lane(s) | {} component(s) mapped | {} unassigned{}",
             plan.summary.lanes, plan.summary.mapped_components, plan.summary.unassigned_components, multiplier
-        ),
-        "lane order = feeder id order; the allocation caps every lane at its loaded quantity".to_string(),
-    ];
-    for (index, line) in lines.iter().enumerate() {
-        svg.push_str(&format!(
-            "    <text x=\"2.5\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" fill=\"#{}\">{}</text>\n",
-            drawing::number(5.6 + index as f64 * 5.6),
-            if index == 0 { "2.9" } else { "2.2" },
-            if index == 0 { drawing::hex(drawing::INK) } else { drawing::hex(drawing::MUTED) },
-            drawing::escape_xml(line)
-        ));
-    }
-    svg.push_str("  </g>\n");
+        )),
+        body("lane order = feeder id order; the allocation caps every lane at its loaded quantity".to_string()),
+        body(format!("millimetres; {scale_note}")),
+    ]
 }

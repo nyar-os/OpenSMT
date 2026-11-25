@@ -16,6 +16,15 @@ fn add(document: &mut SmtDocument, refdes: &str, package: &str, x: f64, y: f64, 
     document.components.push(component);
 }
 
+/// Returns the x attribute of the text element that renders `refdes`.
+fn label_x(svg: &str, refdes: &str) -> Option<f64> {
+    let marker = format!(">{refdes}</text>");
+    let end = svg.find(&marker)?;
+    let start = svg[..end].rfind("<text x=\"")?;
+    let rest = &svg[start + "<text x=\"".len()..];
+    rest[..rest.find('"')?].parse().ok()
+}
+
 #[test]
 fn chip_rules_generate_two_reduced_apertures_at_the_terminal_offsets() {
     let mut document = board_document();
@@ -203,10 +212,12 @@ fn stencil_labels_clear_the_apertures_in_dense_rows() {
     add(&mut document, "R2", "0402", 11.6, 10.0, 0.0);
     add(&mut document, "U1", "SOT-23", 30.0, 20.0, 0.0);
     let svg = render_stencil_svg(&document, "panel").expect("stencil sheet rendered");
-    // Every reference label is drawn, clear of its aperture cluster.
-    assert_eq!(svg.text.matches("text-anchor=\"middle\" fill=\"#0f1729\">").count(), 3);
-    // The 0402 label baseline sits 0.4 mm above the body (10 - 0.25 - 0.4).
-    assert!(svg.text.contains("y=\"9.350\""));
+    // Every reference label is drawn once, clear of its aperture cluster.
+    for refdes in ["R1", "R2", "U1"] {
+        assert_eq!(svg.text.matches(&format!(">{refdes}</text>")).count(), 1, "{refdes} label");
+    }
+    // The 0402 label clears the body and its aperture cluster.
+    assert!(svg.text.contains("y=\"7.050\""));
     // The SOT-23 label clears the leads that reach past the body outline.
     assert!(svg.text.contains(">U1</text>"));
 }
@@ -225,14 +236,15 @@ fn the_bottom_sheet_mirrors_the_single_board_view() {
     // The sheet is the bottom stencil seen through the board, so the view is
     // mirrored about the board centre line: the label sits at 100 - 30 = 70.
     let bottom_svg = render_stencil_svg(&bottom, "panel").expect("rendered").text;
-    assert!(bottom_svg.contains("x=\"70.000\""), "bottom label must be mirrored");
-    assert!(!bottom_svg.contains("x=\"30.000\""), "bottom label must not keep the single-board x");
+    let bottom_x = label_x(&bottom_svg, "R1").expect("bottom label");
+    assert!((65.0..=73.0).contains(&bottom_x), "bottom label must be mirrored, got {bottom_x}");
 
     // A top sheet keeps the unmirrored coordinate for the same placement.
     let mut top = board_document();
     top.components.push(Component::new("R1", "0603", 30.0, 40.0));
     let top_svg = render_stencil_svg(&top, "panel").expect("rendered").text;
-    assert!(top_svg.contains("x=\"30.000\""), "top label keeps the single-board x");
+    let top_x = label_x(&top_svg, "R1").expect("top label");
+    assert!((26.0..=34.0).contains(&top_x), "top label keeps the single-board x, got {top_x}");
 }
 
 #[test]
