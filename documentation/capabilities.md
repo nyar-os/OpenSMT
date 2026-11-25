@@ -668,13 +668,57 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt pick-cycle panel.osmt --heads 4
     ```
 
+37. **Pick-cycle matrix drawing.** `export --format pick-cycle-svg` renders the
+    `pick-cycle` report as a cycle × head-slot matrix: one row per cycle, one
+    column per head slot, used slots filled with the side colour and carrying the
+    package plus reference designator, unused slots greyed out, and a cycle
+    detail column repeating package, side, pick count and references. A summary
+    band reports utilisation, head slots, picks, wasted slots and the cycles
+    saved against a single-head program, with a utilisation bar. Export formats
+    carry no options, so the sheet always plans four heads and says so in the
+    subtitle; acceleration, vision, tape advance and nozzle physics are not
+    modelled. It fails with the same feeder coverage codes as the report. Text is
+    ASCII-only, the render is deterministic and byte-identical on repeat, and the
+    document is never modified.
+
+    ```shell
+    open-smt export panel.osmt --format pick-cycle-svg --out pick-cycle.svg
+    ```
+
+38. **Consumption drawing.** `export --format consumption-svg` renders the
+    `consumption` report for a fixed 100-board run: a horizontal bar per feeder
+    lane stacks net picks and start-up scrap against the first-reel threshold
+    (drawn as a dashed tick; a bar past it needs a splice), a value column lists
+    picks, reel count and parts left on the last reel, and a reel-change timeline
+    marks the board number at which each lane exhausts a loaded reel. The summary
+    band reports picks, gross, scrap, splice count and short lanes. A legend
+    explains the bars, the threshold and the changeover marker. The report is the
+    same one as `feeder consumption`, so missing or undersized lanes fail the
+    same way; partial reels, moisture exposure and changeover time are not
+    modelled. Text is ASCII-only, the render is deterministic and byte-identical
+    on repeat, and the document is never modified.
+
+    ```shell
+    open-smt export panel.osmt --format consumption-svg --out consumption.svg
+    ```
+
 ## Sheet conventions
 
 Every generated sheet has a drawing frame, a title block with the drawing name,
-drawing number, work order (the document id), units, scale and face, and margins
-of at least 8 % of the sheet width. Bottom-side geometry is mirrored about the X
-axis and the face is stated in the title block. Labels are placed so that they
-avoid pads, bodies and the other labels, and legends only list styles the sheet
+drawing number, work order (the document id), units, scale and face, and an
+8 mm drawing margin that is also the frame inset. The content is measured and
+fitted into that area, so the panel grid or chart fills at least 60 % of the
+sheet instead of leaving a wide blank band. Bottom-side geometry is mirrored
+about the X axis and the face is stated in the title block.
+
+Labels are placed in the first free slot of eight candidates around their body
+(above/below left, centre and right, plus both sides); a side label gets a leader
+line and a label that finds no free slot is omitted rather than printed over a
+neighbour. The side columns carry a package legend, so a dense board can print
+reference designators only and still name every package. Every table measures its
+own columns from the cell contents, drops empty columns, right-aligns numeric
+cells, sets row height from the font and stretches to the available width; no
+cell is clipped and no two columns overlap. Legends only list styles the sheet
 actually draws.
 
 ## KiCad PCB import

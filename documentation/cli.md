@@ -730,7 +730,7 @@ Neither document is modified.
 ## export
 
 ```shell
-open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|stencil-svg|stencil-pdf|feeder-svg|sequence-svg|sequence-pdf|reflow-svg|panel-svg|heatmap-svg|balance-svg|setup-svg|setup-pdf --out <path>
+open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|stencil-svg|stencil-pdf|feeder-svg|sequence-svg|sequence-pdf|reflow-svg|panel-svg|heatmap-svg|balance-svg|setup-svg|setup-pdf|pick-cycle-svg|consumption-svg --out <path>
 ```
 
 | Format | Content |
@@ -754,13 +754,18 @@ open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|sten
 | `balance-svg` | line-balance bar chart as SVG: one cycle-time bar per station, the bottleneck highlighted, a dashed average target line and a seconds axis (always three machines) |
 | `setup-svg` | nozzle and feeder setup table as paginated SVG: slot, lane, part number, nozzle, tape width, quantity, assigned count and reference designators |
 | `setup-pdf` | the same setup table as a paginated A4 landscape PDF with a repeated header and `page N of M` |
+| `pick-cycle-svg` | pick-cycle matrix as SVG: one row per cycle, one column per head slot with package/reference in used slots and greyed unused slots, a cycle detail column and a utilisation summary band (always four heads) |
+| `consumption-svg` | consumption drawing as SVG: a gross-picks bar per feeder lane with the first-reel threshold tick, picks/reels/left values, and a reel-change timeline over a 100-board run |
 
 The `svg` and `pdf` sheets use a millimetre `viewBox`; the SVG opens at 8 px/mm
 and the PDF maps 1 mm to 2.834646 pt before fitting. Component bodies take their
 length and width from the package rules table, falling back to 2.0 × 1.2 mm for
-unrecognised packages, and a multi-board panel labels board 1 only. Labels scale
-with the body and are omitted where they would collide with a neighbouring body
-or label. Labels are ASCII-only: non-ASCII text is
+unrecognised packages, and a multi-board panel labels board 1 only. Labels use
+the first free slot of eight candidates around each body (above/below left,
+centre and right, plus both sides), a side label gets a leader line, and a label
+with no free slot is omitted rather than printed over a neighbour. The side
+column carries the package legend so a dense board still names every package.
+Labels are ASCII-only: non-ASCII text is
 written as `?` and reported under `losses` as `drawing/non-ascii-text`, while
 `drawing` reports the panel size, board/component/placement counts and the
 number of fallback footprints. An empty document still produces a framed sheet
@@ -796,9 +801,18 @@ non-ASCII losses are reported as `balance/non-ascii-text`. The `setup-svg` and
 `setup-pdf` sheets (also accepted as `setup-sheet-svg` and `setup-sheet-pdf`)
 read the same allocation as the `feeders` report, derive the nozzle class and
 tape width from the package rules and report losses as `setup/non-ascii-text`.
-Both are byte-identical on repeat. Every sheet has a drawing frame, a title
-block with name, drawing number, work order, units, scale and face, and margins
-of at least 8 % of the width; bottom-side geometry is mirrored about the X axis.
+Both are byte-identical on repeat.
+
+The `pick-cycle-svg` sheet renders the `pick-cycle` report with four heads and
+fails with the same feeder coverage codes; `consumption-svg` renders the
+`consumption` report for a fixed 100-board run and fails like
+`feeder consumption`. Neither carries a `drawing` summary or non-ASCII losses
+(the fixed package and reference text is sanitised the same way). Every sheet has
+a drawing frame, a title block with name, drawing number, work order, units,
+scale and face, an 8 mm margin, and content measured and fitted so it fills at
+least 60 % of the page; bottom-side geometry is mirrored about the X axis. Tables
+measure their columns, drop empty columns, right-align numbers and stretch to the
+available width without clipping.
 
 These are export formats. `kicad`, `altium` and `odb` are still declared but
 unimplemented and exit with code `2`. The separate `import` command reads a
