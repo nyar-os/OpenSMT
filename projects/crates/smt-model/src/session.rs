@@ -115,6 +115,10 @@ pub enum ExportFormat {
     SetupSvg,
     /// The nozzle and feeder setup table as a paginated PDF.
     SetupPdf,
+    /// The pick-cycle matrix as SVG.
+    PickCycleSvg,
+    /// The feeder consumption drawing as SVG.
+    ConsumptionSvg,
 }
 
 impl ExportFormat {
@@ -140,6 +144,8 @@ impl ExportFormat {
             Self::BalanceSvg => "balance-svg",
             Self::SetupSvg => "setup-svg",
             Self::SetupPdf => "setup-pdf",
+            Self::PickCycleSvg => "pick-cycle-svg",
+            Self::ConsumptionSvg => "consumption-svg",
         }
     }
 }
@@ -168,11 +174,13 @@ impl FromStr for ExportFormat {
             "balance-svg" | "line-balance-svg" => Ok(Self::BalanceSvg),
             "setup-svg" | "setup-sheet-svg" => Ok(Self::SetupSvg),
             "setup-pdf" | "setup-sheet-pdf" => Ok(Self::SetupPdf),
+            "pick-cycle-svg" => Ok(Self::PickCycleSvg),
+            "consumption-svg" => Ok(Self::ConsumptionSvg),
             "kicad" | "altium" | "odb" => Err(crate::not_implemented(&format!("`{value}` export"))),
             other => Err(SmtError::new(
                 "cli/unknown-format",
                 format!(
-                    "unknown export format `{other}`; only program, feeders, fai, json, md, svg or pdf, plus stencil, stencil-svg, stencil-pdf, feeder-svg, sequence-svg, sequence-pdf, reflow-svg, panel-svg, heatmap-svg, balance-svg, setup-svg or setup-pdf is supported"
+                    "unknown export format `{other}`; only program, feeders, fai, json, md, svg or pdf, plus stencil, stencil-svg, stencil-pdf, feeder-svg, sequence-svg, sequence-pdf, reflow-svg, panel-svg, heatmap-svg, balance-svg, setup-svg, setup-pdf, pick-cycle-svg or consumption-svg is supported"
                 ),
             )),
         }
@@ -1003,6 +1011,16 @@ impl OpenSmt {
             }
             ExportFormat::SetupPdf => {
                 let drawing = setup_sheet::render_pdf(document, id)?;
+                losses = drawing.summary.losses();
+                drawing.text
+            }
+            ExportFormat::PickCycleSvg => {
+                let drawing = crate::pick_cycle_drawing::render_svg(document, id)?;
+                losses = drawing.summary.losses();
+                drawing.text
+            }
+            ExportFormat::ConsumptionSvg => {
+                let drawing = crate::consumption_drawing::render_svg(document, id)?;
                 losses = drawing.summary.losses();
                 drawing.text
             }

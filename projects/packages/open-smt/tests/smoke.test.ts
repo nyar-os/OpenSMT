@@ -617,6 +617,49 @@ test('feeder and sequence drawings are written through the sdk and the cli', { s
     }
 });
 
+test('pick-cycle and consumption drawings export through the sdk and the cli', { skip: skipWithoutNative }, async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-pick-cycle-'));
+    const file = path.join(directory, 'panel.osmt');
+    const cycleFile = path.join(directory, 'pick-cycle.svg');
+    const consumptionFile = path.join(directory, 'consumption.svg');
+    const cliCycle = path.join(directory, 'cli-pick-cycle.svg');
+    const session = new OpenSMT();
+    try {
+        const document = await session.create(file);
+        await document.addComponent({ refdes: 'R1', package: '0402', x: 10, y: 10 });
+        await document.addComponent({ refdes: 'R2', package: '0402', x: 14, y: 10 });
+        await document.addComponent({ refdes: 'C1', package: '0603', x: 30, y: 20 });
+        await document.addFeeder({ id: 'F1', package: '0402', pitch: 2, capacity: 100, loaded: 100 });
+        await document.addFeeder({ id: 'F2', package: '0603', pitch: 4, capacity: 100 });
+        const before = document.revision;
+
+        const cycle = await document.exportDocument('pick-cycle-svg', cycleFile);
+        assert.equal(cycle.format, 'pick-cycle-svg');
+        assert.ok(cycle.bytes > 0);
+        const cycleText = await fs.readFile(cycleFile, 'utf8');
+        assert.ok(cycleText.includes('PICK CYCLE MATRIX'));
+        assert.ok(cycleText.includes('UTILIZATION'));
+        assert.ok(cycleText.includes('unused head slot'));
+        assert.ok(cycleText.includes('stroke="#d5dbe4"'));
+
+        const consumption = await document.exportDocument('consumption-svg', consumptionFile);
+        assert.equal(consumption.format, 'consumption-svg');
+        assert.ok(consumption.bytes > 0);
+        const consumptionText = await fs.readFile(consumptionFile, 'utf8');
+        assert.ok(consumptionText.includes('FEEDER CONSUMPTION'));
+        assert.ok(consumptionText.includes('REEL CHANGE TIMELINE'));
+        assert.equal(document.revision, before);
+
+        await fs.cp(path.join(packageRoot, 'locales'), cliLocales, { recursive: true, force: true });
+        const cliRun = await run(process.execPath, [cliPath, 'export', file, '--format', 'pick-cycle-svg', '--out', cliCycle]);
+        assert.equal(JSON.parse(cliRun.stdout).format, 'pick-cycle-svg');
+        assert.equal((await fs.readFile(cliCycle)).length, cycle.bytes);
+    } finally {
+        await session.dispose();
+        await fs.rm(directory, { recursive: true, force: true });
+    }
+});
+
 test('the stencil paste report writes JSON and CSV through the sdk and the cli', { skip: skipWithoutNative }, async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'open-smt-paste-'));
     const file = path.join(directory, 'panel.osmt');

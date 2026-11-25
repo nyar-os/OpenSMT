@@ -153,7 +153,9 @@ function exportFormat(value: string, ctx: CommandContext): ExportFormat {
         value === 'heatmap-svg' ||
         value === 'balance-svg' ||
         value === 'setup-svg' ||
-        value === 'setup-pdf'
+        value === 'setup-pdf' ||
+        value === 'pick-cycle-svg' ||
+        value === 'consumption-svg'
     ) {
         return value;
     }

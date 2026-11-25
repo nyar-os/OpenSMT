@@ -386,7 +386,7 @@ export function changeover(path: string, nextPath: string, feederChangeSeconds?:
     );
 }
 
-/** Exports a document as `program`, `feeders`, `fai`, `json`, `md`, `svg`, `pdf`, `stencil`, `stencil-svg`, `stencil-pdf`, `feeder-svg`, `sequence-svg`, `sequence-pdf`, `reflow-svg`, `panel-svg`, `heatmap-svg`, `balance-svg`, `setup-svg` or `setup-pdf`. */
+/** Exports a document as `program`, `feeders`, `fai`, `json`, `md`, `svg`, `pdf`, `stencil`, `stencil-svg`, `stencil-pdf`, `feeder-svg`, `sequence-svg`, `sequence-pdf`, `reflow-svg`, `panel-svg`, `heatmap-svg`, `balance-svg`, `setup-svg`, `setup-pdf`, `pick-cycle-svg` or `consumption-svg`. */
 export function exportDocument(path: string, format: ExportFormat, target: string): ExportReport {
     return decode<ExportReport>(() => binding('export').export(path, format, target));
 }

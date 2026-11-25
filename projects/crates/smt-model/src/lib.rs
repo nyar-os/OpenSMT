@@ -48,6 +48,7 @@ mod changeover;
 mod clearance;
 mod component_list;
 mod consumption;
+mod consumption_drawing;
 mod csv_import;
 mod drawing;
 mod dual;
@@ -66,6 +67,7 @@ mod panel_fit;
 mod panel_map;
 mod paste;
 mod pick_cycle;
+mod pick_cycle_drawing;
 mod place;
 mod reflow;
 mod reflow_window;
@@ -87,6 +89,7 @@ pub use crate::{
     },
     component_list::{ComponentListReport, ComponentPackage, ListedComponent, report as component_list_report},
     consumption::{ConsumptionReport, FeederConsumption, PackageConsumption, plan as plan_consumption},
+    consumption_drawing::{ConsumptionDrawing, ConsumptionDrawingSummary, render_svg as render_consumption_svg},
     drawing::{
         DEFAULT_COMPONENT_HEIGHT_MM, DEFAULT_COMPONENT_WIDTH_MM, Drawing, DrawingLoss, DrawingSummary, PT_PER_MM,
         SVG_PX_PER_MM, render_pdf, render_svg,
@@ -126,6 +129,7 @@ pub use crate::{
         DEFAULT_HEADS as DEFAULT_PICK_CYCLE_HEADS, MAX_HEADS as MAX_PICK_CYCLE_HEADS, PickCycle, PickCycleReport,
         plan as pick_cycle_plan,
     },
+    pick_cycle_drawing::{PickCycleDrawing, PickCycleDrawingSummary, render_svg as render_pick_cycle_svg},
     place::{
         FeederReport, FeederUsage, HEAD_SPEED, PLACE_SECONDS, PackageUsage, PlacementEntry, PlacementReport,
         allocate as allocate_feeders, sequence as sequence_placement, sequence_with as sequence_placement_with,
@@ -246,6 +250,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "heatmapSvg": "the takt heat map drawing is a millimetre SVG of one board with a heat dot per program step plus a package Pareto column; it colours the analytical step time of the default machine model and models no acceleration, tape advance, vision or nozzle physics",
     "balanceSvg": "the line balance drawing is a millimetre SVG bar chart of one station per machine with the slowest station highlighted and the average as a dashed target line; export formats carry no options, so the sheet always balances across three machines and it models no changeover, staffing or machine-specific accelerations",
     "setupSheet": "the setup table lists slot, lane, part number, nozzle, tape width, quantity and assigned reference designators; the document has no nozzle or tape-width field, so both are derived from the fixed package rules (family and body length) and no tape direction, feeder pitch limit or machine slot is modelled; long tables continue on further pages",
+    "pickCycleSvg": "the pick-cycle matrix is a millimetre SVG with one row per cycle and one column per head slot, used slots carrying the package and reference, unused slots greyed out, a utilisation summary band and a cycle detail column; export formats carry no options, so the sheet always plans four heads and it models no nozzle, acceleration or vision constraints",
+    "consumptionSvg": "the consumption sheet is a millimetre SVG with a gross-picks bar per feeder lane against the first-reel threshold and a reel-change timeline; export formats carry no options, so the run always covers 100 boards and it models no partial reels or moisture exposure",
     "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }
 }"#;

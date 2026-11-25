@@ -32,7 +32,9 @@ export type ExportFormat =
     | 'heatmap-svg'
     | 'balance-svg'
     | 'setup-svg'
-    | 'setup-pdf';
+    | 'setup-pdf'
+    | 'pick-cycle-svg'
+    | 'consumption-svg';
 
 /** Severity of a validation finding. */
 export type Severity = 'error' | 'warning' | 'notice';
