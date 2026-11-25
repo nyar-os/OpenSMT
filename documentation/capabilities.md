@@ -33,8 +33,8 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | neutral machine program CSV with readback verification | ✅ supported |
 | feeder setup CSV | ✅ supported |
 | JSON / Markdown reports | ✅ supported |
-| SVG placement drawing (panel, components, labels, legend, title block) | ✅ supported (1:1 mm at 8 px/mm; fixed 2.0 × 1.2 mm footprint; ASCII-only labels) |
-| PDF placement drawing (same sheet, A4 landscape) | ✅ supported (fit to page, Helvetica; same fixed footprint and ASCII-only labels) |
+| SVG placement drawing (panel, components, labels, legend, title block) | ✅ supported (1:1 mm at 8 px/mm; bodies from the package rules table; ASCII-only collision-free labels) |
+| PDF placement drawing (same sheet, A4 landscape) | ✅ supported (fit to page, Helvetica; same body sizing and ASCII-only labels) |
 | paste aperture / stencil generation | ✅ supported (fixed package rules table keyed by package name; one area reduction per family; CSV report plus SVG/PDF sheet) |
 | component height and clearance check | ✅ supported (rotated bounding boxes from the package rules table; warning findings; configurable minimum gap and maximum height) |
 | vendor machine programs (Fuji, Yamaha, Juki, ASM) | ❌ not implemented |
@@ -428,11 +428,16 @@ The machine-readable version is printed by `open-smt capabilities` and by
     its `B1…Bn` label, one rotated rectangle per component on every board,
     reference-label and package/lane labels, a colour legend, a feeder lane
     table and a title block. The title block records the document id, revision,
-    units, board/component/placement/feeder counts, the fixed footprint
-    assumption and the scale. Component rectangles are `2.0 × 1.2` mm
-    (`DEFAULT_COMPONENT_WIDTH_MM` by `DEFAULT_COMPONENT_HEIGHT_MM`) with the
-    stored clockwise rotation, because the model stores no body size; the
-    drawing reports that every component used this default. The lane tag follows
+    units, board/component/placement/feeder counts, the body-size source and the
+    scale. Component bodies take their length and width from the same package
+    rules table the stencil and clearance check use, drawn with the stored
+    clockwise rotation; an unrecognised package falls back to
+    `DEFAULT_COMPONENT_WIDTH_MM` by `DEFAULT_COMPONENT_HEIGHT_MM`
+    (`2.0 × 1.2` mm) and is counted in `defaultSizeComponents`. Labels scale
+    with the body and are placed greedily in document order — the reference
+    designator above the body (or below when that space is taken) and the
+    package/lane line below — and a label that would collide with a neighbouring
+    body or an accepted label is omitted. The lane tag follows
     the current feeder allocation when it is valid and otherwise the first
     feeder in document order that supplies the package. A multi-board panel
     labels board 1 only to keep the sheet readable. Labels are ASCII-only: a
@@ -471,7 +476,9 @@ The machine-readable version is printed by `open-smt capabilities` and by
     component order for a single board. `export --format stencil` writes the
     same entries as CSV, and `export --format stencil-svg` / `stencil-pdf`
     render a stencil sheet that reuses the placement-drawing infrastructure:
-    the board outline, apertures coloured by side, the rule table, a legend and
+    the board outline, apertures coloured by side, reference labels placed
+    above each body and skipped when they would collide with an aperture or
+    another label, the rule table, a legend and
     a title block; labels are ASCII-only and non-ASCII text is reported as
     `stencil/non-ascii-text`. An invalid board reports `board/invalid`. The
     generation is read-only, deterministic and byte-identical on repeat.
@@ -756,7 +763,9 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   sized to the coordinates, components carry no height, and unknown columns are
   refused instead of ignored. Nets, feeders, panel arrays and reflow profiles
   are not read from CSV.
-- Placement drawings use a fixed `2.0 × 1.2` mm footprint because the model
-  stores no body size, and draw labels only on board 1 of a multi-board panel.
+- Placement drawings size component bodies from the fixed package rules table
+  because the model stores no footprint data, draw labels only on board 1 of a
+  multi-board panel and omit labels that would collide with a body or another
+  label.
   They are a placement reference, not a fabrication or assembly drawing, and
   they replace non-ASCII label text with `?` (`drawing/non-ascii-text`).

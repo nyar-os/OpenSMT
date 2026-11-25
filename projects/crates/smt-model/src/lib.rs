@@ -183,8 +183,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "taktHeatmap": "attributes the analytical step time of the default machine model to each step, package and side; it models no acceleration, tape advance, vision or nozzle physics",
     "clearanceCheck": "body outlines come from the fixed package rules table, not footprint data; same-side bodies are compared as rotated bounding boxes, findings are warnings only and height checks apply only to components that store a height",
     "machineProgram": "neutral CSV interchange of the placement program with a readback check; it is not a Fuji, Yamaha, Juki or ASM dialect and takes nozzle ids only from a caller-supplied package map",
-    "svg": "one millimetre placement sheet at 8 px/mm; every component uses a fixed 2.0 x 1.2 mm footprint because the model stores no body size, labels are ASCII-only and a multi-board panel labels board 1 only",
-    "pdf": "one A4 landscape page fitted and centred from the same millimetre layout with Helvetica; the same fixed 2.0 x 1.2 mm footprint, ASCII-only labels and board-1 labels apply",
+    "svg": "one millimetre placement sheet at 8 px/mm; component bodies come from the package rules table with a 2.0 x 1.2 mm generic fallback, labels are ASCII-only, collision-free and drawn on board 1 only",
+    "pdf": "one A4 landscape page fitted and centred from the same millimetre layout with Helvetica; the same rules-table body sizing, ASCII-only collision-free labels and board-1 labels apply",
     "csv": "placement rows only, board sized to fit the coordinates with no outline, height stays null"
   }
 }"#;

@@ -1153,7 +1153,7 @@ export interface DrawingSummary {
     readonly boards: number;
     readonly components: number;
     readonly placements: number;
-    /** Component rectangles drawn with the fixed default footprint. */
+    /** Component rectangles that fell back to the generic 2.0 × 1.2 mm body. */
     readonly defaultSizeComponents: number;
     readonly feederLanes: number;
     /** Non-ASCII characters written as `?`. */

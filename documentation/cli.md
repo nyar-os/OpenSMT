@@ -696,19 +696,21 @@ open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|sten
 | `fai` | first-article inspection sheet CSV, one row per step with empty check columns |
 | `json` | the full report |
 | `md` | Markdown board, feeder, reflow and program tables |
-| `svg` | placement drawing as SVG: panel and board frames, rotated component rectangles, refdes/package/lane labels, legend, feeder table and title block |
+| `svg` | placement drawing as SVG: panel and board frames, rotated component bodies sized from the package rules table, collision-free refdes/package/lane labels, legend, feeder table and title block |
 | `pdf` | the same placement drawing as one A4 landscape page fitted and centred, with Helvetica |
 | `stencil` | stencil aperture CSV, one row per generated aperture |
-| `stencil-svg` | stencil sheet as SVG: board outline, apertures coloured by side, rule table, legend and title block |
+| `stencil-svg` | stencil sheet as SVG: board outline, apertures coloured by side, collision-free refdes labels, rule table, legend and title block |
 | `stencil-pdf` | the same stencil sheet as one A4 landscape page fitted and centred, with Helvetica |
 
 The `svg` and `pdf` sheets use a millimetre `viewBox`; the SVG opens at 8 px/mm
-and the PDF maps 1 mm to 2.834646 pt before fitting. Component rectangles use a
-fixed 2.0 × 1.2 mm footprint because the document stores no body size, and a
-multi-board panel labels board 1 only. Labels are ASCII-only: non-ASCII text is
+and the PDF maps 1 mm to 2.834646 pt before fitting. Component bodies take their
+length and width from the package rules table, falling back to 2.0 × 1.2 mm for
+unrecognised packages, and a multi-board panel labels board 1 only. Labels scale
+with the body and are omitted where they would collide with a neighbouring body
+or label. Labels are ASCII-only: non-ASCII text is
 written as `?` and reported under `losses` as `drawing/non-ascii-text`, while
 `drawing` reports the panel size, board/component/placement counts and the
-number of default footprints. An empty document still produces a framed sheet
+number of fallback footprints. An empty document still produces a framed sheet
 with its title block. Two exports of one document are byte-identical.
 
 The `stencil-svg` and `stencil-pdf` sheets share the same millimetre conventions
