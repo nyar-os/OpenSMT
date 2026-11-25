@@ -686,7 +686,7 @@ Neither document is modified.
 ## export
 
 ```shell
-open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|stencil-svg|stencil-pdf --out <path>
+open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|stencil-svg|stencil-pdf|feeder-svg|sequence-svg|sequence-pdf --out <path>
 ```
 
 | Format | Content |
@@ -701,6 +701,9 @@ open-smt export <file> --format program|feeders|fai|json|md|svg|pdf|stencil|sten
 | `stencil` | stencil aperture CSV, one row per generated aperture |
 | `stencil-svg` | stencil sheet as SVG: board outline, apertures coloured by side, collision-free refdes labels, rule table, legend and title block |
 | `stencil-pdf` | the same stencil sheet as one A4 landscape page fitted and centred, with Helvetica |
+| `feeder-svg` | feeder setup drawing as SVG: one tape-bank slot per lane in feeder id order, a load bar for the loaded share of the capacity and the assigned reference designators |
+| `sequence-svg` | pick-and-place sequence drawing as SVG: one numbered route per board side over the default nearest-neighbour program, with a travel-length legend |
+| `sequence-pdf` | the same sequence sheet as one A4 landscape page fitted and centred, with Helvetica |
 
 The `svg` and `pdf` sheets use a millimetre `viewBox`; the SVG opens at 8 px/mm
 and the PDF maps 1 mm to 2.834646 pt before fitting. Component bodies take their
@@ -716,6 +719,15 @@ with its title block. Two exports of one document are byte-identical.
 The `stencil-svg` and `stencil-pdf` sheets share the same millimetre conventions
 but draw one board, not a panel; their non-ASCII losses are reported as
 `stencil/non-ascii-text` and the `drawing` summary field is absent.
+
+The `feeder-svg` sheet reads the same allocation as the `feeders` report, so a
+missing or undersized lane fails with the same code; its non-ASCII losses are
+reported as `feeder/non-ascii-text`. The `sequence-svg` and `sequence-pdf`
+sheets run the same allocation and nearest-neighbour sequence as the default
+`program` export, so they fail with `feeder/missing` or `feeder/capacity` the
+same way; their non-ASCII losses are reported as `sequence/non-ascii-text`.
+All three sheets are byte-identical on repeat and the `drawing` summary field
+is absent.
 
 These are export formats. `kicad`, `altium` and `odb` are still declared but
 unimplemented and exit with code `2`. The separate `import` command reads a
@@ -783,4 +795,7 @@ open-smt export panel.osmt --format pdf --out panel.pdf
 open-smt export panel.osmt --format stencil --out stencil.csv
 open-smt export panel.osmt --format stencil-svg --out stencil.svg
 open-smt export panel.osmt --format stencil-pdf --out stencil.pdf
+open-smt export panel.osmt --format feeder-svg --out feeders.svg
+open-smt export panel.osmt --format sequence-svg --out sequence.svg
+open-smt export panel.osmt --format sequence-pdf --out sequence.pdf
 ```

@@ -35,6 +35,8 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | JSON / Markdown reports | ✅ supported |
 | SVG placement drawing (panel, components, labels, legend, title block) | ✅ supported (1:1 mm at 8 px/mm; bodies from the package rules table; ASCII-only collision-free labels) |
 | PDF placement drawing (same sheet, A4 landscape) | ✅ supported (fit to page, Helvetica; same body sizing and ASCII-only labels) |
+| feeder setup drawing (SVG tape bank with slots, load bars and lane labels) | ✅ supported (same allocation as the feeders report; models no machine slot, tape direction or pitch constraint) |
+| pick-and-place sequence drawing (SVG and PDF, one numbered route per side) | ✅ supported (default nearest-neighbour program; models no acceleration, tape advance, vision or nozzle physics) |
 | paste aperture / stencil generation | ✅ supported (fixed package rules table keyed by package name; one area reduction per family; CSV report plus SVG/PDF sheet) |
 | component height and clearance check | ✅ supported (rotated bounding boxes from the package rules table; warning findings; configurable minimum gap and maximum height) |
 | vendor machine programs (Fuji, Yamaha, Juki, ASM) | ❌ not implemented |
@@ -512,6 +514,42 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt clearance panel.osmt --min-gap 0.4 --max-height 10
     ```
 
+28. **Feeder setup drawing.** `export --format feeder-svg` renders the feeder
+    tape bank as a millimetre SVG sheet at 8 px/mm: one lane row per feeder in
+    id order with a slot box, a load bar for the loaded share of the capacity,
+    the lane id, package, pitch, capacity and loaded quantity, and the assigned
+    reference designators. It reads the same allocation as the `feeders`
+    report, so a package without a feeder fails with `feeder/missing`; it
+    models no machine slot, tape direction or pitch constraint. An empty setup
+    still writes a framed sheet. Text is ASCII-only and dropped characters are
+    reported as `feeder/non-ascii-text` in the export `losses`. The render is
+    deterministic and byte-identical on repeat, and it never changes the
+    document.
+
+    ```shell
+    open-smt export panel.osmt --format feeder-svg --out feeders.svg
+    ```
+
+29. **Pick-and-place sequence drawing.** `export --format sequence-svg` and
+    `export --format sequence-pdf` render the default nearest-neighbour
+    placement program as a route map: one polyline per board side starting at
+    the machine origin `(0, 0)`, one numbered step marker per placement in
+    program order and a legend with the step counts, the travel length and the
+    estimated program time. The routes come from the same allocation and
+    sequence as the `program` export, so a missing or undersized feeder fails
+    with `feeder/missing` or `feeder/capacity`. The SVG is a millimetre sheet
+    at 8 px/mm and the PDF is one A4 landscape page fitted from the same
+    layout with Helvetica; an empty program still writes a framed sheet. Text
+    is ASCII-only and dropped characters are reported as
+    `sequence/non-ascii-text` in the export `losses`; `summary` reports the
+    board size, step counts per side and the travel length. The render is
+    deterministic and byte-identical on repeat and never changes the document.
+
+    ```shell
+    open-smt export panel.osmt --format sequence-svg --out sequence.svg
+    open-smt export panel.osmt --format sequence-pdf --out sequence.pdf
+    ```
+
 ## KiCad PCB import
 
 `open-smt import <file.kicad_pcb> --out <file.osmt>` reads the S-expression
@@ -665,7 +703,9 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/drawing.rs` | SVG panel/board/component/label/legend/title structure, XML escaping, rotated rectangle coordinates, byte-identical repeat renders, one-page A4 PDF with Helvetica and exact MediaBox, empty document, non-ASCII loss reporting, invalid board/panel codes, `svg`/`pdf` format parsing |
 | `tests/stencil.rs` | chip rule aperture size after the area reduction and terminal offsets, rotated offsets, one aperture per terminal for SOIC/QFP/QFN/SOT-23/LGA, generic fallback and `unmatchedPackages`, determinism and unchanged document, CSV/SVG/PDF export contents, `stencil`/`stencil-svg`/`stencil-pdf` format parsing, invalid board code, non-ASCII loss reporting |
 | `tests/clearance.rs` | height, overlap and gap findings with exact messages and rounded gaps, rotated bounding boxes, default and custom limits, opposite sides never paired, `clearance/invalid`, non-finite coordinates skipped, determinism and unchanged document, session forwarding |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption, splice/scrap SDK edits, splice/scrap CLI commands, SVG/PDF drawing exports through the SDK and CLI, and changeover smokes |
+| `tests/feeder_drawing.rs` | lane rows in feeder id order with slots, load bars and reference designators, valid hex fill and stroke attributes, `feeder/missing` propagation, empty setup framed sheet, byte-identical repeat renders, non-ASCII loss reporting, `feeder-svg` format parsing, session export path |
+| `tests/sequence_drawing.rs` | one numbered route per side with step markers, travel length matching the drawn segments, valid hex fill and stroke attributes, one-page A4 PDF with Helvetica and the routes, empty program framed sheet, `feeder/missing` propagation, byte-identical repeat renders, non-ASCII loss reporting, `sequence-svg`/`sequence-pdf` format parsing, session export path |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption, splice/scrap SDK edits, splice/scrap CLI commands, SVG/PDF placement drawing exports and feeder/sequence drawing exports through the SDK and CLI, and changeover smokes |
 
 ## Limitations
 
@@ -769,3 +809,11 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   label.
   They are a placement reference, not a fabrication or assembly drawing, and
   they replace non-ASCII label text with `?` (`drawing/non-ascii-text`).
+- The feeder setup drawing is a tape-bank suggestion built from the same
+  allocation as the feeders report; it models no machine slot, tape direction
+  or pitch constraint and replaces non-ASCII text with `?`
+  (`feeder/non-ascii-text`).
+- The pick-and-place sequence drawing shows the default nearest-neighbour
+  routes only: it carries no 2-opt or optimised program, models no
+  acceleration, tape advance, vision or nozzle physics, and replaces
+  non-ASCII text with `?` (`sequence/non-ascii-text`).
