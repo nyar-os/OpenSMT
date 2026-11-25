@@ -12,6 +12,8 @@ import type {
     BoardRequest,
     BomCheckReport,
     ChangeoverReport,
+    ClearanceLimits,
+    ClearanceReport,
     ComponentListReport,
     ComponentRequest,
     ComponentUpdateRequest,
@@ -228,6 +230,11 @@ export function panelMap(path: string): PanelMapReport {
 /** Returns the read-only stencil aperture report. */
 export function stencil(path: string): StencilReport {
     return decode<StencilReport>(() => binding('stencil').stencil(path));
+}
+
+/** Returns the read-only height and clearance report against the supplied limits. */
+export function clearance(path: string, limits: ClearanceLimits = {}): ClearanceReport {
+    return decode<ClearanceReport>(() => binding('clearance').clearance(path, JSON.stringify(limits)));
 }
 
 /** Returns the read-only first-article inspection sheet. */

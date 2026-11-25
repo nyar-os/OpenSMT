@@ -17,8 +17,9 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 use serde_json::Value;
 use smt_model::{
-    Board, Component, ComponentUpdate, DEFAULT_FEEDER_CHANGE_SECONDS, DEFAULT_SLOT_PITCH, DualLaneStrategy, ExportFormat,
-    Feeder, FeederUpdate, OpenSmt, Panel, ReflowProfile, ReflowWindowLimits, Side, SmtError, Splice, TaktOptions, Zone,
+    Board, ClearanceLimits, Component, ComponentUpdate, DEFAULT_FEEDER_CHANGE_SECONDS, DEFAULT_SLOT_PITCH, DualLaneStrategy,
+    ExportFormat, Feeder, FeederUpdate, OpenSmt, Panel, ReflowProfile, ReflowWindowLimits, Side, SmtError, Splice, TaktOptions,
+    Zone,
 };
 use wae::{CallContext, Error, JsValue, Result, function, register_module};
 
@@ -466,6 +467,24 @@ fn stencil(ctx: CallContext) -> Result<JsValue> {
     respond(&ctx, &report)
 }
 
+/// Returns the read-only component height and clearance report.
+///
+/// The optional second argument is a JSON object with `minGap` and `maxHeight`
+/// fields; an omitted limit keeps its default.
+#[function]
+fn clearance(ctx: CallContext) -> Result<JsValue> {
+    let path = text(&ctx, 0)?;
+    let limits = match ctx.args().get(1) {
+        Some(_) => serde_json::from_value::<ClearanceLimits>(object(&ctx, 1)?)
+            .map_err(|error| argument_error(&format!("invalid clearance limits: {error}")))?,
+        None => ClearanceLimits::default(),
+    };
+    let mut session = OpenSmt::new();
+    session.open(Path::new(&path)).map_err(fail)?;
+    let report = session.clearance(&limits).map_err(fail)?;
+    respond(&ctx, &report)
+}
+
 /// Returns the read-only first-article inspection sheet.
 #[function]
 fn first_article(ctx: CallContext) -> Result<JsValue> {
@@ -764,6 +783,7 @@ register_module![
     feeder_report,
     panel_map,
     stencil,
+    clearance,
     first_article,
     panel_fit,
     bom_check,

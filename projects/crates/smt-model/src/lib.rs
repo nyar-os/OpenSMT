@@ -26,6 +26,7 @@
 //!   and per-reel leader/trailer waste;
 //! * a read-only takt bottleneck heat map by step, package and side;
 //! * a read-only stencil aperture report and sheet from the package rules table;
+//! * a read-only component height and clearance check;
 //! * a neutral machine program interchange with a readback check;
 //! * CSV program and feeder sheets, plus JSON and Markdown reports.
 //!
@@ -36,6 +37,7 @@
 mod balance;
 mod bom;
 mod changeover;
+mod clearance;
 mod component_list;
 mod consumption;
 mod csv_import;
@@ -66,6 +68,9 @@ pub use crate::{
     balance::{BalanceReport, MAX_MACHINES, MIN_MACHINES, MachineFeeder, MachineReport, balance, balance_with},
     bom::{BomCheckReport, BomFinding, BomQuantityMismatch, check as bom_check},
     changeover::{ChangeoverAction, ChangeoverKind, ChangeoverReport, DEFAULT_FEEDER_CHANGE_SECONDS, plan as plan_changeover},
+    clearance::{
+        ClearanceFinding, ClearanceLimits, ClearanceReport, DEFAULT_MAX_HEIGHT_MM, DEFAULT_MIN_GAP_MM, check as clearance_check,
+    },
     component_list::{ComponentListReport, ComponentPackage, ListedComponent, report as component_list_report},
     consumption::{ConsumptionReport, FeederConsumption, PackageConsumption, plan as plan_consumption},
     drawing::{
@@ -138,7 +143,8 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "feederSchedule": "supported",
     "panelMap": "supported",
     "firstArticle": "supported",
-    "taktHeatmap": "supported"
+    "taktHeatmap": "supported",
+    "clearanceCheck": "supported"
   },
   "io": {
     "osmt": "supported",
@@ -175,6 +181,7 @@ pub const CAPABILITIES_JSON: &str = r#"{
     "firstArticle": "repeats the placement program with the allocated lane pitch and a fixed four-item checklist; it records no inspection result and models no component polarity",
     "pasteAperture": "apertures come from a fixed package rules table keyed by package name, not from footprint data; the reduction is one area factor per family, QFN thermal pads are not modelled and the sheet draws one board, not a panel",
     "taktHeatmap": "attributes the analytical step time of the default machine model to each step, package and side; it models no acceleration, tape advance, vision or nozzle physics",
+    "clearanceCheck": "body outlines come from the fixed package rules table, not footprint data; same-side bodies are compared as rotated bounding boxes, findings are warnings only and height checks apply only to components that store a height",
     "machineProgram": "neutral CSV interchange of the placement program with a readback check; it is not a Fuji, Yamaha, Juki or ASM dialect and takes nozzle ids only from a caller-supplied package map",
     "svg": "one millimetre placement sheet at 8 px/mm; every component uses a fixed 2.0 x 1.2 mm footprint because the model stores no body size, labels are ASCII-only and a multi-board panel labels board 1 only",
     "pdf": "one A4 landscape page fitted and centred from the same millimetre layout with Helvetica; the same fixed 2.0 x 1.2 mm footprint, ASCII-only labels and board-1 labels apply",

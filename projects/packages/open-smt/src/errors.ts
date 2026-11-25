@@ -50,6 +50,7 @@ export const errorCodes = [
     'takt/invalid',
     'station/invalid',
     'changeover/invalid',
+    'clearance/invalid',
     'reflow/invalid',
     'consumption/invalid',
     'program/invalid',

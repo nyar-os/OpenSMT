@@ -14,6 +14,8 @@ import type {
     BoardRequest,
     BomCheckReport,
     ChangeoverReport,
+    ClearanceLimits,
+    ClearanceReport,
     ComponentListReport,
     ComponentRequest,
     ComponentUpdateRequest,
@@ -218,6 +220,12 @@ export class SmtDocument {
     async stencil(): Promise<StencilReport> {
         this.assertOpen();
         return service.stencil(this.state.path);
+    }
+
+    /** Returns the read-only height and clearance report. */
+    async clearance(limits: ClearanceLimits = {}): Promise<ClearanceReport> {
+        this.assertOpen();
+        return service.clearance(this.state.path, limits);
     }
 
     /** Returns the read-only first-article inspection sheet. */

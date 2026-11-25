@@ -33,6 +33,7 @@
             "validate": "Validate the document and report findings",
             "placement": "Allocate and sequence the placement program",
             "stencil": "Report the stencil apertures generated from the package rules table",
+            "clearance": "Report oversized, overlapping and too-close components",
             "feeders": "Report the feeder setup allocation",
             "balance": "Assign components across machines and report the balance",
             "schedule": "Schedule placement tasks across lanes",
@@ -102,6 +103,8 @@
             "tal-max": "Longest acceptable time above liquidus in seconds",
             "max-ramp": "Highest acceptable heating rate in degrees Celsius per second",
             "max-cooling": "Highest acceptable cooling rate in degrees Celsius per second",
+            "min-gap": "Minimum acceptable body-to-body gap in millimetres",
+            "max-height": "Maximum acceptable component height in millimetres",
             "nozzles": "Nozzle ids per package as \"package=nozzle;...\"",
             "program": "Machine program CSV path"
         },

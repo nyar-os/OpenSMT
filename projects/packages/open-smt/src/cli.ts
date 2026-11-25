@@ -704,6 +704,28 @@ cli
     );
 
 cli
+    .command('clearance', 'cli.cmd.clearance')
+    .option('--min-gap <mm>', 'cli.opt.min-gap')
+    .option('--max-height <mm>', 'cli.opt.max-height')
+    .actionCtx((options, _args, ctx) =>
+        guard(ctx, async () => {
+            await editDocument(
+                options,
+                ctx,
+                'clearance <file> [--min-gap <mm>] [--max-height <mm>]',
+                async (document) => {
+                    print(
+                        await document.clearance({
+                            minGap: numberOption(options, ctx, 'min-gap'),
+                            maxHeight: numberOption(options, ctx, 'max-height'),
+                        }),
+                    );
+                },
+            );
+        }),
+    );
+
+cli
     .command('feeders', 'cli.cmd.feeders')
     .option('--out <setup.csv>', 'cli.opt.out')
     .actionCtx((options, _args, ctx) =>

@@ -18,6 +18,7 @@ use crate::{
     balance::{self, BalanceReport},
     bom::{self, BomCheckReport},
     changeover::{self, ChangeoverReport},
+    clearance::{self, ClearanceLimits, ClearanceReport},
     component_list::{self, ComponentListReport},
     consumption::{self, ConsumptionReport},
     drawing::{self, DrawingLoss, DrawingSummary},
@@ -599,6 +600,15 @@ impl OpenSmt {
     /// generic rule and are listed. The document is never modified.
     pub fn stencil(&self) -> Result<StencilReport, SmtError> {
         Ok(stencil::report(self.document()?))
+    }
+
+    /// Returns the read-only height and clearance report of the open document.
+    ///
+    /// Bodies come from the shared package rules table and are compared as
+    /// rotated bounding boxes on the same side. Omitted limits keep their
+    /// defaults. The document is never modified.
+    pub fn clearance(&self, limits: &ClearanceLimits) -> Result<ClearanceReport, SmtError> {
+        clearance::check(self.document()?, limits)
     }
 
     /// Returns the read-only feeder loading report of the open document.

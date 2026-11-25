@@ -387,6 +387,56 @@ export interface StencilReport {
     readonly entries: readonly StencilAperture[];
 }
 
+/**
+ * Limits of the component height and clearance check.
+ *
+ * Both limits are optional; an omitted limit keeps its default.
+ */
+export interface ClearanceLimits {
+    /** Minimum acceptable body-to-body gap in millimetres; default `0.5`. */
+    readonly minGap?: number;
+    /** Maximum acceptable component height in millimetres; default `12`. */
+    readonly maxHeight?: number;
+}
+
+/** One warning of the clearance check. */
+export interface ClearanceFinding {
+    /** Always `warning`; the check never fails the document. */
+    readonly severity: string;
+    /** `clearance/height`, `clearance/overlap` or `clearance/gap`. */
+    readonly code: string;
+    readonly message: string;
+    /** Reference designator of the first component. */
+    readonly refdes: string;
+    /** Reference designator of the second component, for pair findings. */
+    readonly other: string | null;
+    /** Board side, for pair findings. */
+    readonly side: Side | null;
+    /** Body-to-body gap in millimetres, `0` for an overlap. */
+    readonly gap: number | null;
+    /** Measured height in millimetres, for height findings. */
+    readonly height: number | null;
+}
+
+/** Read-only component height and clearance report. */
+export interface ClearanceReport {
+    readonly format: 'open-smt-clearance';
+    readonly version: number;
+    readonly units: string;
+    /** Minimum gap the check applied in millimetres. */
+    readonly minGap: number;
+    /** Maximum height the check applied in millimetres. */
+    readonly maxHeight: number;
+    /** Number of components inspected. */
+    readonly components: number;
+    /** Number of same-side component pairs compared. */
+    readonly pairsChecked: number;
+    /** Findings in component order, then in pair order. */
+    readonly findings: readonly ClearanceFinding[];
+    /** Whether the check found nothing to warn about. */
+    readonly ok: boolean;
+}
+
 /** One reference designator the BOM and the placement table disagree about. */
 export interface BomFinding {
     readonly package: string;
