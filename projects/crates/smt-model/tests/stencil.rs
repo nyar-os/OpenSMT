@@ -178,6 +178,21 @@ fn stencil_exports_write_csv_svg_and_pdf() {
 }
 
 #[test]
+fn stencil_labels_clear_the_apertures_in_dense_rows() {
+    let mut document = board_document();
+    add(&mut document, "R1", "0402", 10.0, 10.0, 0.0);
+    add(&mut document, "R2", "0402", 11.6, 10.0, 0.0);
+    add(&mut document, "U1", "SOT-23", 30.0, 20.0, 0.0);
+    let svg = render_stencil_svg(&document, "panel").expect("stencil sheet rendered");
+    // Every reference label is drawn, clear of its aperture cluster.
+    assert_eq!(svg.text.matches("text-anchor=\"middle\" fill=\"#0f1729\">").count(), 3);
+    // The 0402 label baseline sits 0.4 mm above the body (10 - 0.25 - 0.4).
+    assert!(svg.text.contains("y=\"9.350\""));
+    // The SOT-23 label clears the leads that reach past the body outline.
+    assert!(svg.text.contains(">U1</text>"));
+}
+
+#[test]
 fn stencil_export_parses_the_format_names() {
     assert_eq!("stencil".parse::<ExportFormat>().expect("stencil"), ExportFormat::Stencil);
     assert_eq!("stencil-csv".parse::<ExportFormat>().expect("stencil-csv"), ExportFormat::Stencil);

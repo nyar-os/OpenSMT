@@ -280,12 +280,6 @@ struct Aperture {
     circle: bool,
 }
 
-struct Label {
-    refdes: String,
-    x: f64,
-    y: f64,
-}
-
 struct RuleLine {
     package: String,
     family: String,
@@ -302,7 +296,7 @@ struct Plan {
     board_width: f64,
     board_depth: f64,
     apertures: Vec<Aperture>,
-    labels: Vec<Label>,
+    labels: Vec<drawing::SheetLabel>,
     rules: Vec<RuleLine>,
     summary: StencilDrawingSummary,
 }
@@ -344,12 +338,6 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
     let (units, count) = drawing::ascii(&document.units);
     dropped += count;
 
-    let mut labels = Vec::with_capacity(document.components.len());
-    for component in &document.components {
-        let (refdes, count) = drawing::ascii(&component.refdes);
-        dropped += count;
-        labels.push(Label { refdes, x: round3(component.x), y: round3(component.y) });
-    }
     let apertures = report
         .entries
         .iter()
@@ -362,7 +350,48 @@ fn build_plan(document: &SmtDocument, id: &str) -> Result<Plan, SmtError> {
             rotation: entry.rotation,
             circle: entry.shape == "circle",
         })
+        .collect::<Vec<_>>();
+    // Reference labels sit above the body outline and are skipped when they
+    // would collide with an aperture or an already accepted label.
+    let mut occupied: Vec<drawing::Box4> = report
+        .entries
+        .iter()
+        .map(|entry| drawing::rotated_box(entry.x, entry.y, entry.rotation, entry.width, entry.height))
         .collect();
+    let mut labels = Vec::with_capacity(document.components.len());
+    for component in &document.components {
+        let (refdes, count) = drawing::ascii(&component.refdes);
+        dropped += count;
+        let geometry = packages::geometry(&component.package);
+        let mut body =
+            drawing::rotated_box(component.x, component.y, component.rotation, geometry.body_length, geometry.body_width);
+        // Leads reach past the body outline, so the label clears the whole
+        // aperture cluster of this component.
+        for entry in report.entries.iter().filter(|entry| entry.refdes == component.refdes) {
+            let box_ = drawing::rotated_box(entry.x, entry.y, entry.rotation, entry.width, entry.height);
+            body = (body.0.min(box_.0), body.1.min(box_.1), body.2.max(box_.2), body.3.max(box_.3));
+        }
+        let font = drawing::label_font(geometry.body_length.min(geometry.body_width));
+        let half = drawing::text_width(&refdes, font) / 2.0;
+        let above: drawing::Box4 = (component.x - half, body.1 - 0.4 - font, component.x + half, body.1 - 0.4);
+        let below: drawing::Box4 = (component.x - half, body.3 + 0.4, component.x + half, body.3 + 0.4 + font);
+        let placed = if drawing::collides(&above, &occupied) {
+            if drawing::collides(&below, &occupied) { None } else { Some(below) }
+        }
+        else {
+            Some(above)
+        };
+        if let Some(placed) = placed {
+            occupied.push(placed);
+            labels.push(drawing::SheetLabel {
+                x: round3(component.x),
+                y: round3(placed.3),
+                size: font,
+                text: refdes,
+                muted: false,
+            });
+        }
+    }
 
     let mut rules = Vec::with_capacity(report.rules.len());
     for rule in &report.rules {
@@ -452,11 +481,12 @@ fn push_svg_board(svg: &mut String, plan: &Plan) {
     }
     for label in &plan.labels {
         svg.push_str(&format!(
-            "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"2.2\" text-anchor=\"middle\" fill=\"#{}\">{}</text>\n",
+            "    <text x=\"{}\" y=\"{}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{}\" text-anchor=\"middle\" fill=\"#{}\">{}</text>\n",
             drawing::number(label.x),
-            drawing::number(label.y + 0.8),
+            drawing::number(label.y),
+            drawing::number(label.size),
             drawing::hex(drawing::INK),
-            drawing::escape_xml(&label.refdes)
+            drawing::escape_xml(&label.text)
         ));
     }
     svg.push_str("  </g>\n");
@@ -593,7 +623,7 @@ fn push_pdf_board(pdf: &mut drawing::Pdf, plan: &Plan) {
         }
     }
     for label in &plan.labels {
-        pdf.text_centered(x + label.x, y + label.y + 0.8, 2.2, drawing::INK, &label.refdes);
+        pdf.text_centered(x + label.x, y + label.y, label.size, drawing::INK, &label.text);
     }
 }
 
