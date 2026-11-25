@@ -31,6 +31,7 @@ The machine-readable version is printed by `open-smt capabilities` and by
 | reflow process-window margins (peak, time above liquidus, ramp rates) | ✅ supported |
 | placement program CSV | ✅ supported |
 | neutral machine program CSV with readback verification | ✅ supported |
+| parallel pick-cycle grouping (nozzle and head count) | ✅ supported (consecutive same-package picks, package as nozzle identity; no acceleration, vision or nozzle physics) |
 | feeder setup CSV | ✅ supported |
 | JSON / Markdown reports | ✅ supported |
 | SVG placement drawing (panel, components, labels, legend, title block) | ✅ supported (1:1 mm at 8 px/mm; bodies from the package rules table; ASCII-only collision-free labels) |
@@ -646,6 +647,27 @@ The machine-readable version is printed by `open-smt capabilities` and by
     open-smt export panel.osmt --format setup-pdf --out setup.pdf
     ```
 
+36. **Parallel pick-cycle grouping.** `pickCycle` (CLI
+    `pick-cycle <file> [--heads <n>]`) runs the same allocation and
+    nearest-neighbour sequence as `placement` and packs consecutive placements
+    that share a nozzle into one cycle. The document stores no nozzle field, so
+    the package name is the nozzle identity; a package change or a board-side
+    change starts a new cycle and a cycle holds at most `heads` picks. The
+    program is never reordered. `heads` defaults to `4` and must be between 1 and
+    64, otherwise `pick-cycle/invalid`. The report contains `components`,
+    `cycles`, `picks`, `headSlots` (`cycles × heads`), `wastedSlots`
+    (`headSlots − picks`), `utilization` (`picks / headSlots`, zero when empty),
+    `singleHeadCycles` and `cyclesSaved` (`components − cycles`, the saving
+    against a one-head program), plus one `entries` row per cycle in program
+    order with its `cycle`, `package`, `side`, `picks`, `refdes` and
+    `unusedSlots`. Feeder coverage errors propagate unchanged; acceleration,
+    vision, tape advance and nozzle physics are not modelled, and the document
+    is never modified.
+
+    ```shell
+    open-smt pick-cycle panel.osmt --heads 4
+    ```
+
 ## Sheet conventions
 
 Every generated sheet has a drawing frame, a title block with the drawing name,
@@ -775,6 +797,7 @@ are skipped. Rows keep the order of the source.
 | `schedule/invalid` | a feeder replenishment schedule requested fewer than one board |
 | `paste/invalid` | a paste volume report requested a non-positive foil thickness, fewer than one board or a waste percentage outside 0–100 |
 | `program/invalid` | a machine program file is malformed, a nozzle map is invalid, or an export did not read back identically |
+| `pick-cycle/invalid` | a pick-cycle grouping requested fewer than 1 or more than 64 heads |
 
 Warnings do not make `ok` false: `component/none`, `feeder/none`,
 `feeder/unused`, `component/rotation` (not a multiple of 90) and
@@ -806,6 +829,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/first_article.rs` | program-order rows with lane pitch, package material grouping and side totals, recorded revision, fixed checklist, empty document, feeder coverage propagation, CSV header and empty check columns, determinism, unchanged document |
 | `tests/machine_program.rs` | fixed header and program order, station/pitch/nozzle/speed fields, three-decimal canonical values, render-parse round trip, tampered field and reordered row mismatches, step-count mismatch, malformed files, empty document, invalid nozzle map, feeder coverage propagation, deterministic unchanged document, export-readback and verify-file paths |
 | `tests/heatmap.rs` | step placement and inbound travel time, package ordering with cumulative shares, per-side origin restart, equality with the default takt board time, empty document, feeder coverage propagation, determinism, unchanged document |
+| `tests/pick_cycle.rs` | consecutive same-package grouping, package and side cuts, one-head and default head counts, partial-cycle head-slot waste and utilization, empty document, invalid head counts, feeder coverage propagation, determinism and unchanged document |
 | `tests/drawing.rs` | SVG panel/board/component/label/legend/title structure, XML escaping, rotated rectangle coordinates, byte-identical repeat renders, one-page A4 PDF with Helvetica and exact MediaBox, empty document, non-ASCII loss reporting, invalid board/panel codes, `svg`/`pdf` format parsing |
 | `tests/stencil.rs` | chip rule aperture size after the area reduction and terminal offsets, rotated offsets, one aperture per terminal for SOIC/QFP/QFN/SOT-23/LGA, generic fallback and `unmatchedPackages`, determinism and unchanged document, CSV/SVG/PDF export contents, bottom sheet mirrored along X with reversed rotation, `stencil`/`stencil-svg`/`stencil-pdf` format parsing, invalid board code, non-ASCII loss reporting |
 | `tests/clearance.rs` | height, overlap and gap findings with exact messages and rounded gaps, rotated bounding boxes, default and custom limits, opposite sides never paired, `clearance/invalid`, non-finite coordinates skipped, determinism and unchanged document, session forwarding |
@@ -815,7 +839,7 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
 | `tests/panel_map_drawing.rs` | row-major board rectangles with labels, component dots on every instance, origin cross, valid hex fill and stroke attributes, byte-identical repeat renders, non-ASCII loss reporting, `panel-svg`/`panel-map-svg` format parsing, session export path |
 | `tests/heatmap_drawing.rs` | one heat dot per program step with Pareto package column, valid hex fill and stroke attributes, `feeder/missing` propagation, byte-identical repeat renders, non-ASCII loss reporting, `heatmap-svg` format parsing, session export path |
 | `tests/paste.rs` | empty document zero report, exact rect and circle aperture arithmetic against the rule table, board and waste scaling, custom foil thickness, `paste/invalid` for every bad input, per-package CSV sheet, byte-identical repeat reports, unchanged document, session `paste-csv` file write |
-| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption, splice/scrap SDK edits, splice/scrap CLI commands, SVG/PDF placement drawing exports, feeder/sequence drawing exports and the stencil paste volume report through the SDK and CLI, and changeover smokes |
+| `tests/smoke.test.ts` (TypeScript) | session lifecycle, argument errors before the addon, native-gated balance, multi-lane, panel-fit, panel-map, first-article, BOM-check, takt, takt-heatmap, pick-cycle (default, one head, invalid SDK/CLI counts), machine-export/machine-verify, component-update, component-list, feeder-optimize, reflow-window, feeder-consumption, splice/scrap SDK edits, splice/scrap CLI commands, SVG/PDF placement drawing exports, feeder/sequence drawing exports and the stencil paste volume report through the SDK and CLI, and changeover smokes |
 
 ## Limitations
 
@@ -841,6 +865,11 @@ Warnings do not make `ok` false: `component/none`, `feeder/none`,
   or nozzle physics. The feeder and nozzle change counts are caller estimates,
   not plan data, and multi-machine throughput is an even split, not a line
   simulation.
+- The parallel pick-cycle grouping is a measurement, not an optimiser: it groups
+  consecutive same-package picks of the existing nearest-neighbour program and
+  never reorders it. The package stands in for the nozzle because the document
+  has no nozzle field, a side change starts a new cycle, and no acceleration,
+  vision, tape advance, nozzle physics or head interchange is modelled.
 - The feeder station assignment is a heuristic: it orders lanes by the mean
   placement X of the nearest-neighbour program, models tape-bank travel along X
   only and ignores slot capacity, tape direction, nozzle constraints and reel

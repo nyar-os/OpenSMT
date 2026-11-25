@@ -643,6 +643,32 @@ a step (`top` before `bottom`, with `side`, `steps`, `seconds`, `share`) and one
 are zero for an empty document. Feeder coverage errors propagate unchanged and
 the document is not modified.
 
+## pick-cycle
+
+```shell
+open-smt pick-cycle <file> [--heads <n>]
+```
+
+Prints the read-only parallel pick-cycle grouping of the placement program as
+JSON. The command runs the same feeder allocation and nearest-neighbour sequence
+as `placement`, so feeder coverage errors propagate unchanged. Consecutive
+placements of the same package on the same board side share one cycle until
+`--heads` picks are reached; a package change or a side change starts a new
+cycle, and the program order is never changed. `--heads` defaults to `4` and
+must be an integer from `1` to `64`; `0`, a larger count or a non-numeric value
+reports `pick-cycle/invalid` and exits with code `1`.
+
+The report contains `format` (`open-smt-pick-cycle`), `version`, `units`,
+`heads`, `components`, `cycles`, `picks`, `headSlots`, `utilization`,
+`wastedSlots`, `singleHeadCycles`, `cyclesSaved` and one `entries` row per cycle
+in program order (`cycle`, `package`, `side`, `picks`, `refdes`,
+`unusedSlots`). `headSlots` is `cycles × heads`, `wastedSlots` is
+`headSlots − picks`, `utilization` is `picks / headSlots` (zero for an empty
+document) and `cyclesSaved` is `components − cycles`, the saving against a
+single-head program. The package stands in for the nozzle because the document
+stores no nozzle field. The grouping models no acceleration, vision, tape
+advance or nozzle physics and never modifies the document.
+
 ## machine export
 
 ```shell
@@ -831,6 +857,7 @@ open-smt reflow panel.osmt
 open-smt reflow window panel.osmt --peak-max 250 --tal-max 60 --max-ramp 5
 open-smt takt panel.osmt --machines 2
 open-smt takt heatmap panel.osmt
+open-smt pick-cycle panel.osmt --heads 4
 open-smt machine export panel.osmt --out machine.csv --nozzles "0603=N1;QFN-32=N2"
 open-smt machine verify panel.osmt --program machine.csv --nozzles "0603=N1;QFN-32=N2"
 open-smt changeover panel.osmt job-b.osmt
