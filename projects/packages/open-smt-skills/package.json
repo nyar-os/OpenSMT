@@ -1,6 +1,6 @@
 {
     "name": "@wae/open-smt-skills",
-    "version": "0.0.7",
+    "version": "0.0.8",
     "description": "Agent skills for OpenSMT: placement programs, feeder setup, line balance and reflow review",
     "license": "Apache-2.0",
     "type": "module",
