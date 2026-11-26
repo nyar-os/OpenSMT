@@ -58,6 +58,8 @@ importers:
 
   projects/packages/open-smt-linux-x64: {}
 
+  projects/packages/open-smt-skills: {}
+
   projects/packages/open-smt-win32-x64: {}
 
   projects/sites/homepage:

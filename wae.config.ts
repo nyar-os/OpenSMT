@@ -98,4 +98,15 @@ export default defineConfig({
         ts: { packages: ['@wae/open-smt'] },
         outputs: ['projects/packages/open-smt/dist/cli.js', 'projects/packages/open-smt/dist/index.js'],
     },
+    skills: {
+        packages: [
+            {
+                dir: 'projects/packages/open-smt-skills/skills',
+                packageJson: 'projects/packages/open-smt-skills/package.json',
+                appPackageJson: 'projects/packages/open-smt/package.json',
+                cliEntry: 'projects/packages/open-smt/dist/cli.js',
+                commandName: 'open-smt',
+            },
+        ],
+    },
 });

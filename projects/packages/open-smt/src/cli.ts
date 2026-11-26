@@ -1064,3 +1064,5 @@ if (entry !== undefined && import.meta.url === pathToFileURL(entry).href) {
         process.exitCode = 1;
     }
 }
+
+export { cli };
